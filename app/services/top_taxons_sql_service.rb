@@ -75,10 +75,10 @@ class TopTaxonsSqlService
     sort = CLIENT_FILTERING_SORT_VALUES[@workflow]
 
     # TODO: (gdingle): how do we protect against SQL injection?
-    # The first query of a session does not work - the session variable @rank do not work, if we do not declare the variables before.
-    # Although I could not find support on MySQL documentation, the first query seems to use always the undefined value instead of updating the variable.
-    # Also guarantees that they are re-initialized to a value that avoids potential corner case issues from the last value from a previous query.
-    ActiveRecord::Base.connection.execute("SET @rank := 0, @current_id := 0;")
+    # Ranking is done with a ROW_NUMBER() window function (see top_n_query),
+    # which is portable (PostgreSQL / MySQL 8+) and plan-independent. There are
+    # no MySQL session variables to prime any more, so the previous
+    # "SET @rank := 0, @current_id := 0" priming statement is gone (bug-#010).
     sql_results = TaxonCount.connection.select_all(
       top_n_query(
         query,
@@ -234,7 +234,14 @@ class TopTaxonsSqlService
   # This query:
   # 1) assigns a rank to each row within a pipeline run
   # 2) returns rows ranking <= num_results
-  # See http://www.sqlines.com/mysql/how-to/get_top_n_each_group
+  #
+  # Uses a ROW_NUMBER() window function partitioned by pipeline_run_id. This is
+  # the portable, plan-independent equivalent of the old MySQL session-variable
+  # trick (`@rank := IF(@current_id = pipeline_run_id, @rank + 1, 1)`): the
+  # PARTITION BY resets the counter per pipeline run and the window ORDER BY is
+  # the former ranking ORDER BY, so it assigns identical ranks on PostgreSQL or
+  # MySQL 8+ (bug-#010). The `current_id` column was an artifact of the trick
+  # (it only ever echoed pipeline_run_id and nothing consumed it) and is dropped.
   def top_n_query(
     query,
     num_results,
@@ -254,18 +261,18 @@ class TopTaxonsSqlService
     "SELECT *
       FROM (
         SELECT
-          @rank := IF(@current_id = pipeline_run_id, @rank + 1, 1) AS `rank`,
-          @current_id := pipeline_run_id AS current_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY pipeline_run_id
+            ORDER BY
+              #{count_type_order_clause}
+              #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
+          ) AS rank,
           x.*
         FROM (
           #{query}
         ) x
-        ORDER BY
-          pipeline_run_id,
-          #{count_type_order_clause}
-          #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
       ) y
-      WHERE `rank` <= #{num_results}
+      WHERE rank <= #{num_results}
     "
   end
 

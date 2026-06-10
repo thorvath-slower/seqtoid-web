@@ -84,7 +84,6 @@ RSpec.describe TopTaxonsSqlService, type: :service do
       expected_taxon_counts = {
         # Data related to ReportHelper::PROPERTIES_OF_TAXID
         rank: 1,
-        current_id: @pipeline_run1.id,
         pipeline_run_id: @pipeline_run1.id,
         tax_id: 570,
         count_type: "NT",
@@ -175,7 +174,6 @@ RSpec.describe TopTaxonsSqlService, type: :service do
       expected_taxon_counts = {
         # Data related to ReportHelper::PROPERTIES_OF_TAXID
         rank: 1,
-        current_id: @pipeline_run1.id,
         pipeline_run_id: @pipeline_run1.id,
         tax_id: 570,
         tax_level: 2,
