@@ -190,12 +190,12 @@ class CheckPipelineRuns
         SELECT
           id,
           project_id,
-          unix_timestamp(created_at) as unixtime_of_creation
+          EXTRACT(EPOCH FROM created_at) as unixtime_of_creation
         FROM samples
         WHERE
               project_id = #{bm_proj.id}
-          AND created_at > from_unixtime(#{t_now - bm_frequency_seconds})
-          AND name LIKE \"#{bm_name_prefix}%\"
+          AND created_at > to_timestamp(#{t_now - bm_frequency_seconds})
+          AND name LIKE '#{bm_name_prefix}%'
       "
       bm_pipeline_branch = prop_get(bm_props, "pipeline_branch", defaults)
       pipeline_commit = Sample.pipeline_commit(bm_pipeline_branch) || ""

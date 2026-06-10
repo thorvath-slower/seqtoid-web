@@ -833,7 +833,7 @@ class Sample < ApplicationRecord
       joins(:project)
         .where("(project_id in (?) or
                 projects.public_access = 1 or
-                DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < ?)",
+                samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < ?)",
                project_ids, Time.current)
     end
   end
@@ -856,14 +856,14 @@ class Sample < ApplicationRecord
   def self.public_samples
     joins(:project)
       .where("(projects.public_access = 1 OR
-              DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < ?)",
+              samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < ?)",
              Time.current)
   end
 
   def self.private_samples
     joins(:project)
       .where("(projects.public_access = 0 AND
-              DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) >= ?)",
+              samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval >= ?)",
              Time.current)
   end
 

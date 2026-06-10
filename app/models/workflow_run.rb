@@ -227,13 +227,15 @@ class WorkflowRun < ApplicationRecord
   }
 
   scope :sort_by_input, lambda { |sort_key, order_dir|
-    order_statement = "JSON_EXTRACT(`inputs_json`, '$.#{sort_key}') #{order_dir}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
+    # bug-#011: JSON_EXTRACT -> jsonb access. Order by the extracted jsonb value
+    # (JSON-aware, like JSON_EXTRACT) rather than text; assumes inputs_json is jsonb.
+    order_statement = "inputs_json -> '#{sort_key}' #{order_dir}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
     order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :sort_by_cached_result, lambda { |sort_key, order_dir|
     cached_result_key = sort_key == "coverage_depth" ? CACHED_RESULT_COVERAGE_VIZ_KEY : CACHED_RESULT_QUALITY_METRICS_KEY
-    order_statement = "JSON_EXTRACT(`cached_results`, '$.#{cached_result_key}.#{sort_key}') #{order_dir}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "cached_results #> '{#{cached_result_key},#{sort_key}}' #{order_dir}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
     order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -245,12 +247,12 @@ class WorkflowRun < ApplicationRecord
     "
     # TODO(ihan): Investigate location metadata creation. I've implemented a workaround solution below,
     # but ideally, all location info should be stored by location_id.
-    order_statement = "(CASE WHEN ISNULL(metadata.location_id) THEN metadata.string_validated_value ELSE locations.name END) #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "(CASE WHEN metadata.location_id IS NULL THEN metadata.string_validated_value ELSE locations.name END) #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :by_taxon, lambda { |taxon_id|
-    query = "JSON_EXTRACT(`inputs_json`, '$.taxon_id') IN (#{taxon_id.join(',')})"
+    query = "(inputs_json ->> 'taxon_id')::bigint IN (#{taxon_id.join(',')})"
     where(Arel.sql(ActiveRecord::Base.sanitize_sql_array(query)))
   }
 

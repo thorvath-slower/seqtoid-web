@@ -578,7 +578,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("IF(projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%y-%m-%d')}', true, false) AS public"))]
+           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < '#{Time.current.strftime('%y-%m-%d')}' THEN true ELSE false END AS public"))]
   end
 
   def get_visibility_by_sample_id_and_current_power(sample_ids, current_power)
@@ -589,7 +589,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("IF(projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%y-%m-%d')}', true, false) AS public"))]
+           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < '#{Time.current.strftime('%y-%m-%d')}' THEN true ELSE false END AS public"))]
   end
 
   # Takes an array of samples and uploads metadata for those samples.
