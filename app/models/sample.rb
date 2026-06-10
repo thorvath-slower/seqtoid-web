@@ -112,7 +112,7 @@ class Sample < ApplicationRecord
     # Note: if the samples do not contain the specified metadata, all metadata.string_validated_value's will be nil
     # and samples will be sorted by TIEBREAKER_SORT_KEY
     joins_statement = "LEFT JOIN metadata ON (samples.id = metadata.sample_id AND metadata.key = '#{sort_key}')"
-    order_statement = "metadata.string_validated_value #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "metadata.string_validated_value #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(ActiveRecord::Base.sanitize_sql_array(joins_statement)).order(ActiveRecord::Base.sanitize_sql_array(order_statement))
   }
 
@@ -123,12 +123,12 @@ class Sample < ApplicationRecord
     "
     # TODO(ihan): Investigate location metadata creation. I've implemented a workaround solution below,
     # but ideally, all location info should be stored by location_id.
-    order_statement = "(CASE WHEN ISNULL(metadata.location_id) THEN metadata.string_validated_value ELSE locations.name END) #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "(CASE WHEN ISNULL(metadata.location_id) THEN metadata.string_validated_value ELSE locations.name END) #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :sort_by_host_genome, lambda { |order_dir|
-    order_statement = "host_genomes.name #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "host_genomes.name #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     left_outer_joins(:host_genome).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -138,7 +138,7 @@ class Sample < ApplicationRecord
       LEFT JOIN pipeline_runs ON samples.id = pipeline_runs.sample_id AND
       pipeline_runs.id = (SELECT MAX(id) FROM pipeline_runs WHERE samples.id = pipeline_runs.sample_id)
     "
-    order_statement = "pipeline_runs.#{sort_key} #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "pipeline_runs.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -149,7 +149,7 @@ class Sample < ApplicationRecord
       pipeline_runs.id = (SELECT MAX(id) FROM pipeline_runs WHERE samples.id = pipeline_runs.sample_id)
       LEFT JOIN insert_size_metric_sets ON insert_size_metric_sets.pipeline_run_id = pipeline_runs.id
     "
-    order_statement = "insert_size_metric_sets.mean #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "insert_size_metric_sets.mean #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -1147,7 +1147,7 @@ class Sample < ApplicationRecord
     metadata_sort_key = sanitize_metadata_field_name(order_by)
 
     if SAMPLES_SORT_KEYS.include?(sort_key)
-      samples.order("samples.#{sort_key} #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+      samples.order("samples.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}")
     elsif sort_key == "host"
       samples.sort_by_host_genome(order_dir)
     elsif PIPELINE_RUNS_SORT_KEYS.include?(sort_key)

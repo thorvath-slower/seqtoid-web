@@ -11,6 +11,7 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
+  enable_extension "citext"
   create_table "accession_coverage_stats", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The id of the pipeline run the coverage stats were generated from"
     t.string "accession_id", null: false, comment: "The NCBI GenBank id of the accession the coverage stats were created for"
@@ -196,7 +197,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
   end
 
   create_table "host_genomes", force: :cascade do |t|
-    t.string "name", null: false, comment: "Friendly name of host genome. May be common name or scientific name of species. Must be unique and start with a capital letter."
+    t.citext "name", null: false, comment: "Friendly name of host genome. May be common name or scientific name of species. Must be unique and start with a capital letter."
     t.string "s3_star_index_path", default: "s3://#{S3_DATABASE_BUCKET}/host_filter/ercc/2017-09-01-utc-1504224000-unixtime__2017-09-01-utc-1504224000-unixtime/STAR_genome.tar", null: false, comment: "The path to the index file to be used in the pipeline by star for host filtering."
     t.string "s3_bowtie2_index_path", default: "s3://#{S3_DATABASE_BUCKET}/host_filter/ercc/2017-09-01-utc-1504224000-unixtime__2017-09-01-utc-1504224000-unixtime/bowtie2_genome.tar", null: false, comment: "The path to the index file to be used in the pipeline by bowtie for host filtering."
     t.bigint "default_background_id"
@@ -267,7 +268,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
   end
 
   create_table "locations", force: :cascade do |t|
-    t.string "name", default: "", null: false, comment: "Full display name, such as a complete address"
+    t.citext "name", default: "", null: false, comment: "Full display name, such as a complete address"
     t.string "geo_level", limit: 20, default: "", null: false, comment: "Level of specificity (country, state, subdivision, or city)"
     t.string "country_name", limit: 100, default: "", null: false, comment: "Country (or equivalent) of this location if available"
     t.string "country_code", limit: 5, default: "", null: false, comment: "ISO 3166 alpha-2 country codes. Can be used to resolve country_name if data sources ever change."
@@ -294,8 +295,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
 
   create_table "metadata", force: :cascade do |t|
     t.string "key", null: false
-    t.string "raw_value"
-    t.string "string_validated_value"
+    t.citext "raw_value"
+    t.citext "string_validated_value"
     t.decimal "number_validated_value", precision: 36, scale: 9
     t.bigint "sample_id"
     t.datetime "created_at", precision: nil, null: false
@@ -555,7 +556,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
   end
 
   create_table "projects", force: :cascade do |t|
-    t.string "name"
+    t.citext "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.integer "public_access", limit: 1, default: 0
@@ -587,7 +588,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
   end
 
   create_table "samples", force: :cascade do |t|
-    t.string "name"
+    t.citext "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.bigint "project_id"
@@ -799,8 +800,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
   end
 
   create_table "users", force: :cascade do |t|
-    t.string "email"
-    t.string "name"
+    t.citext "email"
+    t.citext "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.integer "sign_in_count", default: 0, null: false
@@ -829,7 +830,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.integer "public_access", limit: 1
-    t.string "name"
+    t.citext "name"
     t.string "status", comment: "A soft enum (string) describing the execution status. Currently only applicable to phylo trees."
     t.index ["name"], name: "index_visualizations_on_name"
     t.index ["updated_at"], name: "index_visualizations_on_updated_at"
@@ -847,8 +848,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.bigint "rerun_from"
-    t.jsonb "cached_results", comment: "JSON of cached results for generic loading. Use for simple outputs."
-    t.jsonb "inputs_json", comment: "Generic JSON field for recording execution inputs."
+    t.text "cached_results", comment: "JSON-string of cached results for generic loading. Use for simple outputs."
+    t.text "inputs_json", comment: "Generic JSON-string field for recording execution inputs."
     t.string "s3_output_prefix", comment: "Record the SFN-WDL OutputPrefix used. Ex: 's3://bucket/samples/subpath/results' Never allow users to set this."
     t.integer "time_to_finalized", comment: "Seconds from executed_at to marked as finished with processing."
     t.text "error_message"

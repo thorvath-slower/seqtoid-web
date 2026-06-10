@@ -44,7 +44,7 @@ class Project < ApplicationRecord
     sorted_project_ids = select("projects.id, COUNT(DISTINCT samples.id) AS #{sample_count_alias}")
                          .left_joins(:samples)
                          .group(:id)
-                         .order(Arel.sql("#{sample_count_alias} #{order_dir}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
+                         .order(Arel.sql("#{sample_count_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
                          .collect(&:id)
 
     where(id: sorted_project_ids).order(Arel.sql("array_position(ARRAY[#{sorted_project_ids.join ','}]::bigint[], projects.id)"))
@@ -58,7 +58,7 @@ class Project < ApplicationRecord
     sorted_project_ids = select("projects.id, string_agg(DISTINCT host_genomes.name, ',' ORDER BY host_genomes.name ASC) AS #{host_genome_list_alias}")
                          .left_joins(samples: [:host_genome])
                          .group(:id)
-                         .order(Arel.sql("#{host_genome_list_alias} #{order_dir}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
+                         .order(Arel.sql("#{host_genome_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
                          .collect(&:id)
 
     where(id: sorted_project_ids).order(Arel.sql("array_position(ARRAY[#{sorted_project_ids.join ','}]::bigint[], projects.id)"))
@@ -71,7 +71,7 @@ class Project < ApplicationRecord
                          .left_joins(:samples)
                          .joins("LEFT OUTER JOIN metadata ON (metadata.sample_id=samples.id) AND metadata.key='#{metadata_sample_type_key}'")
                          .group(:id)
-                         .order(Arel.sql("#{sample_type_list_alias} #{order_dir}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
+                         .order(Arel.sql("#{sample_type_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
                          .collect(&:id)
 
     where(id: sorted_project_ids).order(Arel.sql("array_position(ARRAY[#{sorted_project_ids.join ','}]::bigint[], projects.id)"))
@@ -158,7 +158,7 @@ class Project < ApplicationRecord
     sort_key = DATA_KEY_TO_SORT_KEY[order_by]
 
     if PROJECTS_SORT_KEYS.include?(sort_key)
-      projects.order("projects.#{sort_key} #{order_dir}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+      projects.order("projects.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}")
     elsif sort_key == SAMPLE_COUNTS_SORT_KEY
       projects.sort_by_sample_count(order_dir)
     elsif sort_key == HOSTS_SORT_KEY

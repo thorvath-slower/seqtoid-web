@@ -202,7 +202,7 @@ class WorkflowRun < ApplicationRecord
   ].freeze
 
   scope :sort_by_sample_name, lambda { |order_dir|
-    order_statement = "samples.name #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "samples.name #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     left_outer_joins(:sample).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -215,7 +215,7 @@ class WorkflowRun < ApplicationRecord
     "
     order_by = sort_key == "ct_value" ? "number_validated_value" : "string_validated_value"
 
-    joins(ActiveRecord::Base.send(:sanitize_sql_array, joins_statement)).order("metadata.#{order_by} #{order_dir}, workflow_runs.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+    joins(ActiveRecord::Base.send(:sanitize_sql_array, joins_statement)).order("metadata.#{order_by} #{order_dir} #{mysql_nulls(order_dir)}, workflow_runs.#{TIEBREAKER_SORT_KEY} #{order_dir}")
   }
 
   scope :sort_by_host_genome, lambda { |order_dir|
@@ -223,19 +223,24 @@ class WorkflowRun < ApplicationRecord
         LEFT JOIN samples ON workflow_runs.sample_id = samples.id
         LEFT JOIN host_genomes ON host_genomes.id = samples.host_genome_id
     "
-    joins(joins_statement).order("host_genomes.name #{order_dir}, workflow_runs.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+    joins(joins_statement).order("host_genomes.name #{order_dir} #{mysql_nulls(order_dir)}, workflow_runs.#{TIEBREAKER_SORT_KEY} #{order_dir}")
   }
 
   scope :sort_by_input, lambda { |sort_key, order_dir|
     # bug-#011: JSON_EXTRACT -> jsonb access. Order by the extracted jsonb value
-    # (JSON-aware, like JSON_EXTRACT) rather than text; assumes inputs_json is jsonb.
-    order_statement = "inputs_json -> '#{sort_key}' #{order_dir}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
+    # bug-#011: inputs_json is a TEXT column holding a JSON string, so cast ::jsonb
+    # to navigate it (this is what MySQL's JSON_EXTRACT on a text column did). The
+    # input sort keys are strings, so use ->> (text) for plain lexical ordering;
+    # jsonb -> would compare strings by length-then-bytes, which is not what we want.
+    order_statement = "(inputs_json::jsonb) ->> '#{sort_key}' #{order_dir} #{mysql_nulls(order_dir)}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
     order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :sort_by_cached_result, lambda { |sort_key, order_dir|
     cached_result_key = sort_key == "coverage_depth" ? CACHED_RESULT_COVERAGE_VIZ_KEY : CACHED_RESULT_QUALITY_METRICS_KEY
-    order_statement = "cached_results #> '{#{cached_result_key},#{sort_key}}' #{order_dir}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
+    # cached_results is a TEXT column holding a JSON string; cast ::jsonb to navigate.
+    # The cached keys are numbers, so #> (jsonb) gives correct numeric ordering.
+    order_statement = "(cached_results::jsonb) #> '{#{cached_result_key},#{sort_key}}' #{order_dir} #{mysql_nulls(order_dir)}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
     order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -247,12 +252,12 @@ class WorkflowRun < ApplicationRecord
     "
     # TODO(ihan): Investigate location metadata creation. I've implemented a workaround solution below,
     # but ideally, all location info should be stored by location_id.
-    order_statement = "(CASE WHEN metadata.location_id IS NULL THEN metadata.string_validated_value ELSE locations.name END) #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "(CASE WHEN metadata.location_id IS NULL THEN metadata.string_validated_value ELSE locations.name END) #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :by_taxon, lambda { |taxon_id|
-    query = "(inputs_json ->> 'taxon_id')::bigint IN (#{taxon_id.join(',')})"
+    query = "(inputs_json::jsonb ->> 'taxon_id')::bigint IN (#{taxon_id.join(',')})"
     where(Arel.sql(ActiveRecord::Base.sanitize_sql_array(query)))
   }
 
@@ -414,7 +419,7 @@ class WorkflowRun < ApplicationRecord
     metadata_sort_key = sanitize_metadata_field_name(order_by)
 
     if sort_key == "id"
-      workflow_runs.order("workflow_runs.#{sort_key} #{order_dir}, workflow_runs.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+      workflow_runs.order("workflow_runs.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, workflow_runs.#{TIEBREAKER_SORT_KEY} #{order_dir}")
     elsif sort_key == "name"
       workflow_runs.sort_by_sample_name(order_dir)
     elsif sort_key == "host"
