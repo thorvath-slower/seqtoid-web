@@ -1,0 +1,66 @@
+// using czifui variables as of 12/2021
+$primary-off-white: #f8f9fe;
+$primary-lightest: #eff2fc;
+$primary-light: #a9bdfc;
+$primary: #3867fa;
+$primary-dark: #2b52cd;
+$primary-darkest: #223f9c;
+
+$secondary: #9bc74e;
+
+$black: #000000;
+$gray-darkest: #545454;
+$gray-dark: #767676;
+$gray-medium: #999999;
+$gray-light: #cccccc;
+$gray-lightest: #eaeaea;
+$gray-off-white: #f8f8f8;
+$white: #ffffff;
+
+$success-off-white: #ecf5f0;
+$success-lightest: #e6f7ed;
+$success-light: #e4ede8;
+$success-medium: #3cb371;
+$success-dark: #1c7f48;
+
+$error-off-white: #fef2f2;
+$error-lightest: #fbe8e8;
+$error-light: #f2e4e4;
+$error-medium: #dc132c;
+$error-dark: #b70016;
+
+$warning-off-white: #fcf6ec;
+$warning-lightest: #fff3e1;
+$warning-light: #f4eee4;
+$warning-medium: #f5a623;
+$warning-dark: #946314;
+
+$info-off-white: #eff2fc;
+$info-lightest: #ebeffc;
+$info-light: #e7eaf4;
+$info-medium: #3867fa;
+$info-dark: #223f9c;
+
+$beta-dark: #693bac;
+$beta-medium: #7a41ce;
+$beta-light: #ece8f1;
+$beta-lightest: #f0ebf6;
+$beta-off-white: #f4f0f9;
+
+$box-shadow-lighter: rgba(34, 36, 38, 0.15);
+$box-shadow-light: rgba(0, 0, 0, 0.22);
+$box-shadow-dark: rgba(34, 36, 38, 0.5);
+
+// czid marketing colors as of 10/24/2023
+
+$blue: #4edbfa;
+$bluegreen: #7aeff1;
+$green: #98de7b;
+
+// Deprecated color variables from czifui@3.4.1 that are no longer included in czifui@6.1.0
+$sds-color-warning-100-overlay: #f4eee4;
+$sds-color-info-100-overlay: #e7eaf4;
+
+@function hover-state($base-color) {
+  @return darken($base-color, 5%);
+}

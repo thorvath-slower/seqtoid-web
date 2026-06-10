@@ -1,0 +1,71 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.errorModal {
+  .errorMessage {
+    display: flex;
+
+    .textContainer {
+      width: 315px;
+      margin-bottom: $sds-spaces-l;
+
+      .error {
+        display: inline-flex;
+        background-color: $sds-color-error-200;
+        border-radius: $sds-corners-corner-l;
+        padding: $sds-spaces-xxs $sds-spaces-s;
+        background-color: $sds-color-error-100;
+        color: $sds-color-error-400;
+        margin-bottom: $sds-spaces-l;
+        margin-left: -$sds-spaces-xxs;
+
+        .icon {
+          width: $icon-l;
+          fill: $sds-color-error-400;
+        }
+
+        .text {
+          @include font-caps-xxxs;
+          margin-left: $sds-spaces-s;
+          margin-top: $sds-spaces-xxxs;
+        }
+      }
+
+      .title {
+        @include font-header-l;
+      }
+
+      .message {
+        @include font-body-s;
+        margin-top: $sds-spaces-s;
+        color: $sds-color-gray-600;
+        .actionLink {
+          color: $sds-color-primary-400 !important;
+        }
+      }
+    }
+
+    .imgMicrobe {
+      fill: $sds-color-gray-200;
+      width: $img-l;
+      margin: -$sds-spaces-l;
+    }
+  }
+
+  .actions {
+    margin-top: $sds-spaces-m;
+    display: flex;
+
+    .item {
+      &:not(:first-child) {
+        margin-left: $sds-spaces-xs;
+      }
+
+      &:not(:last-child) {
+        margin-right: $sds-spaces-xs;
+      }
+    }
+  }
+}

@@ -1,0 +1,68 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.filePicker {
+  width: 100%;
+  border: $sds-borders-gray-dashed;
+  border-radius: $sds-corners-corner-m;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+
+  &.active {
+    background-color: $sds-color-primary-200;
+    border: $sds-borders-primary-dashed;
+  }
+
+  &:hover,
+  &.accepted {
+    background-color: $sds-color-primary-200;
+    border: $sds-borders-primary-dashed;
+  }
+
+  .inner {
+    margin: 0 28px;
+
+    .title {
+      @include font-header-s;
+      margin-bottom: 5px;
+    }
+
+    .fileBox {
+      font-size: 13px;
+
+      .checkmarkIcon {
+        color: $sds-color-primary-400;
+      }
+
+      &.noTitle {
+        font-size: 16px;
+
+        .fileName {
+          font-weight: 600;
+        }
+      }
+    }
+
+    .instructions {
+      color: $sds-color-gray-600;
+      font-size: 13px;
+    }
+
+    .message {
+      margin-top: 1rem;
+      color: $sds-color-primary-400;
+    }
+
+    .browserLink {
+      color: $sds-color-primary-400;
+    }
+  }
+
+  .loadingIndicator {
+    text-align: center;
+    color: $sds-color-gray-500;
+  }
+}

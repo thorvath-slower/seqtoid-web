@@ -1,0 +1,168 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.viewOnlyLinkForm {
+  display: flex;
+  flex-direction: column;
+
+  .note {
+    @include font-body-xs;
+    color: $sds-color-gray-500;
+  }
+
+  .noteContainer {
+    margin-top: $sds-spaces-xxs;
+    margin-right: 100px;
+  }
+
+  .background {
+    background-color: $sds-color-gray-100;
+    border-radius: $sds-corners-corner-m;
+  }
+
+  .helpIcon {
+    margin-left: $sds-spaces-xs;
+    display: inline-flex;
+    vertical-align: middle;
+  }
+
+  .toggleContainer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .loadingIcon {
+      // width and height of toggle
+      width: 68px;
+      height: 28px;
+      justify-content: center;
+    }
+
+    .linkToggle {
+      margin-right: $sds-spaces-m;
+    }
+
+    .automaticUpdateToggle {
+      margin-right: $sds-spaces-xl;
+    }
+  }
+
+  .viewOnlyLinkHeader {
+    .titleContainer {
+      height: 22px; // title height
+
+      .title {
+        @include font-header-m;
+      }
+    }
+
+    .note {
+      display: inline;
+    }
+  }
+
+  .viewOnlyLinkBody {
+    padding: $sds-spaces-l;
+    margin-top: $sds-spaces-l;
+
+    .label {
+      @include font-header-s;
+      color: $sds-color-gray-black;
+      margin-bottom: $sds-spaces-xxs;
+    }
+
+    .pipelineVersionTooltip {
+      text-decoration: underline;
+      text-decoration-style: dashed;
+
+      &:hover {
+        color: $sds-color-primary-400;
+        cursor: default;
+      }
+    }
+
+    .settingsForm {
+      margin-left: $sds-spaces-xl;
+
+      .settingsFormDropdown {
+        margin-top: $sds-spaces-l;
+
+        .backgroundModelLabel {
+          @include font-header-s;
+          margin-top: $sds-spaces-l;
+          margin-bottom: $sds-spaces-xxs;
+          display: flex;
+          align-items: center;
+        }
+
+        .dropdown {
+          width: 190px;
+          color: $sds-color-primary-400;
+
+          span {
+            color: $sds-color-gray-500;
+          }
+        }
+      }
+
+      .settingsFormField {
+        display: flex;
+        flex-direction: column;
+        margin-top: $sds-spaces-l;
+
+        .formFieldLabelContainer {
+          height: 24px; // formFieldLabel height
+
+          .formFieldLabel {
+            @include font-header-s;
+          }
+        }
+      }
+    }
+
+    .shareableLink {
+      display: flex;
+      margin-top: $sds-spaces-xl;
+
+      .shareableLinkField:first-child {
+        flex: 1;
+      }
+
+      .shareableLinkField:last-child {
+        flex: 0 0 auto;
+        margin-left: $sds-spaces-m;
+      }
+
+      .input {
+        input[type="text"] {
+          color: $sds-color-gray-500;
+        }
+      }
+
+      .button {
+        min-width: 75px;
+      }
+    }
+
+    .staticWarning {
+      @include font-body-xxs;
+      color: $sds-color-gray-500;
+      margin-left: $sds-spaces-xxxs;
+      margin-top: $sds-spaces-s;
+      margin-right: 100px;
+      margin-bottom: $sds-spaces-s;
+    }
+  }
+}
+
+.highlight {
+  @include font-header-xs;
+}
+
+// Override materialize.css
+.conditionList {
+  @include font-body-xs;
+  margin-left: $sds-spaces-xl;
+}

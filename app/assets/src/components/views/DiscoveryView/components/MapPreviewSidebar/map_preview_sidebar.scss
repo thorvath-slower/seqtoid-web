@@ -1,0 +1,88 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.sidebar {
+  font-size: 12px;
+  width: 300px;
+  overflow-y: scroll;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+
+  .container {
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 auto;
+
+    .table {
+      flex: 1 0 auto;
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  .noData {
+    color: $sds-color-gray-500;
+    margin: 20px;
+    text-align: center;
+  }
+
+  .tabs {
+    margin: 15px $sds-spaces-m 5px;
+    flex: 0 0 auto;
+
+    .tabLabel {
+      @include font-header-xs;
+      margin-right: $sds-spaces-m;
+    }
+
+    .tabCounter {
+      @include font-body-xs;
+      color: $sds-color-gray-500;
+    }
+  }
+
+  .summaryInfo {
+    width: initial;
+  }
+}
+
+.tableHeader {
+  padding: 5px 0;
+  margin-left: 0;
+}
+
+.sampleRow {
+  align-items: flex-start;
+  padding: $sds-spaces-m 0;
+  margin-left: 0;
+
+  .sample,
+  .tableHeader,
+  .selectColumn {
+    margin-left: 0;
+    margin-right: 5px;
+  }
+}
+
+.basicCell {
+  // this is adjusted to align the baseline of
+  // content of basic cells with the sample name.
+  margin-top: $sds-spaces-xxxs;
+}
+
+.sampleHeader,
+.projectHeader {
+  text-align: left;
+}
+
+.projectRow {
+  margin-left: 0;
+  padding: 5px 0;
+
+  .project {
+    margin-left: 5px;
+    margin-right: 5px;
+  }
+}

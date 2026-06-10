@@ -1,0 +1,160 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.downloadTypeContainer {
+  margin-top: $sds-spaces-l;
+  flex: 1 1 0;
+  min-height: 0;
+
+  .category {
+    &:not(:first-child) {
+      margin-top: $sds-spaces-xl;
+    }
+
+    .title {
+      @include font-caps-xxxs;
+      color: $sds-color-gray-500;
+    }
+  }
+}
+
+.taxaWithReadsDropdown {
+  width: 300px;
+
+  .taxaWithReadsOptionsHeader {
+    display: flex;
+    padding: $sds-spaces-xs $sds-spaces-l;
+
+    .header {
+      @include font-header-xs;
+      color: $sds-color-gray-500;
+    }
+
+    .fill {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+
+  .taxaWithReadsOption {
+    display: flex;
+    padding: $sds-spaces-xs $sds-spaces-l;
+
+    .taxonName {
+      @include font-body-xxs;
+      flex-shrink: 1;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .fill {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .sampleCount {
+      @include font-body-xxs;
+      color: $sds-color-gray-500;
+    }
+  }
+}
+
+.downloadType {
+  padding: $sds-spaces-l $sds-spaces-m;
+  margin-bottom: $sds-spaces-xxs;
+  margin-right: $sds-spaces-m;
+  border-radius: $sds-corners-corner-m;
+  display: flex;
+  cursor: pointer;
+
+  &:hover,
+  &.selected {
+    background-color: $sds-color-gray-100;
+  }
+
+  &.disabled {
+    cursor: default;
+
+    &:hover {
+      background-color: white;
+    }
+
+    .name,
+    .description,
+    .fileType {
+      color: $sds-color-gray-300;
+    }
+  }
+
+  .radioButton {
+    align-items: start;
+    padding: $sds-spaces-xxs $sds-spaces-m 0 0;
+  }
+
+  .content {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .name {
+    @include font-header-xs;
+  }
+
+  .description {
+    @include font-body-xxs;
+    color: $sds-color-gray-500;
+  }
+
+  .fileType {
+    @include font-body-xs;
+    color: $sds-color-gray-500;
+  }
+}
+
+.fields {
+  margin-top: $sds-spaces-m;
+  margin-bottom: $sds-spaces-xxs;
+  display: flex;
+  flex-wrap: wrap;
+
+  .field {
+    width: calc(50% - #{$sds-spaces-xl * 0.5});
+
+    &:nth-child(odd) {
+      margin-right: $sds-spaces-xl;
+    }
+
+    .label {
+      @include font-body-xs;
+      margin-bottom: $sds-spaces-xxs;
+    }
+
+    .forcedOption {
+      height: 34px;
+      display: flex;
+      align-items: center;
+    }
+
+    .info {
+      @include font-body-xxs;
+      color: $sds-color-gray-500;
+    }
+  }
+
+  .checkboxField {
+    @include font-body-xxs;
+    color: $sds-color-gray-black;
+  }
+  .filterbyField {
+    width: calc(100% - #{$sds-spaces-xl * 0.5});
+    margin-top: $sds-spaces-xl;
+    margin-bottom: $sds-spaces-xl;
+    .label {
+      @include font-body-xs;
+      margin-bottom: $sds-spaces-xxs;
+    }
+  }
+}

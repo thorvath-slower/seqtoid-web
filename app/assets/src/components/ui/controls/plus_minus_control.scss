@@ -1,0 +1,32 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.plusMinusContainer {
+  display: flex;
+  flex-direction: column;
+  border-radius: $sds-corners-corner-m;
+  overflow: hidden;
+
+  .button {
+    -webkit-appearance: none;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    outline: none;
+    border: none;
+    box-sizing: border-box;
+
+    &:first-child {
+      border-bottom: $sds-borders-gray-200;
+    }
+
+    &:focus {
+      background-color: transparent;
+    }
+  }
+}
+
+.icon {
+  fill: $sds-color-gray-600;
+}

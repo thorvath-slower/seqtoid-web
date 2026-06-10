@@ -1,0 +1,95 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+:global(.ui):global(.dropdown).dropdown {
+  &:global(.active) {
+    .dropdownTrigger {
+      border: $sds-borders-primary-400;
+    }
+  }
+}
+
+.option {
+  @include font-body-xs;
+  // override the fixed height and flex display from BareDropdown items
+  height: auto !important;
+  display: block !important;
+
+  white-space: normal;
+  margin-top: $sds-spaces-m;
+  margin-bottom: $sds-spaces-m;
+  cursor: pointer;
+
+  // for SectionsDropdown, the menu items already have padding that can't be overridden
+  &.noMargins {
+    margin: 0 0 0 $sds-spaces-xxs;
+  }
+
+  .optionText {
+    color: $sds-color-gray-black;
+
+    &.selectedOption {
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  .optionSubtext {
+    @include font-body-xxs;
+    color: $sds-color-gray-500;
+  }
+
+  &:hover {
+    // override background color from BareDropdown
+    background-color: $sds-color-gray-100 !important;
+  }
+}
+
+.disabledOption {
+  color: $sds-color-gray-300;
+  // override cursor from BareDropdown
+  cursor: default !important;
+
+  .optionText {
+    color: $sds-color-gray-300;
+  }
+
+  .optionSubtext {
+    color: $sds-color-gray-300;
+  }
+
+  &:hover {
+    // override background color from BareDropdown
+    background-color: $sds-color-gray-white !important;
+  }
+}
+
+// override semantic ui Dropdown.Header and Dropdown.Divider styling
+:global(.ui.dropdown .menu) {
+  :global(.header) {
+    @include font-caps-xxxxs;
+    color: $sds-color-gray-500;
+
+    margin: $sds-spaces-m 0;
+  }
+
+  :global(.divider) {
+    border-top: $sds-borders-gray-200;
+    margin: 0 $sds-spaces-l;
+  }
+}
+
+.emptySection {
+  margin: $sds-spaces-l 0 $sds-spaces-l $sds-spaces-l;
+  cursor: default !important;
+
+  .message {
+    @include font-body-xxs;
+    color: $sds-color-gray-500;
+  }
+
+  &:hover {
+    background-color: transparent !important;
+  }
+}

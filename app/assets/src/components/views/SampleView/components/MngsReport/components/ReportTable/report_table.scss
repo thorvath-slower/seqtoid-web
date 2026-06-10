@@ -1,0 +1,215 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.reportTable {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
+.header {
+  @include font-header-xs;
+
+  color: $sds-color-gray-500;
+  justify-content: flex-end;
+  text-align: right;
+  margin-right: $sds-spaces-l;
+  // Push all the headers down except nt/nr selector so the text is aligned.
+  margin-top: $sds-spaces-l;
+}
+
+.taxonHeader {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.expandHeader {
+  // reactVirtualized sets margin-left to 10px for the first column by default,
+  // so we need to override it.
+  margin-left: 0px !important;
+  margin-right: 0px !important;
+}
+
+.expandCell {
+  // reactVirtualized sets margin-left to 10px for the first column by default,
+  // so we need to override it.
+  margin-left: 0px !important;
+  margin-right: 0px !important;
+}
+
+.expandIcon {
+  font-size: 18px;
+  padding-left: 5px;
+  text-align: center;
+}
+
+.header {
+  .expandIcon {
+    margin-bottom: 2px;
+  }
+}
+
+.ntnrSelectorHeader {
+  color: $sds-color-gray-600;
+  text-align: center;
+  cursor: pointer;
+  // Don't push down the text so "NR" is aligned with the other headers.
+  margin-top: 0;
+}
+
+.cell {
+  @include font-body-s;
+  overflow: visible !important; // Make sure the download dropdowns don't get truncated
+
+  color: $sds-color-gray-600;
+  font-weight: $font-weight-bold;
+  padding: $sds-spaces-xs 0;
+  text-align: right;
+  margin-right: $sds-spaces-l;
+
+  .noData {
+    text-align: center;
+  }
+}
+
+.stack {
+  display: inline-block;
+
+  .stackElement {
+    display: block;
+    @include font-body-s;
+    line-height: $sds-spaces-xl;
+    font-weight: $font-weight-bold;
+
+    &.lowlightValue {
+      @include font-body-xxs;
+
+      color: $sds-color-gray-500;
+    }
+  }
+}
+
+.nameCell {
+  display: flex;
+  flex-direction: row;
+  font-weight: $font-weight-semibold;
+  text-align: left;
+
+  .taxonContainer {
+    display: flex;
+    margin-left: $sds-spaces-l;
+    .annotationLabel {
+      margin-right: $sds-spaces-s;
+    }
+
+    .taxonInfo {
+      .taxonName {
+        white-space: normal;
+        &:hover {
+          cursor: pointer;
+        }
+      }
+
+      .missingName {
+        color: $sds-color-gray-500;
+      }
+
+      .countInfo {
+        font-weight: $font-weight-regular;
+        margin-left: $sds-spaces-xs;
+        color: $sds-color-gray-500;
+        white-space: normal;
+
+        .italics {
+          font-style: italic;
+        }
+      }
+    }
+  }
+
+  &:hover {
+    .taxonName {
+      color: $sds-color-primary-400;
+    }
+  }
+}
+
+.taxonContainer::first-letter {
+  text-transform: uppercase;
+}
+
+.speciesRow {
+  .nameCell {
+    font-weight: $font-weight-regular;
+    margin-left: $sds-spaces-m;
+    margin-right: $sds-spaces-xxs;
+  }
+}
+
+.genusRow {
+  background-color: $sds-color-gray-100;
+}
+
+.genusRow,
+.speciesRow,
+.row {
+  padding-left: 5px;
+  // For some reason, react virtualized adds 8px padding to rows' style,
+  // when we expand a single column, from a previous value of 0.
+  // In theory is to make room for the scrollbar.
+  // We override it here to 0, specially since the last column - the NT/NR
+  // selector can be used for the scrollbar.
+  padding-right: 0px !important;
+
+  &.highlighted {
+    background-color: $sds-color-primary-200;
+    border-left: 5px solid $sds-color-primary-400;
+    padding-left: 0px;
+  }
+
+  &.dimmed:not(:hover) * {
+    color: $sds-color-gray-300 !important;
+  }
+
+  .hoverActions {
+    display: none;
+  }
+
+  &:hover {
+    .hoverActions {
+      display: inline-block;
+    }
+
+    // Undim rows on hover
+    &.dimmed * {
+      .taxonName {
+        color: $sds-color-primary-400 !important;
+      }
+
+      &:global(.dimRed.label) {
+        background-color: $sds-color-error-600 !important;
+        border-color: $sds-color-error-600 !important;
+      }
+    }
+  }
+}
+
+.annotatedData {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  vertical-align: middle;
+
+  .icon {
+    flex: 0 0 auto;
+    margin-right: $sds-spaces-xs;
+    height: $icon-l;
+    vertical-align: middle;
+  }
+
+  .data {
+    flex: 0 0 auto;
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "tag": "branch-master",
+  "project": "idseq",
+  "env": "dev",
+  "name": "web",
+  "region": "us-west-2"
+}

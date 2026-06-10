@@ -1,0 +1,163 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.footer {
+  background: $sds-color-gray-black;
+  color: $sds-color-gray-white;
+  padding: 3rem 4rem;
+  font-family: $sds-font-font-family;
+  @include font-body-s;
+
+  a {
+    color: $sds-color-gray-white;
+    text-decoration: none;
+  }
+
+  @media (max-width: 768px) {
+    @include font-body-xxs;
+    padding: 35px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.footerLogo {
+  display: block;
+  height: 40px;
+
+  @media (max-width: 768px) {
+    height: 32px;
+  }
+}
+
+.topNavContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5rem;
+
+  a + a {
+    margin-left: 40px;
+
+    @media (max-width: 768px) {
+      margin-left: 0px;
+      margin-top: 32px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 40px;
+  }
+}
+
+.topNavMenu {
+  @media (max-width: 768px) {
+    margin-top: 42px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.topNavMenuTop {
+  background: $sds-color-gray-black;
+}
+
+.bottomNavContainer {
+  display: flex;
+  justify-content: space-between;
+
+  @media (max-width: 768px) {
+    flex-direction: column-reverse;
+    align-items: center;
+    width: 100%;
+  }
+}
+
+.bottomNavMenu {
+  display: flex;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    margin-top: 25px;
+    @include font-body-xxxs;
+  }
+
+  .cookieSettings {
+    margin: 0px;
+
+    &:hover {
+      cursor: pointer;
+    }
+  }
+
+  p {
+    margin-right: $sds-spaces-m;
+    margin-bottom: 0px;
+    color: $sds-color-gray-white;
+
+    @media (max-width: 768px) {
+      margin-bottom: $sds-spaces-m;
+    }
+  }
+
+  span {
+    margin: 0 $sds-spaces-s;
+  }
+}
+
+.czLogoContainer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  p {
+    font-style: italic;
+    color: $sds-color-gray-white;
+
+    @media (max-width: 768px) {
+      align-self: flex-start;
+    }
+  }
+
+  .separator {
+    background: $sds-color-gray-white;
+    opacity: 0.3;
+    height: 42px;
+    width: 1px;
+    margin: 0 $sds-spaces-xl;
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: center;
+    flex-direction: column;
+  }
+}
+
+.czLogoInnerContainer {
+  display: flex;
+  align-items: center;
+  margin-left: 32px;
+
+  @media (max-width: 768px) {
+    margin-left: 0;
+    margin-bottom: $sds-spaces-xl;
+  }
+}
+
+.cziLogo svg {
+  width: 75px;
+  height: auto;
+}
+
+.biohubLogo svg {
+  width: auto;
+  height: auto;
+}

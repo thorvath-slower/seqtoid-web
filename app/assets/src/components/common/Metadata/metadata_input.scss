@@ -1,0 +1,16 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+
+.warning {
+  @include font-body-xxxs;
+  color: $sds-color-warning-600;
+  display: flex;
+
+  .icon {
+    flex: 0 0 auto;
+    width: $icon-s;
+    height: $icon-s;
+    margin-right: 7px;
+  }
+}

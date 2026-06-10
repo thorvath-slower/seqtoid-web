@@ -1,0 +1,49 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.metadataSection {
+  border-bottom: $sds-borders-gray-300;
+
+  .title {
+    @include font-caps-xxs;
+    line-height: 40px;
+    color: $sds-color-gray-black;
+    padding: 0 10px;
+    height: 40px;
+  }
+
+  .editLink {
+    @include font-body-xxs;
+    color: transparent;
+    text-decoration: underline;
+    cursor: pointer;
+
+    &.show {
+      color: $sds-color-gray-300;
+    }
+
+    &:hover,
+    &:focus {
+      color: $sds-color-gray-black;
+    }
+  }
+
+  .status {
+    @include font-body-xxs;
+    color: $sds-color-gray-300;
+    margin-top: 1px;
+  }
+
+  .controls {
+    text-align: right;
+    margin-top: 15px;
+  }
+}
+
+.metadataSection:hover {
+  .editLink {
+    color: $sds-color-gray-300;
+  }
+}

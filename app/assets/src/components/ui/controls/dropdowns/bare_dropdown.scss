@@ -1,0 +1,200 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+:global(.ui):global(.dropdown).bareDropdown,
+.portalDropdown {
+  .dropdownArrow {
+    fill: currentColor;
+    width: $sds-icon-sizes-s-width;
+  }
+
+  // Places the arrow within the trigger.
+  &.arrowInsideTrigger {
+    position: relative;
+
+    .dropdownArrow {
+      margin: 0;
+      padding: 0;
+      position: absolute;
+      // TODO: These are centering the icon in the input. So, they depend heavily on the dimensions of the component.
+      // For that reason, i think they should not depend on space variables.
+      // They should, however, be relative to dimensions of the parent component.
+      right: 10px;
+      top: 10px;
+      line-height: 24px;
+      pointer-events: none;
+      font-size: 20px;
+    }
+  }
+
+  // Places the arrow to the right of the trigger.
+  &.arrowOutsideTrigger {
+    display: flex;
+    align-items: center;
+
+    .dropdownArrow {
+      margin-left: 0;
+      font-size: 20px;
+    }
+  }
+
+  &.hideArrow {
+    .dropdownArrow {
+      display: none;
+    }
+  }
+
+  &.smallArrow {
+    .dropdownArrow {
+      font-size: 16px;
+    }
+  }
+
+  :global(.item) {
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.4px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    /* Overwrite semantic ui */
+    padding-left: $sds-spaces-l !important;
+    padding-right: $sds-spaces-l !important;
+    color: black !important;
+    cursor: pointer;
+
+    &:hover {
+      background-color: $sds-color-gray-200;
+    }
+  }
+
+  // Since we have our own custom search input,
+  // hide the semantic-ui search input.
+  :global(.search) {
+    display: none;
+  }
+
+  // semantic-ui applies max-height when search is true.
+  // We have our max-height on .innerMenu, so override this max-height
+  // to prevent double scrollbars.
+  &:global(.search) {
+    .menu {
+      max-height: none;
+    }
+  }
+
+  .emptySection {
+    margin: $sds-spaces-l;
+    cursor: default !important;
+
+    .message {
+      @include font-body-xxs;
+      color: $sds-color-gray-500;
+    }
+
+    &:hover {
+      background-color: transparent !important;
+    }
+  }
+
+  .item {
+    cursor: pointer;
+
+    &:hover {
+      background-color: $sds-color-gray-200;
+    }
+
+    &.active {
+      font-weight: bold;
+    }
+  }
+
+  .menu {
+    min-width: 100%;
+    background-color: $sds-color-gray-white;
+    box-shadow: $sds-drop-shadows-shadow-m;
+    border: $sds-borders-gray-300;
+    border-radius: $sds-corners-corner-m;
+
+    &:global(.left) {
+      .innerMenu {
+        /* Override special case semantic ui styling for left menus */
+        margin: 0 !important;
+      }
+    }
+
+    &.extraPadding {
+      padding-top: $sds-spaces-l;
+      padding-bottom: $sds-spaces-m;
+    }
+
+    .menuLabel {
+      font-size: 13px;
+      line-height: 13px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      margin-bottom: 12px;
+      padding: 0 $sds-spaces-l;
+    }
+
+    .searchContainer {
+      margin: 0 $sds-spaces-l $sds-spaces-m $sds-spaces-l;
+    }
+  }
+
+  .dropdownMenu {
+    padding: $sds-spaces-xs 0;
+  }
+
+  .noResultsMessage {
+    @include font-body-xxs;
+    padding: $sds-spaces-xs $sds-spaces-l;
+    color: $sds-color-gray-500;
+  }
+
+  .innerMenu {
+    /* Override semantic-ui */
+    box-shadow: none !important;
+    border-radius: $border-radius-none !important;
+    border-top: none !important;
+    max-height: 288px;
+    overflow: auto;
+
+    // TODO(mark): Move this to a global CSS file.
+    &::-webkit-scrollbar {
+      width: 8px;
+      border-radius: $sds-corners-corner-s;
+    }
+
+    &::-webkit-scrollbar-track {
+      display: none;
+    }
+  }
+
+  i:global(.dropdown) {
+    &:before {
+      font-family: FontAwesome;
+      content: "\f107";
+    }
+  }
+
+  &:global(.active) {
+    & > i:global(.dropdown):global(.icon):before {
+      color: $sds-color-primary-400;
+    }
+  }
+}
+
+.searchInputIcon {
+  fill: $sds-color-gray-400;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  // TODO: These are centering the icon in the input. So, they depend heavily on the dimensions of the component.
+  // For that reason, i think they should not depend on space variables.
+  // They should, however, be relative to dimensions of the parent component.
+  right: 10px;
+  top: 10px;
+}

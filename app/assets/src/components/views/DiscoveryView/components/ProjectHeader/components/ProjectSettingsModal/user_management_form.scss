@@ -1,0 +1,97 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.userManagementForm {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+
+  .title {
+    @include font-header-m;
+    color: black;
+    display: flex;
+    align-items: center;
+    min-height: 20px;
+    margin-bottom: $sds-spaces-xxs;
+  }
+
+  .note {
+    @include font-body-xs;
+    color: $sds-color-gray-500;
+    margin-bottom: $sds-spaces-l;
+  }
+
+  .background {
+    background-color: $sds-color-gray-100;
+    border-radius: $sds-corners-corner-m;
+  }
+
+  .userManagementBody {
+    padding: $sds-spaces-l;
+
+    .userList {
+      margin-top: $sds-spaces-l;
+      width: 100%;
+      max-height: 150px;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+
+      .userEntry {
+        @include font-body-xs;
+      }
+
+      .userEntry:not(:first-child) {
+        margin-top: $sds-spaces-xs;
+      }
+    }
+
+    .addMemberForm {
+      display: flex;
+
+      .label {
+        @include font-header-s;
+        margin-bottom: $sds-spaces-xs;
+      }
+
+      .button {
+        min-width: 75px;
+      }
+
+      .addMemberFormField:not(:first-child) {
+        margin-left: $sds-spaces-m;
+      }
+
+      .addMemberFormField:not(:last-child) {
+        flex: 1;
+      }
+
+      .addMemberFormField:last-child {
+        flex: 0 0 auto;
+        align-self: flex-end;
+        margin-bottom: 0;
+      }
+    }
+
+    .statusMessage {
+      @include font-body-xxs;
+      margin-top: $sds-spaces-m;
+      height: 16px;
+
+      &.errorMessage {
+        color: $sds-color-error-400;
+      }
+
+      &.infoMessage {
+        color: $sds-color-gray-500;
+      }
+
+      &.successMessage {
+        color: $sds-color-success-400;
+      }
+    }
+  }
+}

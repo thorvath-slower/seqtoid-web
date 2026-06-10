@@ -1,0 +1,22 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.container {
+  width: 350px;
+  margin: 0 auto;
+  box-shadow: $sds-drop-shadows-shadow-m;
+  margin-top: 150px;
+  border-radius: $sds-corners-corner-l;
+
+  .text {
+    @include font-body-s;
+    padding: $sds-spaces-xl;
+
+    a {
+      // Override _header.scss
+      color: $sds-color-primary-400 !important;
+    }
+  }
+}

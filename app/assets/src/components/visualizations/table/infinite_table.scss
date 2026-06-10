@@ -1,0 +1,16 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.loading {
+  .cellContent {
+    @include loadingAnimation;
+
+    height: 12px;
+    margin: $sds-spaces-xxs 20%;
+  }
+}
+
+.sortedHeader {
+  color: $sds-color-primary-400;
+}

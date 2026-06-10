@@ -1,0 +1,61 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.sampleUploadTable {
+  flex: 1 1 0;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+
+  .detectedMsg {
+    @include font-body-xs;
+    margin-top: 20px;
+    margin-bottom: $sds-spaces-m;
+    color: $sds-color-gray-500;
+
+    .count {
+      @include font-header-xs;
+      color: $sds-color-gray-black;
+    }
+  }
+
+  .removeIcon {
+    cursor: pointer;
+    opacity: 0.3;
+    width: 10px;
+    margin-top: 5px;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  .removeLink {
+    color: $sds-color-gray-500;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .cell,
+  .header {
+    @include font-body-xs;
+  }
+
+  .cell {
+    text-align: left;
+    color: inherit;
+  }
+
+  .header {
+    justify-content: left;
+  }
+  .disabled {
+    color: $sds-color-gray-500;
+  }
+}
+
+.columnHeaderLabel {
+  margin-left: 0 !important; // override label styling from BaseTable
+}

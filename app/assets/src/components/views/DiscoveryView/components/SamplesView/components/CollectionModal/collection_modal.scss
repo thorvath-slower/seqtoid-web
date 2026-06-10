@@ -1,0 +1,126 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.collectionModal {
+  @include font-body-s;
+
+  .form {
+    .sectionHeader {
+      display: flex;
+      align-items: center;
+      margin-top: $sds-spaces-xl;
+
+      .label {
+        @include font-header-s;
+        margin-right: $sds-spaces-xxs;
+      }
+
+      .optional {
+        @include font-body-xxs;
+
+        color: $sds-color-gray-300;
+      }
+    }
+
+    .infoIcon {
+      vertical-align: text-top;
+
+      &.error {
+        fill: $sds-color-error-600 !important;
+      }
+    }
+
+    .errorMessageContainer {
+      display: flex;
+      align-items: center;
+      margin-top: $sds-spaces-xxs;
+
+      .errorMessage {
+        @include font-body-xxxs;
+
+        margin-left: $sds-spaces-s;
+        color: $sds-color-error-600;
+      }
+    }
+
+    .textArea {
+      width: 100%;
+    }
+
+    .dropdown {
+      margin-bottom: $sds-spaces-xxl;
+    }
+
+    .buttons {
+      display: flex;
+
+      button {
+        &:not(:first-child) {
+          margin-left: $sds-spaces-default;
+        }
+      }
+    }
+
+    .details {
+      @include font-body-xs;
+      color: $sds-color-gray-500;
+      margin-top: $sds-spaces-default;
+    }
+
+    .highlight {
+      @include font-header-xxs;
+    }
+
+    .notificationContainer {
+      margin-bottom: $sds-spaces-xxl;
+
+      .messageLine {
+        @include font-body-xxs;
+        padding: $sds-spaces-xxs 0;
+        margin-right: $sds-spaces-xl;
+      }
+    }
+  }
+
+  .sampleList {
+    margin-bottom: $sds-spaces-xxl;
+
+    .selectedSamples {
+      margin-bottom: 0;
+
+      .sampleName {
+        @include font-body-xs;
+      }
+
+      .sampleDetails {
+        @include font-body-xxs;
+
+        color: $sds-color-gray-500;
+        margin-left: $sds-spaces-m;
+      }
+    }
+
+    .moreSamplesCount {
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  .title {
+    @include font-header-xl;
+
+    padding-bottom: 20px;
+  }
+
+  .notification {
+    margin-top: 20px;
+    margin-bottom: 20px;
+  }
+
+  .link {
+    // Overwrite <a> inherit rule in header.scss
+    color: $sds-color-primary-400 !important;
+    cursor: pointer;
+  }
+}

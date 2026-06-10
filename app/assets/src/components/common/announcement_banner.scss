@@ -1,0 +1,66 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.announcementBanner {
+  @include font-body-xs;
+  background: $sds-color-primary-200;
+  height: 40px;
+  position: relative;
+  text-align: center;
+  z-index: 10;
+
+  &.inverted {
+    background: $sds-color-primary-400;
+    color: $sds-color-gray-white;
+  }
+
+  .content {
+    display: block;
+    line-height: 40px;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: calc(100% - 50px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    .icon {
+      fill: $sds-color-primary-400;
+      height: 20px;
+      margin-right: $sds-spaces-s;
+      vertical-align: text-bottom;
+
+      &.inverted {
+        fill: $sds-color-gray-white;
+      }
+    }
+
+    .title {
+      @include font-header-xs;
+      margin-right: $sds-spaces-xxs;
+    }
+
+    .link {
+      margin-left: 3px;
+      text-decoration: underline;
+    }
+  }
+
+  .close {
+    cursor: pointer;
+    fill: $sds-color-gray-500;
+    position: absolute;
+    right: $sds-spaces-l;
+    top: $sds-spaces-l;
+
+    &.inverted {
+      fill: $sds-color-gray-white;
+    }
+
+    &:hover {
+      fill: $sds-color-gray-black;
+    }
+  }
+}

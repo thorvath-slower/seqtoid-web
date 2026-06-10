@@ -1,0 +1,95 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.liveSearchBox {
+  input[type="text"] {
+    @include font-body-xs;
+
+    height: 34px;
+    border-radius: $sds-corners-corner-m;
+    box-sizing: border-box;
+    border: $sds-borders-gray-300;
+
+    &:focus {
+      border: $sds-borders-primary-400;
+      box-shadow: none !important;
+    }
+  }
+
+  &.rectangular {
+    :global(.prompt) {
+      border-radius: $sds-corners-corner-m;
+    }
+  }
+
+  &:not(.rectangular) {
+    :global(.prompt) {
+      width: 260px !important;
+      border-radius: $sds-corners-corner-l !important;
+    }
+  }
+
+  &:global(.ui.category.search) {
+    > :global(.results) {
+      > :global(.category) {
+        background-color: transparent;
+        margin-top: $sds-spaces-m;
+        padding: 0 16px;
+
+        &:last-child {
+          margin-bottom: $sds-spaces-m;
+        }
+
+        > :global(.name) {
+          @include font-caps-xxxs;
+
+          padding: 0;
+          text-transform: uppercase;
+        }
+
+        :global(.results) {
+          border: 0px;
+        }
+      }
+    }
+
+    :global(.category),
+    :global(.name),
+    :global(.results.visible),
+    :global(.result) {
+      display: block !important;
+      border-bottom: none !important;
+    }
+
+    :global(.results.visible) {
+      max-height: 300px;
+      overflow-y: scroll;
+    }
+
+    :global(.result) {
+      padding: 5px 0 !important;
+    }
+
+    :global(.title) {
+      font-weight: normal !important;
+    }
+
+    :global(.description) {
+      font-size: 10px;
+    }
+  }
+}
+
+.searchIcon {
+  fill: $sds-color-gray-400;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  // TODO: These are centering the icon in the input. So, they depend heavily on the dimensions of the component.
+  // For that reason, i think they should not depend on space variables.
+  // They should, however, be relative to dimensions of the parent component.
+  right: 10px;
+  top: 10px;
+}

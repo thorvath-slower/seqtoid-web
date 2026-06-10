@@ -1,0 +1,42 @@
+// Adapted from metadata_legend.scss
+// See original design at:
+// https://chanzuckerberg.invisionapp.com/d/main#/console/18553478/385796250/inspect
+
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.tooltip {
+  position: absolute;
+  box-shadow: $sds-drop-shadows-shadow-m;
+  border: $sds-borders-gray-300;
+  border-radius: $sds-corners-corner-m;
+  background-color: $sds-color-gray-white;
+  z-index: 0;
+
+  .legend {
+    padding: $sds-spaces-s 12px;
+    border-radius: $sds-corners-corner-m; // so that corners to do not cover parent corners
+    background-color: $sds-color-gray-white;
+    z-index: 1;
+    text-align: center;
+
+    @include font-body-xs;
+  }
+
+  // This tooltip arrow was adapted from semantic-ui popup.
+  .arrow {
+    position: absolute;
+    left: 50%;
+    background-color: $sds-color-gray-white;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    margin-top: -5px;
+    transform: rotate(45deg);
+    z-index: -1;
+    box-shadow: $sds-drop-shadows-shadow-m;
+    border-radius: 0 0 $sds-corners-corner-s 0; // this is different from semantic-ui
+  }
+}

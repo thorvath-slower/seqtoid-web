@@ -1,0 +1,123 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+# This model initially had no columns defined. If you add columns to the
+# model remove the '{}' from the fixture names and add the columns immediately
+# below each fixture, per the syntax in the comments below
+#
+one:
+  sample: one
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+two:
+  sample: one
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+three:
+  sample: one
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+  total_ercc_reads: 0
+  job_status: "CHECKED"
+four:
+  sample: two
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+  total_ercc_reads: 0
+  job_status: "CHECKED"
+five:
+  sample: two
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+six:
+  sample: six
+  job_status: "CHECKED"
+  finalized: 1
+  total_reads: 1122
+  total_ercc_reads: 500
+  adjusted_remaining_reads: 316
+  subsample: 1000000
+  alignment_config: one
+  results_finalized: 10
+public_project_sampleA_run:
+  sample: public_project_sampleA
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+public_project_sampleB_run:
+  sample: public_project_sampleB
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+joe_project_sampleA_run:
+  sample: joe_project_sampleA
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+joe_project_sampleB_run:
+  sample: joe_project_sampleB
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+project_one_sampleA_run:
+  sample: project_one_sampleA
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+project_one_sampleB_run:
+  sample: project_one_sampleB
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+expired_sample_run:
+  sample: expired_sample
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+public_sample_run:
+  sample: public_sample
+  pipeline_version: '1.0'
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+public_sample_run_with_pipeline_stages:
+  sample: public_sample_with_pipeline_stages
+  pipeline_version: '1.0'
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10
+private_sample_run_with_pipeline_stages:
+  sample: private_sample_with_pipeline_stages
+  pipeline_version: '1.0'
+  job_status: 'CHECKED'
+  total_reads: 1
+  adjusted_remaining_reads: 1
+  alignment_config: one
+  results_finalized: 10

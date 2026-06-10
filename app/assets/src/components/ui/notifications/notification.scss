@@ -1,0 +1,99 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.notification {
+  @include font-body-xs;
+  border-left: 5px solid $sds-color-gray-black;
+  border-radius: $sds-corners-corner-m;
+  box-shadow: $sds-drop-shadows-shadow-s;
+  color: $sds-color-gray-black;
+  display: flex;
+  align-items: center;
+  font-family: $font-family-default;
+  padding: $sds-spaces-l $sds-spaces-l $sds-spaces-l 9px;
+  cursor: default;
+
+  &.flat {
+    border: 0;
+    box-shadow: none;
+    padding: 9px;
+  }
+
+  .icon {
+    flex-grow: 0;
+    margin-left: $sds-spaces-xxs;
+    margin-right: $sds-spaces-l;
+    align-self: flex-start;
+
+    svg {
+      width: $icon-l;
+      height: $icon-l;
+    }
+
+    .successIcon {
+      font-size: 16px;
+      color: $sds-color-success-400;
+    }
+  }
+
+  .content {
+    // Helps to center single-line text vertically.
+    margin-top: 1px;
+    flex: 1 1 0;
+    align-self: baseline;
+  }
+
+  .removeIcon {
+    height: 14px;
+    width: 14px;
+    fill: $sds-color-gray-500;
+    margin-right: $sds-spaces-l;
+    margin-top: $sds-spaces-xxs;
+    margin-left: auto;
+    align-self: flex-start;
+
+    &:hover {
+      cursor: pointer;
+    }
+  }
+
+  .actions {
+    @include font-caps-xxs;
+    font-weight: 600;
+    margin-top: $sds-spaces-l;
+
+    &:hover {
+      cursor: pointer;
+    }
+  }
+
+  &.error {
+    border-color: $sds-color-error-400;
+    background-color: $sds-color-error-100;
+  }
+
+  &.warning {
+    border-color: $sds-color-warning-400;
+    background-color: $sds-color-warning-100;
+  }
+
+  &.info {
+    border-color: $sds-color-primary-400;
+    background-color: $sds-color-primary-200;
+
+    .icon {
+      fill: $sds-color-primary-400;
+    }
+  }
+
+  &.success {
+    border-color: $sds-color-success-400;
+    background-color: $sds-color-success-100;
+
+    .icon {
+      fill: $sds-color-success-400;
+    }
+  }
+}

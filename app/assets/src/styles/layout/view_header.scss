@@ -1,0 +1,61 @@
+@import "../themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.view-header {
+  padding: 20px;
+  overflow: auto;
+
+  &__left {
+    float: left;
+    min-width: 20%;
+    max-width: 80%;
+
+    &__pre-title {
+      color: $sds-color-gray-500;
+      font-size: 12px;
+      height: 20px;
+      line-height: 20px;
+      margin-bottom: $sds-spaces-m;
+      text-transform: uppercase;
+      vertical-align: middle;
+    }
+
+    &__title {
+      font-size: 26px;
+      font-weight: 400;
+      height: 40px;
+      line-height: 40px;
+      vertical-align: middle;
+    }
+
+    &__sub-title {
+      color: $sds-color-gray-500;
+      font-size: 12px;
+      height: 20px;
+      line-height: 20px;
+      margin-top: $sds-spaces-m;
+      vertical-align: middle;
+    }
+  }
+
+  &__right {
+    float: right;
+    height: 100px;
+    min-width: 20%;
+    max-width: 80%;
+    position: relative;
+    vertical-align: middle;
+
+    &__wrapper {
+      float: right;
+      position: relative;
+      top: 50%;
+      transform: translate(0, -50%);
+
+      &:not(:first-child) {
+        margin-right: $sds-spaces-m;
+      }
+    }
+  }
+}

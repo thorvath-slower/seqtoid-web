@@ -1,0 +1,197 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.tableContainer {
+  flex: 1 0 auto;
+  flex-direction: column;
+  height: 100%;
+}
+
+.columnSelector {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 30px;
+  display: flex;
+  align-content: center;
+  justify-content: center;
+
+  .plusIcon {
+    flex: 1 0 auto;
+    width: 14px;
+    fill: $sds-color-gray-400;
+    vertical-align: center;
+
+    &:hover {
+      fill: $sds-color-primary-400;
+    }
+  }
+}
+
+.cell {
+  @include font-body-xs;
+
+  color: $sds-color-gray-black;
+  font-weight: $font-weight-semibold;
+  text-align: center;
+  overflow: hidden;
+}
+
+.disabled {
+  color: $sds-color-gray-500;
+}
+
+.row {
+  &:global(.ReactVirtualized__Table__headerRow) {
+    border-bottom: 3px solid $sds-color-gray-200;
+
+    &:hover {
+      .dragHandleIcon {
+        background: $sds-color-gray-300;
+        width: 1px;
+        height: $sds-spaces-m;
+
+        &:hover {
+          width: $sds-spaces-xxxs;
+        }
+      }
+    }
+  }
+
+  &:global(.ReactVirtualized__Table__row) {
+    border-bottom: $sds-borders-gray-200;
+
+    &:hover {
+      background-color: $sds-color-primary-100;
+    }
+
+    &:focus {
+      outline: none;
+    }
+
+    &.clickable {
+      cursor: pointer;
+    }
+  }
+
+  .header {
+    @include font-body-s;
+
+    color: $sds-color-gray-500;
+    font-weight: $font-weight-semibold;
+    outline: 0;
+    text-transform: none;
+
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+
+    .sortableHeader {
+      max-width: 100%;
+      display: flex;
+      flex: 1 0 auto;
+      align-items: inherit;
+      justify-content: inherit;
+
+      .label {
+        // Shrink once you're at the maximum width (e.g. don't overflow). Do not grow unless needed.
+        flex: 0 1 auto;
+        min-width: 0;
+
+        // Offset label by sortIcon width + sortIcon margin width
+        margin-left: $sds-icon-sizes-xs-width + $sds-spaces-xxs +
+          $sds-spaces-xxs;
+      }
+
+      .sortIcon {
+        // Make the sort icon slightly bigger than the text.
+        margin: 0 $sds-spaces-xxs;
+
+        width: $sds-icon-sizes-xs-width;
+        min-width: $sds-icon-sizes-xs-width;
+
+        // For inactive headers: use gray-500 and hide icon
+        fill: white;
+      }
+
+      // For inactive, hovered headers: use gray-600 color and show icon
+      &:hover {
+        color: $sds-color-gray-600;
+
+        .label {
+          cursor: pointer;
+        }
+
+        .sortIcon {
+          fill: $sds-color-gray-600;
+        }
+      }
+
+      // For active headers: use primary-400 and show icon
+      &.active {
+        color: $sds-color-primary-400;
+
+        .sortIcon {
+          fill: $sds-color-primary-400;
+        }
+
+        // For active, hovered headers: use primary-500 color and show icon
+        &:hover {
+          color: $sds-color-primary-500;
+
+          .label {
+            cursor: pointer;
+          }
+
+          .sortIcon {
+            fill: $sds-color-primary-500;
+          }
+        }
+      }
+
+      // When the label within the header is hovered, use gray-dark and show icon
+      .label:hover + .sortIcon {
+        color: $sds-color-gray-black;
+        fill: $sds-color-gray-black;
+      }
+    }
+
+    .label {
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      max-width: 100%;
+      display: inline-block;
+      vertical-align: middle;
+
+      &:hover {
+        color: $sds-color-gray-black;
+        cursor: default;
+      }
+    }
+  }
+}
+
+.grid {
+  outline: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &:hover::-webkit-scrollbar {
+    display: block;
+  }
+}
+
+// This is needed to ensure that dropdowns within a row in a ReactVirtualized table do not get truncated.
+// Note that applying this to `ReactVirtualized__Grid__innerScrollContainer` is necessary, otherwise if
+// you have a table that doesn't take up the whole viewport height and you open the dropdown on the last
+// row, it will be truncated. Details: <https://github.com/bvaughn/react-virtualized/issues/876>.
+:global(.ReactVirtualized__Table__row),
+:global(.ReactVirtualized__Grid__innerScrollContainer) {
+  overflow: visible !important;
+}

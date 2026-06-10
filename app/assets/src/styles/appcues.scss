@@ -1,0 +1,11 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.hotspot > div > .apc-spotlight {
+  background: $sds-color-gray-white !important;
+  opacity: 0.9;
+}
+
+div > .apc-spotlight {
+  box-shadow: none !important;
+}

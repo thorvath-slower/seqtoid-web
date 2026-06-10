@@ -1,0 +1,10 @@
+@import "~@czi-sds/components/dist/variables";
+
+.deleteButton:not(:disabled) {
+  background-color: $sds-color-error-400;
+
+  &:hover,
+  &:active {
+    background-color: $sds-color-error-600;
+  }
+}

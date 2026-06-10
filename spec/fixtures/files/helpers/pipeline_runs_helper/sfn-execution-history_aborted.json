@@ -1,0 +1,40 @@
+{
+    "events": [{
+            "timestamp": 1583875953.55,
+            "type": "ExecutionStarted",
+            "id": 1,
+            "previousEventId": 0,
+            "executionStartedEventDetails": {
+                "roleArn": "arn:aws:iam::123456789012:role/idseq-dev-sfn-service"
+            }
+        },
+        {
+            "timestamp": 1583875953.59,
+            "type": "TaskStateEntered",
+            "id": 2,
+            "previousEventId": 0,
+            "stateEnteredEventDetails": {
+                "name": "PreprocessInput"
+            }
+        },
+        {
+            "timestamp": 1583875954.268,
+            "type": "TaskStateExited",
+            "id": 6,
+            "previousEventId": 5,
+            "stateExitedEventDetails": {
+                "name": "PreprocessInput"
+            }
+        },
+        {
+            "timestamp": 1583875994.006,
+            "type": "ExecutionAborted",
+            "id": 11,
+            "previousEventId": 0,
+            "executionAbortedEventDetails": {
+                "error": "KeyboardInterrupt",
+                "cause": ""
+            }
+        }
+    ]
+}

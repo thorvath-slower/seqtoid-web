@@ -1,0 +1,65 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.thresholdFilter {
+  &:not(:first-child) {
+    padding-top: $sds-spaces-l !important;
+  }
+
+  .inputFieldColumn {
+    @include font-body-xs;
+    &:not(:last-child) {
+      margin-right: $sds-spaces-m;
+    }
+  }
+
+  .removeIcon {
+    cursor: pointer;
+    opacity: 0.3;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0px;
+}
+
+.metricColumn {
+  width: 230px;
+}
+
+.inputText {
+  margin: 0px;
+  max-width: 70px;
+  min-width: unset;
+
+  // Remove up and down arrows
+  /* Chrome, Safari, Edge, Opera */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Firefox */
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+.metricDropdown {
+  width: 100%;
+}
+
+.operatorDropdown {
+  min-width: 40px;
+  max-width: 75px;
+}

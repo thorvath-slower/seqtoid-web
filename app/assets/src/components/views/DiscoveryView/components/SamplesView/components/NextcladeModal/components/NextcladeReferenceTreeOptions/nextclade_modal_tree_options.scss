@@ -1,0 +1,58 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.treeTypeContainer {
+  margin-top: $sds-spaces-s;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.treeType {
+  padding: $sds-spaces-s $sds-spaces-m;
+  margin-bottom: $sds-spaces-xxs;
+  border-radius: $sds-corners-corner-m;
+  display: flex;
+  cursor: pointer;
+
+  &:hover,
+  &.selected {
+    background-color: $sds-color-gray-100;
+  }
+
+  .radioButton {
+    align-items: flex-start;
+    padding: $sds-spaces-xxs $sds-spaces-m 0 0;
+  }
+
+  .content {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .name {
+    @include font-header-xs;
+  }
+
+  .description {
+    @include font-body-xxs;
+    color: $sds-color-gray-500;
+  }
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: $sds-spaces-s;
+  margin-right: $sds-spaces-xl;
+
+  .localFilePicker {
+    margin: $sds-spaces-xs 0;
+    height: 120px;
+
+    &.short {
+      height: 90px;
+    }
+  }
+}

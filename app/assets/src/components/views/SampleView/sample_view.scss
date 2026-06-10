@@ -1,0 +1,40 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.sampleViewContainer {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - #{$header-total-height});
+}
+
+.highlight {
+  @include font-header-xs;
+}
+
+.notificationBody {
+  @include font-body-xs;
+  cursor: default;
+
+  .externalLink {
+    color: inherit !important;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+  }
+
+  .consensusGenomeLink {
+    @include font-caps-xxxs;
+    margin-top: $sds-spaces-s;
+    color: $sds-color-primary-400;
+    cursor: pointer;
+  }
+
+  .revertFiltersLink {
+    @include font-caps-xxs;
+    display: block;
+    margin-top: $sds-spaces-xs;
+    color: $sds-color-gray-black;
+    cursor: pointer;
+  }
+}

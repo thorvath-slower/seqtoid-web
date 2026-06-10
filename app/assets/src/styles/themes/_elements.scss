@@ -1,0 +1,129 @@
+@use "sass:math";
+
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+// Box-shadows depreciated! Using czifui shadows as of 12/2021
+$box-shadow-s: 0 2px 4px 0 rgba(0, 0, 0, 0.25);
+$box-shadow-m: 0 2px 4px 0 rgba(0, 0, 0, 0.15), 0 2px 10px 0 rgba(0, 0, 0, 0.15);
+$box-shadow-l: 0 2px 12px 0 rgba(0, 0, 0, 0.3);
+
+// Corners !depreciated! Using czifui corners as of 2/2022
+$border-radius-l: 20px;
+$border-radius-m: 4px;
+$border-radius-s: 2px;
+$border-radius-none: 0px;
+
+// Borders !depreciated! Using czifui colors as of 1/2022
+$border-primary: 1px solid $primary;
+$border-primary-dark: 1px solid $primary-dark;
+$border-primary-darkest: 1px solid $primary-darkest;
+$border-gray-dark: 1px solid $gray-dark;
+$border-gray-medium: 1px solid $gray-medium;
+$border-gray-light: 1px solid $gray-light;
+$border-gray-lightest: 1px solid $gray-lightest;
+$border-gray-off-white: 1px solid $gray-off-white;
+$border-error: 1px solid $error-medium;
+$border-success: 1px solid $success-medium;
+$border-warning: 1px solid $warning-medium;
+$border-dashed-primary: 2px dashed $primary;
+$border-dashed-gray-medium: 2px dashed $gray-medium;
+
+$narrow-container-width: 1600px;
+$narrow-container-margin: 14px;
+$header-height: 50px;
+$header-margin-bottom: 10px;
+$header-total-height: $header-height + $header-margin-bottom;
+
+// Spaces !depreciated! Using czifui spaces as of 11/2021
+$space-default: 10px;
+$space-xxxxs: 1px;
+$space-xxxs: 2px;
+$space-xxs: 4px;
+$space-xs: 6px;
+$space-s: 8px;
+$space-m: 10px;
+$space-l: 14px;
+$space-xl: 22px;
+$space-xxl: 38px;
+
+// Image and illustration sizes
+$img-s: 80px;
+$img-m: 150px;
+$img-l: 200px;
+
+// Icons
+$icon-xs: 10px;
+$icon-s: 14px;
+$icon-l: 22px;
+$icon-xl: 32px;
+
+// Remove the px unit for SVG viewBox
+// See: https://css-tricks.com/snippets/sass/strip-unit-function/
+@function strip-unit($number) {
+  @if type-of($number) == "number" and not unitless($number) {
+    @return math.div($number, $number * 0 + 1);
+  }
+  @return $number;
+}
+
+// Export variables for use in JSX icon and img sizes
+:export {
+  imgS: strip-unit($img-s);
+  imgM: strip-unit($img-m);
+  imgL: strip-unit($img-l);
+
+  iconXS: strip-unit($icon-xs);
+  iconS: strip-unit($icon-s);
+  iconL: strip-unit($icon-l);
+  iconXL: strip-unit($icon-xl);
+}
+
+// Customized scroll bar
+@mixin scrollable {
+  &::-webkit-scrollbar {
+    // Overwrite semantic ui.
+    width: 8px !important;
+    height: 8px !important;
+  }
+
+  &::-webkit-scrollbar-track {
+    // Overwrite semantic ui.
+    background: transparent !important;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    // Overwrite semantic ui.
+    background-color: $sds-color-gray-300 !important;
+
+    &:hover {
+      background-color: $sds-color-gray-400 !important;
+    }
+  }
+}
+
+@keyframes loadingBackgroundAnimation {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 10% 0;
+  }
+}
+
+@mixin loadingAnimation {
+  animation-name: loadingBackgroundAnimation;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+
+  background: linear-gradient(
+    to right,
+    $gray-off-white 10%,
+    $gray-lightest 18%,
+    $gray-lightest 22%,
+    $gray-off-white 30%
+  );
+  background-position: 0% 0;
+  background-size: 200%;
+}

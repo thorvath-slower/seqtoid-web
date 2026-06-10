@@ -1,0 +1,71 @@
+@import "../../../themes/colors";
+@import "../../../themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.idseq-ui.button.secondary {
+  border: $sds-borders-primary-400;
+  background-color: $sds-color-gray-white;
+  color: $sds-color-primary-400;
+  fill: $sds-color-primary-400;
+
+  .icon-label {
+    svg {
+      fill: $sds-color-primary-400;
+    }
+  }
+
+  &:hover,
+  &.hover {
+    background: $sds-color-primary-400;
+    color: $sds-color-gray-white;
+    fill: $sds-color-gray-white;
+
+    .icon-label {
+      svg {
+        fill: $sds-color-gray-white;
+      }
+    }
+  }
+
+  &:active,
+  &.active {
+    border: $sds-borders-primary-500;
+    background-color: $sds-color-primary-500;
+    color: $sds-color-gray-white;
+    fill: $sds-color-gray-white;
+
+    .icon-label {
+      svg {
+        fill: $sds-color-gray-white;
+      }
+    }
+  }
+
+  &:focus,
+  &.focus {
+    border: $sds-borders-primary-500;
+    background-color: $sds-color-primary-500;
+    color: $sds-color-gray-white;
+    fill: $sds-color-gray-white;
+
+    .icon-label {
+      svg {
+        fill: $sds-color-gray-white;
+      }
+    }
+  }
+
+  &:disabled,
+  &.disabled {
+    border: $sds-borders-gray-300;
+    background-color: $sds-color-gray-100;
+    color: $sds-color-gray-300;
+    fill: $sds-color-gray-300;
+
+    .icon-label {
+      svg {
+        fill: $sds-color-gray-300;
+      }
+    }
+  }
+}

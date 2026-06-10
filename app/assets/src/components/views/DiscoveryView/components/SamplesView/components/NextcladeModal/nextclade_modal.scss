@@ -1,0 +1,69 @@
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.modal {
+  display: flex;
+  flex-direction: column;
+
+  .infoIcon {
+    margin-left: $sds-spaces-xxs;
+    margin-top: $sds-spaces-xxxs;
+
+    &.lower {
+      vertical-align: -$sds-spaces-xxxs;
+    }
+  }
+
+  .nextcladeHeader {
+    .title {
+      @include font-header-xl;
+      color: $sds-color-gray-black;
+      vertical-align: -$sds-spaces-s;
+    }
+
+    .tagline {
+      @include font-body-s;
+      color: $sds-color-gray-500;
+    }
+  }
+
+  .nextcladeDescription {
+    margin-top: $sds-spaces-xl;
+
+    .title {
+      @include font-header-m;
+      color: $sds-color-gray-black;
+    }
+
+    ul {
+      margin-left: $sds-spaces-xl;
+      margin-top: $sds-spaces-xxs;
+      margin-bottom: 0;
+
+      li {
+        @include font-body-s;
+        color: $sds-color-gray-500;
+        width: max-content;
+      }
+    }
+  }
+
+  .referenceTree {
+    margin-top: $sds-spaces-xl;
+
+    .title {
+      @include font-header-s;
+      color: $sds-color-gray-black;
+    }
+
+    .options {
+      overflow: auto;
+    }
+  }
+
+  .footer {
+    margin-top: $sds-spaces-l;
+  }
+}

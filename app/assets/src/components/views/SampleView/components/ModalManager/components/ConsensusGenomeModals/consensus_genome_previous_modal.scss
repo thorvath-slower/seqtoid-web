@@ -1,0 +1,64 @@
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.modal {
+  .title {
+    @include font-header-xxl;
+    margin-bottom: $sds-spaces-xxs;
+  }
+
+  .label {
+    @include font-header-xs;
+    margin-bottom: $sds-spaces-xl;
+
+    .taxonName {
+      @include font-body-xs;
+    }
+  }
+
+  .table {
+    height: 200px;
+    margin-bottom: $sds-spaces-m;
+
+    .headerLabel {
+      @include font-header-xs;
+
+      color: $sds-color-gray-500;
+    }
+
+    .primaryHeader {
+      text-align: left;
+    }
+
+    .runData {
+      text-align: left;
+    }
+
+    .row {
+      cursor: pointer;
+
+      .title {
+        @include font-header-xs;
+
+        text-overflow: ellipsis;
+        overflow: hidden;
+        margin-bottom: 0; // Override Popup
+      }
+
+      .subtext {
+        @include font-body-xs;
+        color: $sds-color-gray-300;
+      }
+    }
+
+    .dateCell {
+      @include font-body-xs;
+    }
+  }
+
+  .button {
+    margin: $sds-spaces-xs;
+  }
+}

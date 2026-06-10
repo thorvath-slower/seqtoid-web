@@ -1,0 +1,92 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.phyloTreeListView {
+  .viewHeader {
+    margin-top: 40px;
+    margin-bottom: 40px;
+  }
+}
+
+.controls {
+  display: flex;
+
+  .controlElement {
+    margin-left: $sds-spaces-m;
+    margin-right: 0;
+  }
+}
+
+.noTreeBanner {
+  margin-top: 50px;
+  text-align: center;
+  color: $sds-color-gray-500;
+}
+
+.taxonName {
+  &:hover {
+    color: $sds-color-primary-400;
+    cursor: pointer;
+  }
+}
+
+.adminPanel {
+  text-align: left;
+
+  .header {
+    @include font-header-l;
+  }
+}
+
+.notification {
+  margin: $sds-spaces-m 0;
+
+  .notificationContent {
+    margin-right: $sds-spaces-l;
+    .warning {
+      font-weight: $font-weight-bold;
+    }
+  }
+
+  &.show {
+    display: flex;
+  }
+
+  &.hide {
+    display: none;
+  }
+}
+
+.matrix {
+  margin-top: $sds-spaces-s;
+  width: inherit;
+  height: inherit;
+}
+
+.iconAlert {
+  width: $icon-l;
+}
+
+.attributionsBanner {
+  @include font-body-xxs;
+  background-color: $sds-color-gray-white;
+  color: $sds-color-gray-500;
+  border-radius: $sds-corners-corner-m;
+  box-shadow: $sds-drop-shadows-shadow-s;
+  padding: $sds-spaces-xxxs $sds-spaces-s;
+  margin: $sds-spaces-m;
+  // Ensures it appears on top of the phylo tree if they overlap.
+  z-index: 1;
+  // Always position at the bottom right hand corner of the viewport.
+  position: fixed;
+  bottom: 0;
+  right: 0;
+
+  .infoIcon {
+    margin: 1px $sds-spaces-xxs 0 0; // top margin is to align the icon with the text
+    vertical-align: text-top;
+    fill: $sds-color-gray-400 !important;
+  }
+}

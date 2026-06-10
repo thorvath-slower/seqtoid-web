@@ -1,0 +1,94 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+sample_human_sex:
+  key: "sex"
+  raw_value: "Male"
+  string_validated_value: "Male"
+  sample: metadata_validation_sample_human_existing_metadata
+  metadata_field: sex
+
+sample_human_nucleotide_type:
+  key: "nucleotide_type"
+  raw_value: "RNA"
+  string_validated_value: "RNA"
+  sample: metadata_validation_sample_human_existing_metadata
+  metadata_field: nucleotide_type
+
+sample_collection_location:
+  key: "collection_location"
+  raw_value: "37.4852, -122.2364"
+  string_validated_value: "37.4852, -122.2364"
+  sample: project_one_sampleA
+  metadata_field: collection_location
+
+# Metadata for private joe project.
+sample_human_private_sex:
+  key: "sex"
+  raw_value: "Male"
+  string_validated_value: "Male"
+  sample: sample_human_existing_metadata_joe_project
+  metadata_field: sex
+
+sample_human_private_sample_type:
+  key: "sample_type"
+  raw_value: "Blood"
+  string_validated_value: "Blood"
+  sample: sample_human_existing_metadata_joe_project
+  metadata_field: sample_type
+
+sample_joe_collection_location:
+  key: "collection_location"
+  raw_value: "37.773972, -122.431297"
+  string_validated_value: "37.773972, -122.431297"
+  sample: joe_project_sample_mosquito
+  metadata_field: collection_location
+
+# Metadata for public project
+sample_human_public_sex:
+  key: "sex"
+  raw_value: "Male"
+  string_validated_value: "Male"
+  sample: sample_human_existing_metadata_public
+  metadata_field: sex
+
+sample_human_public_nucleotide_type:
+  key: "nucleotide_type"
+  raw_value: "RNA"
+  string_validated_value: "RNA"
+  sample: sample_human_existing_metadata_public
+  metadata_field: nucleotide_type
+
+sample_human_expired_sex:
+  key: "sex"
+  raw_value: "Male"
+  string_validated_value: "Male"
+  sample: sample_human_existing_metadata_expired
+  metadata_field: sex
+
+sample_human_expired_age:
+  key: "age"
+  raw_value: "100"
+  number_validated_value: 100
+  sample: sample_human_existing_metadata_expired
+  metadata_field: age
+
+sample_collection_location_v2:
+  key: "collection_location_v2"
+  raw_value: "{\"locationiq_id\":\"123\",\"osm_id\":\"321\",\"osm_type\":\"Way\"}"
+  metadata_field: collection_location_v2
+  location_id: 1
+  sample: joe_project_sample_mosquito
+
+sample_human_collection_location_v2:
+  key: "collection_location_v2"
+  raw_value: "{\"locationiq_id\":\"123\",\"osm_id\":\"321\",\"osm_type\":\"Way\"}"
+  metadata_field: collection_location_v2
+  location_id: 2
+  sample: joe_sample
+
+sample_collection_location_v2_kurigram:
+  key: "collection_location_v2"
+  raw_value: "{\"locationiq_id\":\"123\",\"osm_id\":\"321\",\"osm_type\":\"Way\"}"
+  metadata_field: collection_location_v2
+  location_id: 4
+  sample: joe_project_sampleA

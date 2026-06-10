@@ -1,0 +1,169 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 0;
+
+  .table,
+  .map {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map {
+    border-top: 2px solid $sds-color-gray-200;
+  }
+
+  .note {
+    flex: 0 0 auto;
+  }
+}
+
+.tableDataRow {
+  align-items: flex-start;
+  padding: 11px 0;
+}
+
+.basicCell {
+  // this is adjusted to align the baseline of
+  // content of basic cells with the sample name.
+  margin-top: $sds-spaces-xxxs;
+}
+
+.samplesToolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 11px;
+
+  .fluidBlank {
+    flex: 1 1 auto;
+  }
+
+  .counterContainer {
+    flex: 0 0 auto;
+
+    .counter {
+      color: $sds-color-primary-400;
+    }
+
+    .label {
+      @include font-body-xs;
+
+      flex: 0 0 auto;
+      margin-left: 7px;
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  .separator {
+    flex: 0 0 auto;
+    height: 27px;
+    margin: 0 $sds-spaces-m 0 20px;
+    border-right: $sds-borders-gray-400;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+
+    .action {
+      &:not(:first-child) {
+        margin-left: $sds-spaces-m;
+      }
+    }
+  }
+}
+
+.filteredCount {
+  display: flex;
+  align-content: center;
+  font: $sds-font-body-s-400-font;
+  color: $sds-color-gray-500;
+
+  margin-top: 11px;
+  margin-bottom: $sds-spaces-s;
+  gap: $sds-spaces-m;
+}
+
+.sampleHeader {
+  justify-content: left;
+  text-align: left;
+}
+
+// We pass in the "selectableCell" className to
+// our checkbox to modify the enclosing div as follows;
+// this creates a large, invisible "button" the height of
+// the row, making samples easier to select.
+.selectableCell {
+  position: absolute;
+  overflow: visible;
+  height: 100%;
+  width: 50px;
+  margin: -$sds-spaces-m;
+  margin-top: -11px;
+  padding-left: 0px;
+  justify-content: center;
+}
+
+.amrNotification {
+  @include font-body-xs;
+
+  .amrTab {
+    display: inline;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+
+    &:hover {
+      cursor: pointer;
+    }
+  }
+}
+
+.highlight {
+  @include font-header-xxs;
+}
+
+.messageLine {
+  @include font-body-xxs;
+  padding: $sds-spaces-xxs 0;
+  margin-right: $sds-spaces-xl;
+}
+
+.loadingColumns {
+  margin: $sds-spaces-xxl auto 0;
+
+  .iconLoading {
+    fill: $sds-color-gray-500;
+  }
+}
+
+.dropdownItem {
+  // TODO (nina): remove this once SDS fixes opacity on dropdown
+  opacity: 1 !important;
+  width: 250px;
+}
+
+.itemWrapper {
+  display: flex;
+  flex-direction: row;
+  white-space: normal;
+}
+
+.bulkActionsIcon {
+  margin-right: $sds-spaces-xs;
+
+  svg {
+    fill: $sds-color-gray-600;
+  }
+}
+
+.iconDisabled {
+  svg {
+    fill: $sds-color-gray-200;
+  }
+}

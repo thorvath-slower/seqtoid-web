@@ -1,0 +1,30 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.idseq-ui.pathogen-preview {
+  margin-left: $sds-spaces-xs;
+
+  .ui.circular {
+    margin-left: -1px;
+    margin-right: -1px;
+    vertical-align: -10%;
+    min-width: 10px;
+    min-height: 10px;
+    -webkit-transform: scale(0.65);
+  }
+
+  .ui.red.label {
+    background-color: $sds-color-error-600 !important;
+    border-color: $sds-color-error-600 !important;
+  }
+
+  .pathogen-count {
+    @include font-body-xxs;
+    color: $sds-color-gray-black;
+    margin-left: 3px;
+  }
+}
+
+:global(.ui):global(.popup).pathogen-preview-popup {
+  @include font-body-xs;
+}

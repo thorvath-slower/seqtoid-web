@@ -1,0 +1,31 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.wrapper {
+  max-width: 250px;
+}
+
+.headerRow {
+  display: flex;
+  flex-direction: row;
+}
+
+.tooltip {
+  margin-left: $sds-spaces-xs;
+}
+
+.version {
+  font: $sds-font-body-s-400-font;
+  margin-bottom: 0;
+}
+
+.subText {
+  font: $sds-font-body-xxs-400-font;
+  color: $sds-color-gray-600;
+}
+
+.infoIcon {
+  color: $sds-color-warning-400;
+}

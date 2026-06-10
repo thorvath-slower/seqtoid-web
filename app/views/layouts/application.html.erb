@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <%= render "layouts/onetrust" %>
+    <%= render "layouts/sentry_monitoring" %>
+    <%= render "layouts/segment_analytics" %>
+    <%= render "layouts/adobe_analytics" %>
+
+    <!-- SEO Tags -->
+    <title>SeqtoID - Detect & Track Infectious Diseases</title>
+    <meta name="description" content="SeqtoID: a free, cloud-based metagenomic platform for researchers, empowers global pathogen and outbreak detection and monitoring.">
+    <meta name="keywords" content="Infectious disease, sequencing, metagenomic sequencing, genomics, Chan Zuckerberg Initiative, CZI, Chan Zuckerberg Biohub, CZ Biohub, science, next gen sequencing, research, biology, virology, bioinformatics, computational biology, global health">
+
+    <!-- Social Media Meta Tags -->
+    <meta property="og:title" content="SeqtoID: The free, cloud-based metagenomics platform" />
+    <meta property="og:description" content="Real-time pathogen detection, microbiome characterization and outbreak detection for researchers" />
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://assets.prod.czid.org/assets/CZID_Meta.png" />
+    <meta property="og:image:width" content="1000" />
+    <meta property="og:image:height" content="500" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Specific Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SeqtoID: The free, cloud-based metagenomics platform" />
+    <meta name="twitter:description" content="Real-time pathogen detection, microbiome characterization and outbreak detection for researchers" />
+    <meta name="twitter:image" content="https://assets.prod.czid.org/assets/CZID_Meta.png" />
+
+    <%= csrf_meta_tags %>
+    <%= stylesheet_link_tag    'application', media: 'all', 'data-turbolinks-track': 'reload' %>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+    <!-- The following line is a side fix to work around our issue with @import url(..) declarations in Sass. -->
+    <!-- As soon as possible, the Sass issues should be fixed and this streamlined back into our Sass build. -->
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,400i,600,600i,700,700i,800" rel="stylesheet">
+    <%= javascript_include_tag 'vendors' %>
+    <%= javascript_include_tag 'application' %>
+    <link rel="icon" type="image/png" href="<%= image_url("logo-#{Rails.env}.png") %>"/>
+  </head>
+
+  <body id="id-seq">
+    <div class="page">
+      <%= render "layouts/page_header" %>
+      <%= render "layouts/segment_user_identification" %>
+      <div id="page_content" class="page_content">
+        <%= yield %>
+      </div>
+    </div>
+  </body>
+</html>

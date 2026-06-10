@@ -1,0 +1,44 @@
+@import "~@czi-sds/components/dist/variables";
+
+textarea {
+  resize: none;
+}
+.submit {
+  vertical-align: top;
+}
+
+.page {
+  margin: $sds-spaces-m;
+
+  .header {
+    font: $sds-font-header-xxl-600-font;
+  }
+
+  .title {
+    font: $sds-font-header-l-600-font;
+    margin-bottom: $sds-spaces-m;
+  }
+
+  .adminActionContainer {
+    padding: $sds-spaces-xl;
+
+    .actions {
+      display: flex;
+      gap: $sds-spaces-xl;
+    }
+
+    .formControl {
+      display: flex;
+      gap: $sds-spaces-m;
+      margin-bottom: $sds-spaces-m;
+    }
+
+    .appConfigDropdown {
+      margin-bottom: $sds-spaces-l;
+    }
+  }
+
+  .featureFlagResponse {
+    margin-bottom: $sds-spaces-m;
+  }
+}

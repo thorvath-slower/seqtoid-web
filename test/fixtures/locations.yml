@@ -1,0 +1,98 @@
+ucsf:
+  name: "University of California, San Francisco, Parnassus Avenue, Inner Sunset, San Francisco, San Francisco City and County, California, 94131, USA"
+  geo_level: "city"
+  country_name: "USA"
+  state_name: "California"
+  subdivision_name: "San Francisco City and County"
+  city_name: "San Francisco"
+  lat: "37.49"
+  lng: "-122.23"
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+swamp:
+  name: "Swamp of Mosquitos"
+  id: 1
+  geo_level: "city"
+  country_name: "USA"
+  state_name: "California"
+  subdivision_name: "San Mateo County"
+  city_name: "Redwood City"
+  lat: "37.49"
+  lng: "-122.23"
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+california:
+  name: "California, USA"
+  geo_level: "state"
+  country_name: "USA"
+  state_name: "California"
+  lat: "37.49"
+  lng: "-122.23"
+  locationiq_id: 214330370
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+sf_county:
+  name: "San Francisco City and County, California, USA"
+  geo_level: "subdivision"
+  country_name: "USA"
+  state_name: "California"
+  subdivision_name: "San Francisco City and County"
+  lat: "37.49"
+  lng: "-122.23"
+  locationiq_id: 214379825
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+bangladesh:
+  name: "Bangladesh"
+  id: 2
+  geo_level: "country"
+  country_name: "Bangladesh"
+  lat: "37.49"
+  lng: "-122.23"
+  locationiq_id: 214341060
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+rangpur:
+  name: "Rangpur Division, Bangladesh"
+  id: 3
+  geo_level: "state"
+  country_name: "Bangladesh"
+  state_name: "Rangpur Division"
+  lat: "37.49"
+  lng: "-122.23"
+  locationiq_id: 214799782
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+kurigram:
+  name: "Kurigram, Kurigram District, Rangpur Division, Bangladesh"
+  id: 4
+  geo_level: "city"
+  country_name: "Bangladesh"
+  state_name: "Rangpur Division"
+  subdivision_name: "Kurigram District"
+  city_name: "Kurigram"
+  country_id: 2
+  state_id: 3
+  city_id: 4
+  lat: "37.49"
+  lng: "-122.23"
+  osm_id: 165475,
+  locationiq_id: 89640023,
+
+columbus:
+  name: "Columbus, Franklin County, Ohio, USA"
+  geo_level: "city"
+  country_name: "USA"
+  state_name: "Ohio"
+  subdivision_name: "Franklin County"
+  city_name: "Columbus"
+  lat: "37.49"
+  lng: "-122.23"
+  osm_id: 165475,
+  locationiq_id: 89640023,

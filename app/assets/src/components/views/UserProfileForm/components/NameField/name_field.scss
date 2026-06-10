@@ -1,0 +1,30 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.titleMainText {
+  @include font-header-s;
+  color: $sds-color-gray-black;
+  padding-bottom: $sds-spaces-xs;
+}
+.titleSubText {
+  @include font-body-s;
+  color: $sds-color-gray-500;
+}
+.main {
+  padding-bottom: $sds-spaces-xl;
+}
+.nameFields {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  // Clear SDS InputText bottom margin
+  margin-bottom: -$sds-spaces-l;
+}
+.InputContainerLeft {
+  width: 245px;
+}
+.InputContainerRight {
+  padding-left: $sds-spaces-m;
+  width: 245px;
+}

@@ -1,0 +1,202 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  pipeline_run: one
+  tax_id: 1
+  tax_level: 1
+  count_type: 'NT'
+  count: 1
+  percent_identity: 96
+  alignment_length: 149.9
+  e_value: -16.9
+
+two:
+  pipeline_run: two
+  tax_id: 1
+  tax_level: 1
+  count_type: 'NT'
+  count: 1
+  percent_identity: 96
+  alignment_length: 149.9
+  e_value: -16.9
+
+three:
+  pipeline_run: three
+  tax_id: 1
+  count_type: 'NT'
+  tax_level: 1
+  name: 'some species'
+  count: 1
+  percent_identity: 96
+  alignment_length: 149.9
+  e_value: -16.9
+
+four:
+  pipeline_run:  four
+  tax_id: 1
+  count_type: 'NT'
+  tax_level: 1
+  name: 'some species'
+  count: 2
+  percent_identity: 96
+  alignment_length: 149.9
+  e_value: -16.9
+
+five:
+  pipeline_run: six
+  tax_id: 573
+  tax_level: 1
+  count: 69
+  name: "Klebsiella pneumoniae"
+  count_type: "NR"
+  percent_identity: 97.8565
+  alignment_length: 46.3623
+  e_value: -16.9101
+  genus_taxid: 570
+  superkingdom_taxid: 2
+  common_name: ""
+
+six:
+  pipeline_run: six
+  tax_id: 573
+  tax_level: 1
+  count: 209
+  name: "Klebsiella pneumoniae"
+  count_type: "NT"
+  percent_identity: 99.6995
+  alignment_length: 149.402
+  e_value: -89.5641
+  genus_taxid: 570
+  superkingdom_taxid: 2
+  common_name: ""
+
+seven:
+  pipeline_run: six
+  tax_id: 570
+  tax_level: 2
+  count: 87
+  name: "Klebsiella"
+  count_type: "NR"
+  percent_identity: 97.9598
+  alignment_length: 46.4253
+  e_value: -16.9874
+  genus_taxid: 570
+  superkingdom_taxid: 2
+  common_name: ""
+
+eight:
+  pipeline_run: six
+  tax_id: 570
+  tax_level: 2
+  count: 217
+  name: "Klebsiella"
+  count_type: "NT"
+  percent_identity: 99.7014
+  alignment_length: 149.424
+  e_value: -89.5822
+  genus_taxid: 570
+  superkingdom_taxid: 2
+  pipeline_run_id: 2661
+  common_name: ""
+
+nine:
+  pipeline_run: six
+  tax_id: 1313
+  tax_level: 1
+  count: 2
+  name: "Streptococcus pneumoniae"
+  count_type: "NR"
+  percent_identity: 96.9
+  alignment_length: 32.0
+  e_value: -9.3
+  genus_taxid: 1301
+  superkingdom_taxid: 2
+  common_name: ""
+
+ten:
+  pipeline_run: six
+  tax_id: 1301
+  tax_level: 2
+  count: 2
+  name: "Streptococcus"
+  count_type: "NR"
+  percent_identity: 96.9
+  alignment_length: 32.0
+  e_value: -9.3
+  genus_taxid: 1301
+  superkingdom_taxid: 2
+  common_name: ""
+
+eleven:
+  pipeline_run: six
+  tax_id: 1301
+  tax_level: 2
+  count: 4
+  name: "Streptococcus"
+  count_type: "NT"
+  percent_identity: 95.65
+  alignment_length: 149.75
+  e_value: -81.478
+  genus_taxid: 1301
+  superkingdom_taxid: 2
+  common_name: ""
+
+twelve:
+  pipeline_run: six
+  tax_id: 28037
+  tax_level: 1
+  count: 4
+  name: "Streptococcus mitis"
+  count_type: "NT"
+  percent_identity: 95.65
+  alignment_length: 149.75
+  e_value: -81.478
+  genus_taxid: 1301
+  superkingdom_taxid: 2
+  common_name: ""
+
+# for phylo_trees
+pt_tc1:
+  tax_id: 1
+  count_type: 'NT'
+  count: 1
+  pipeline_run: joe_project_sampleA_run
+  tax_level: 1
+  name: "Streptococcus mitis"
+  percent_identity: 95.65
+  alignment_length: 149.75
+  e_value: -81.478
+
+
+pt_tc2:
+  tax_id: 1
+  count_type: 'NT'
+  count: 1
+  pipeline_run: joe_project_sampleB_run
+  tax_level: 1
+  name: "Streptococcus mitis"
+  percent_identity: 95.65
+  alignment_length: 149.75
+  e_value: -81.478
+
+pt_tc3:
+  tax_id: 1
+  count_type: 'NT'
+  count: 1
+  pipeline_run: public_project_sampleA_run
+  tax_level: 1
+  name: "Streptococcus mitis"
+  percent_identity: 95.65
+  alignment_length: 149.75
+  e_value: -81.478
+
+pt_tc4:
+  tax_id: 1
+  count_type: 'NT'
+  count: 1
+  pipeline_run: public_project_sampleB_run
+  tax_level: 1
+  name: "Streptococcus mitis"
+  percent_identity: 95.65
+  alignment_length: 149.75
+  e_value: -81.478

@@ -1,0 +1,45 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.xAxis {
+  stroke: $sds-color-gray-300;
+}
+
+.xAxisTickText,
+.yAxisTickText {
+  @include font-body-xxxs;
+  color: $sds-color-gray-500;
+}
+
+.yAxisTickLine,
+.xAxisTickLine {
+  color: $sds-color-gray-300;
+}
+
+.labelX,
+.labelY {
+  color: $sds-color-gray-black;
+  font-family: $sds-font-font-family;
+  font-weight: $font-weight-regular;
+
+  &.large {
+    @include font-body-xxs;
+    font-weight: $font-weight-regular;
+  }
+
+  &.bold {
+    @include font-header-xxs;
+  }
+}
+
+.labelXSubtext {
+  @include font-body-xxs;
+
+  font-family: $sds-font-font-family;
+  fill: $sds-color-gray-600;
+}
+
+.hoverRect {
+  fill: transparent;
+}

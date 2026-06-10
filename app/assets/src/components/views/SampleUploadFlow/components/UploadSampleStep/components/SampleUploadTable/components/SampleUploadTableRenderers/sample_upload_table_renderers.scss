@@ -1,0 +1,24 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+@import "~styles/themes/colors";
+
+.fileName {
+  @include font-body-xs;
+  margin-bottom: $sds-spaces-m;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.disabled {
+  color: $sds-color-gray-500;
+}
+
+.iconInfo {
+  fill: $sds-color-error-400 !important;
+  margin-bottom: -$sds-spaces-xxxs;
+  margin-left: $sds-spaces-xs;
+}
+
+.checkbox {
+  height: $sds-spaces-xl;
+}

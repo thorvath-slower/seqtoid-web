@@ -1,0 +1,47 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.projectHeader {
+  justify-content: left;
+  text-align: left;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1 0 auto;
+
+  .toggleContainer {
+    margin-bottom: $sds-spaces-m;
+  }
+
+  .table {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .map {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    border-top: 2px solid $sds-color-gray-200;
+  }
+
+  .projectDescription {
+    color: $sds-color-gray-600;
+  }
+}
+
+.filteredCount {
+  display: flex;
+  align-content: center;
+  font: $sds-font-body-s-400-font;
+  color: $sds-color-gray-500;
+
+  margin-top: 11px;
+  margin-bottom: $sds-spaces-s;
+  gap: $sds-spaces-m;
+}

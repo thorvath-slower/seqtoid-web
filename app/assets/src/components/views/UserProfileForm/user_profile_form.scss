@@ -1,0 +1,34 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.parentContainer {
+  margin-top: 90px;
+  margin-bottom: 90px;
+}
+
+.submitButton {
+  margin-top: $sds-spaces-xxl;
+  margin-bottom: $sds-spaces-l;
+  padding-left: $sds-spaces-xl;
+}
+.linkContainer {
+  @include font-body-xxxs;
+  color: $sds-color-gray-500;
+  padding-top: $sds-spaces-s;
+  padding-bottom: 100px;
+}
+.dataPrivacyLink {
+  padding-top: $sds-spaces-s;
+  padding-bottom: $sds-spaces-xxl;
+  color: $sds-color-primary-400 !important; // override czifui
+}
+.formTitle {
+  @include font-header-xxl;
+  color: $sds-color-gray-black;
+  padding-bottom: $sds-spaces-xl;
+}
+.formSubtitle {
+  @include font-body-s;
+  color: $sds-color-gray-black;
+  padding-bottom: $sds-spaces-xl;
+}

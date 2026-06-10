@@ -1,0 +1,69 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.filtersContainer {
+  width: 150px;
+
+  .filterHeader {
+    font: $sds-font-body-s-600-font;
+    margin-bottom: $sds-spaces-l;
+  }
+
+  .filterContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: $sds-spaces-l;
+    color: $sds-color-gray-500;
+
+    &.taxonThresholdFilterContainer {
+      margin-bottom: $sds-spaces-l;
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    .filterLabel {
+      @include font-caps-xxxs;
+      color: $sds-color-gray-500;
+    }
+
+    .disabledFilterLabel {
+      color: $sds-color-gray-300;
+    }
+
+    .tags {
+      flex: 0 0 auto;
+
+      .descriptor {
+        font: $sds-font-body-xs-400-font;
+        color: $sds-color-gray-500;
+        margin-top: $sds-spaces-m;
+      }
+
+      .filterTag {
+        margin: $sds-spaces-xxs $sds-spaces-xxs 0 0;
+
+        &:last-child {
+          margin-right: 0;
+        }
+      }
+    }
+  }
+
+  .divider {
+    border: 1px solid $sds-color-gray-200;
+    // For the divider to extend from end-to-end of the left sidebar,
+    // we must apply negative margin to counteract the left sidebar's padding
+    margin: $sds-spaces-xl calc(-1 * $sds-spaces-xl);
+  }
+}
+
+.disabledTooltip {
+  max-width: 190px !important;
+}
+
+.styledMinimal {
+  padding-left: 0;
+}

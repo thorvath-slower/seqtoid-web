@@ -1,0 +1,77 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.issueGroup {
+  border-bottom: none !important;
+
+  &.warning {
+    background-color: $sds-color-warning-100;
+
+    tbody {
+      tr:nth-child(odd) {
+        background-color: $sds-color-warning-100-overlay;
+      }
+    }
+  }
+
+  &.error {
+    background-color: $sds-color-error-100;
+
+    tbody {
+      tr:nth-child(odd) {
+        background-color: #f2e4e4;
+      }
+    }
+  }
+
+  &.info {
+    background-color: $sds-color-primary-200;
+
+    tbody {
+      tr:nth-child(odd) {
+        background-color: $sds-color-info-100-overlay;
+      }
+    }
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: $sds-spaces-m;
+
+  .icon {
+    width: 20px;
+    height: 20px;
+    margin-right: $sds-spaces-m;
+
+    &.warning {
+      fill: $sds-color-warning-400;
+    }
+
+    &.error {
+      fill: $sds-color-error-400;
+    }
+
+    &.info {
+      fill: $sds-color-primary-400;
+    }
+  }
+}
+
+.tableContainer {
+  margin: 0 40px;
+  padding-bottom: 20px;
+
+  td {
+    border-bottom: none !important;
+  }
+
+  thead {
+    border-bottom: none;
+  }
+
+  th {
+    color: $sds-color-gray-600;
+  }
+}

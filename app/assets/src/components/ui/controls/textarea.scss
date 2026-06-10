@@ -1,0 +1,19 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.textarea {
+  border-radius: $sds-corners-corner-m;
+  box-sizing: border-box;
+  border: $sds-borders-gray-300;
+  outline: none;
+  font: $sds-font-body-s-400-font;
+  line-height: 23px;
+
+  &:focus {
+    border: $sds-borders-primary-400;
+    -webkit-box-shadow: none;
+    -moz-box-shadow: none;
+    box-shadow: none;
+  }
+}

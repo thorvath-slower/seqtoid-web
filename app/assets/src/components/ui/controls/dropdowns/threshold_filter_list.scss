@@ -1,0 +1,41 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.thresholdFilterList {
+  .thresholdFilterGrid {
+    display: flex;
+    flex-direction: row;
+    padding: 0px;
+    align-items: center;
+    flex-wrap: wrap;
+
+    .addThresholdRow {
+      padding-top: $sds-spaces-l !important;
+
+      .addThresholdColumn {
+        .addThresholdLink {
+          @include font-caps-xxxs;
+          cursor: pointer;
+          text-align: left;
+
+          &:hover {
+            color: $sds-color-primary-400;
+          }
+        }
+      }
+    }
+  }
+
+  :global(.grid) {
+    margin: 0;
+
+    :global(.row) {
+      margin: 0;
+      padding: 0;
+
+      :global(.column) {
+        padding: 0;
+      }
+    }
+  }
+}

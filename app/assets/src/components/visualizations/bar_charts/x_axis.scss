@@ -1,0 +1,25 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.text {
+  @include font-body-xxs;
+  fill: $sds-color-gray-black;
+}
+
+.xAxis {
+  margin: 0px;
+  padding: 0px;
+}
+
+.xAxisTitle {
+  @include font-body-xxs;
+  color: $sds-color-gray-black;
+  margin-bottom: $sds-spaces-s;
+
+  div {
+    display: inline-block;
+    text-align: center;
+  }
+}

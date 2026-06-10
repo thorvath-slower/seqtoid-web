@@ -1,0 +1,117 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  // Header size: 60px. Make sure to change this if header height is changed.
+  height: calc(100vh - 60px);
+
+  .headerContainer {
+    flex: 0 0 auto;
+    margin: 0px 20px;
+  }
+
+  .mainContainer {
+    flex: 1 0 0;
+    display: flex;
+    min-height: 0;
+
+    .leftPane:not(:empty) {
+      border-right: 2px solid $sds-color-gray-200;
+      flex: 0 0 auto;
+      padding: $sds-spaces-l $sds-spaces-xl;
+      overflow-x: visible;
+    }
+
+    .centerPane {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+
+      .viewContainer {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        padding-top: 11px;
+      }
+    }
+
+    .rightPane:not(:empty) {
+      border-left: 2px solid $sds-color-gray-200;
+      flex: 0 0 auto;
+      overflow: overlay;
+      padding: 0 5px 0 $sds-spaces-m;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      &:hover::-webkit-scrollbar {
+        display: block;
+      }
+    }
+  }
+}
+
+.tabLabel {
+  @include font-header-s;
+  margin-right: $sds-spaces-m;
+}
+
+.tabCounter {
+  @include font-body-xs;
+  color: $sds-color-gray-500;
+  font-weight: $font-weight-regular;
+}
+
+.tableContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+
+  .dataContainer {
+    flex: 1 0 50px;
+    display: flex;
+    flex-direction: column;
+
+    &:not(:only-child) {
+      flex: 0 0 50px;
+    }
+
+    .workflowTabs {
+      overflow-x: clip;
+    }
+  }
+
+  .noResultsContainer {
+    flex: 1 0 auto;
+    max-height: 400px;
+  }
+}
+
+.noDataBannerFlexContainer {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+
+  // The following before and after attributes center
+  // the div on the available space, while keeping a max-height.
+  &::before {
+    content: "";
+    flex: 1 0 auto;
+    max-height: 250px;
+  }
+
+  &::after {
+    content: "";
+    flex: 1 0 auto;
+  }
+
+  .noDataBannerContainer {
+    flex: 0 0 auto;
+  }
+}

@@ -1,0 +1,24 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.uploadedFileName {
+  :global(.MuiChip-root) {
+    background-color: $sds-color-gray-200;
+    justify-content: space-between;
+    height: 100%;
+    width: 100%;
+
+    &:hover {
+      background-color: $sds-color-gray-200;
+    }
+
+    :global(.MuiChip-label) {
+      @include font-body-xs;
+      color: black;
+    }
+
+    :global(svg) {
+      fill: $sds-color-gray-600;
+    }
+  }
+}

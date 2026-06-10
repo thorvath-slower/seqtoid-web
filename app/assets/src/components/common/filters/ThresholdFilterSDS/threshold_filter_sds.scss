@@ -1,0 +1,34 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.label {
+  font: $sds-font-caps-xxxs-600-font;
+  color: $sds-color-gray-500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.filterContainer {
+  margin: $sds-spaces-s;
+  color: $sds-color-gray-black;
+  width: 420px;
+  .title {
+    font: $sds-font-header-s-600-font;
+    margin-bottom: $sds-spaces-l;
+  }
+
+  .actions {
+    margin-top: $sds-spaces-xxl;
+    display: flex;
+    gap: $sds-spaces-s;
+  }
+}
+
+.filterTagsList {
+  margin-bottom: $sds-spaces-s;
+
+  .filterTagContainer {
+    margin: $sds-spaces-xs;
+  }
+}

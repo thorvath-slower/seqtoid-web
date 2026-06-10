@@ -1,0 +1,29 @@
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.filterList {
+  .filterListElement {
+    display: inline-block;
+    margin: $sds-spaces-xxs 0;
+    vertical-align: top;
+
+    &:not(:last-child) {
+      margin-right: $sds-spaces-m;
+    }
+  }
+}
+
+.tagList {
+  margin-top: $sds-spaces-l;
+  margin-bottom: $sds-spaces-l;
+
+  .filterTag {
+    display: inline-block;
+    margin: 0;
+    margin-right: $sds-spaces-xs;
+
+    &:last-child {
+      margin-right: 0;
+    }
+  }
+}

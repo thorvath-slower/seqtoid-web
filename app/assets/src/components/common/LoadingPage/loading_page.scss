@@ -1,0 +1,16 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.loading {
+  @include font-body-s;
+  padding: 0 0 0 $sds-spaces-default;
+  color: $sds-color-gray-500;
+  margin-top: 90px;
+
+  .loadingIcon {
+    width: $icon-s;
+    height: $icon-s;
+  }
+}

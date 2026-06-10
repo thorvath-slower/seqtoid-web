@@ -1,0 +1,12 @@
+<div id="AlignmentViz_page">
+  <%= javascript_tag do %>
+    react_component('AlignmentViz', {
+    sampleId: <%= @sample.id %>,
+    alignmentQuery: '<%= @taxon_info %>',
+    taxId: <%= @taxid %>,
+    taxLevel: '<%= @tax_level %>',
+    taxName: '<%= @taxon_name %>',
+    pipelineVersion: '<%= @pipeline_version %>'
+    }, 'AlignmentViz_page');
+  <% end %>
+</div>

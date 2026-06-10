@@ -1,0 +1,235 @@
+name: Run E2E Tests
+
+on:
+  workflow_call:
+    inputs:
+      node-environment:
+        type: string
+        description: "Environment"
+        required: true
+        default: "staging"
+      test-category:
+        type: string
+        description: "Test Category"
+        required: true
+        default: "smoke"
+      should-run-with-feature-flags:
+        type: string
+        description: "Run with feature flags?"
+        required: true
+        default: "false"
+
+  workflow_dispatch:
+    inputs:
+      node-environment:
+        type: choice
+        description: "Environment"
+        required: true
+        default: "staging"
+        options:
+          - staging
+          - sandbox
+      test-category:
+        type: choice
+        description: "Test Category"
+        required: true
+        default: "smoke"
+        options:
+          - smoke
+          - e2e
+      should-run-with-feature-flags:
+        type: choice
+        description: "Run with feature flags?"
+        required: true
+        default: "false"
+        options:
+          - "true"
+          - "false"
+
+run-name: "Run ${{inputs.test-category}} tests on ${{inputs.node-environment}} environment (with feature flags: ${{inputs.should-run-with-feature-flags}})"
+
+jobs:
+  workflow-e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      CI: true
+      CZID_USERNAME: ${{secrets.CZID_USERNAME}}
+      CZID_PASSWORD: ${{secrets.CZID_PASSWORD}}
+      NODE_ENV: ${{inputs.node-environment}}
+      BASESPACE_USERNAME: ${{secrets.BASESPACE_USERNAME}}
+      BASESPACE_PASSWORD: ${{secrets.BASESPACE_PASSWORD}}
+      NEXTGEN_FEATURE_FLAGS_ENABLED: ${{inputs.should-run-with-feature-flags}}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: "./.node-version"
+
+      - name: Install dependencies
+        run: |
+          cd ./e2e/
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Configure user for test
+        working-directory: ./e2e/
+        run: |
+          if [[ ${{inputs.should-run-with-feature-flags}} == 'true' ]]; then
+            CZID_USERNAME_WITH_FF=${{secrets.CZID_USERNAME_WITH_FF}}
+            CZID_PASSWORD_WITH_FF=${{secrets.CZID_PASSWORD_WITH_FF}}
+            echo "CZID_USERNAME=${CZID_USERNAME_WITH_FF}" >> $GITHUB_ENV
+            echo "CZID_PASSWORD=${CZID_PASSWORD_WITH_FF}" >> $GITHUB_ENV
+            echo "Running tests with feature flags"
+          else
+            echo "Running tests without feature flags"
+          fi
+
+      - name: Run playwright tests
+        working-directory: ./e2e/
+        id: run-playwright
+        run: |
+          npx playwright test -c setup/${{inputs.node-environment}}.config.ts --project="${{inputs.test-category}} test: *"
+
+      - name: Upload test result artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{inputs.test-category}}-${{ github.run_id }}
+          path: /home/runner/work/czid-web-private/czid-web-private/e2e/playwright-report
+          retention-days: 14
+
+      - name: Notify Slack on success
+        id: slack_message
+        if: ${{ success() }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "E2E Automation: ${{inputs.test-category}} tests have passed :white_check_mark:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Env*: ${{inputs.node-environment}}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Test Category*: ${{inputs.test-category}}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch*: ${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit*: ${{ github.sha }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Results Link*: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "plain_text",
+                      "text": "Automated by Github Actions",
+                      "emoji": true
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notify Slack on failure
+        if: ${{ failure() }}
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "E2E Automation: ${{inputs.test-category}} tests failed :x:",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Env*: ${{inputs.node-environment}}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Test Category*: ${{inputs.test-category}}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch*: ${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit*: ${{ github.sha }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Results*: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "plain_text",
+                      "text": "Automated by Github Actions",
+                      "emoji": true
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

@@ -1,0 +1,14 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.tooltip {
+  @include font-body-xs;
+  text-align: left;
+
+  .title {
+    font-weight: bold;
+    margin-right: $sds-spaces-xs;
+  }
+}

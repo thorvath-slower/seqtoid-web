@@ -1,0 +1,59 @@
+@import "themes/typography";
+@import "themes/colors";
+@import "themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.tooltip {
+  &.in {
+    opacity: 1 !important;
+  }
+  .tooltip-inner {
+    font-size: 0.8rem;
+    text-align: left;
+    max-width: 200px;
+    padding: $sds-spaces-m 15px;
+    color: $sds-color-gray-100 !important;
+    background: $sds-color-gray-600;
+    border-radius: $sds-corners-corner-s;
+    box-shadow: $sds-drop-shadows-shadow-m;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: $sds-font-font-family;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+// TODO: Refactor all <a> elements into a <Link> SDS component, and remove.
+a {
+  color: inherit !important;
+}
+
+.hidden {
+  display: none;
+}
+
+.profile-dropdown {
+  cursor: pointer;
+  i {
+    margin: 20px;
+  }
+}
+
+#sample-list {
+  width: 100px;
+  top: 11rem !important;
+}
+
+.modal-overlay {
+  z-index: 999 !important;
+}
+
+.content-body {
+  .progress {
+    margin: 0;
+  }
+}

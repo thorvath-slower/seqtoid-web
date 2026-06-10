@@ -1,0 +1,33 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+@import "./taxon_filter_variables.scss";
+
+.filterContainer {
+  margin: $sds-spaces-s;
+  color: $sds-color-gray-black;
+  width: $TAXON_THRESHOLD_FILTER_WIDTH;
+
+  .title {
+    font: $sds-font-header-m-600-font;
+    margin-bottom: $sds-spaces-l;
+  }
+
+  .filterDescriptor {
+    @include font-body-s;
+    margin-bottom: $sds-spaces-xs;
+  }
+
+  .thresholdDescriptor {
+    @include font-body-s;
+    margin-top: $sds-spaces-xl;
+    margin-bottom: $sds-spaces-xs;
+  }
+
+  .actions {
+    margin-top: $sds-spaces-xxl;
+    display: flex;
+    gap: $sds-spaces-s;
+  }
+}

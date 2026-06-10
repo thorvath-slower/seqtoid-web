@@ -1,0 +1,108 @@
+// Place all the styles related to the home controller here.
+// They will automatically be included in application.scss.
+// You can use Sass (SCSS) here: http://sass-lang.com/
+@import "themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+body {
+  color: $sds-color-gray-black;
+  font-size: 14px;
+  font-family: $sds-font-font-family;
+}
+.page-loading {
+  position: fixed;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  background: $sds-color-gray-white no-repeat center center;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100px;
+  opacity: 1;
+  border-radius: $sds-corners-corner-m;
+  div {
+    text-transform: none;
+    font-size: 1.3rem;
+    padding-bottom: 45px;
+    padding-top: 9px;
+  }
+  i {
+    margin-right: 5px !important;
+    font-size: 1.6rem !important;
+  }
+  .spinner-label {
+    position: relative;
+    top: -2px;
+  }
+}
+.sample-container {
+  tbody {
+    td {
+      i.fa {
+        border-radius: $sds-corners-corner-m;
+        padding: 5px;
+        margin: 0 13px;
+        color: $sds-color-gray-white;
+        background-color: $sds-color-primary-400;
+        cursor: pointer;
+      }
+      i.fa.fa-flask {
+        margin-left: 0;
+      }
+    }
+  }
+  .dropdown-content {
+    width: 220px;
+  }
+}
+
+.sample-dropdown-content {
+  width: auto !important;
+}
+
+.content-wrapper {
+  .scroll {
+    margin: $sds-spaces-m;
+    width: 100%;
+    text-align: center !important;
+  }
+}
+
+table {
+  thead {
+    th {
+      font-style: thin;
+      font-size: 14px;
+      color: $sds-color-gray-300;
+    }
+  }
+}
+
+i.fa {
+  cursor: pointer;
+}
+
+.no-data {
+  text-align: center;
+  margin: 20px;
+  i {
+    font-size: 18px;
+  }
+}
+
+.pagination {
+  margin: 30px;
+  text-align: center;
+}
+
+.page-info {
+  text-align: center;
+}
+
+.dropdown-content ul li {
+  cursor: pointer;
+}

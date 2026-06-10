@@ -1,0 +1,24 @@
+@import "themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.complete,
+.succeeded,
+.succeeded_with_issue {
+  color: $sds-color-success-400 !important;
+}
+
+.failed {
+  color: $sds-color-error-400 !important;
+}
+
+.waiting {
+  color: $sds-color-primary-400 !important;
+}
+
+.initializing {
+  color: $sds-color-gray-500 !important;
+}
+
+.uploading {
+  color: $sds-color-warning-400 !important;
+}

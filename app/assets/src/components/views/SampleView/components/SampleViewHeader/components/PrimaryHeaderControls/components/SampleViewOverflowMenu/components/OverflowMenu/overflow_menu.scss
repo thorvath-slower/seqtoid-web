@@ -1,0 +1,24 @@
+@import "~@czi-sds/components/dist/variables";
+
+.dropdownItem {
+  color: $sds-color-error-400;
+  .icon {
+    fill: $sds-color-error-400;
+    margin-right: $sds-spaces-xxs;
+  }
+  &.iconDisabled {
+    color: $sds-color-gray-300;
+    svg {
+      fill: $sds-color-gray-300;
+    }
+  }
+}
+
+.helpButton {
+  min-width: auto !important;
+  padding: 0 5px !important;
+
+  :global(.MuiButton-startIcon) {
+    margin: 0 !important;
+  }
+}

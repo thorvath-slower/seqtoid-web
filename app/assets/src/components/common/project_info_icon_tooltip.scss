@@ -1,0 +1,17 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.centerSpan {
+  align-self: center;
+
+  .projectInfoIcon {
+    margin: 5px $sds-spaces-xxs 5px $sds-spaces-xxs;
+    vertical-align: text-top;
+  }
+}
+
+.projectInfoIconTooltip {
+  width: 300px !important;
+}

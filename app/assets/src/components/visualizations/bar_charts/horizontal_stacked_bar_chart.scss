@@ -1,0 +1,94 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+// these defaults can be overridden by passing in your
+// own class names and css to the component.
+
+.chart {
+  width: 100%;
+  line-height: 0px;
+  margin: 0px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.xAxisTitle {
+  @include font-body-xxs;
+  color: $sds-color-gray-black;
+  margin-bottom: $sds-spaces-s;
+
+  div {
+    display: inline-block;
+    text-align: center;
+  }
+}
+
+.xAxis {
+  margin: 0px;
+  padding: 0px;
+}
+
+.xGrid {
+  fill: none;
+  stroke: $sds-color-gray-200;
+}
+
+.canvas {
+  @include scrollable;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  margin: 0px;
+  padding: 0px;
+
+  svg,
+  div {
+    margin: 0px;
+    padding: 0px;
+  }
+}
+
+.yAxis {
+  float: left;
+}
+
+.barCanvas {
+  float: right;
+}
+
+.emptyBarSpace {
+  &:hover {
+    fill: $sds-color-gray-100;
+    fill-opacity: 0.9;
+  }
+  &:hover ~ .fullBar {
+    stroke: $sds-color-primary-400;
+  }
+}
+
+.fullBar {
+  fill: none;
+}
+
+.barPiece {
+  &:hover {
+    stroke: $sds-color-primary-400;
+  }
+}
+
+.faded {
+  stroke-opacity: 0;
+  fill-opacity: 0.1;
+}
+
+.test {
+  display: inline-block;
+  visibility: hidden;
+  line-height: normal;
+  width: max-content;
+}

@@ -1,0 +1,12 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.optional {
+  @include font-header-xxs;
+  font-weight: 500;
+  color: $sds-color-gray-500;
+}
+
+.error {
+  margin-top: $sds-spaces-m;
+}

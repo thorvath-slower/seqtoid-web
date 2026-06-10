@@ -1,0 +1,94 @@
+@import "../../themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.phylo-tree-vis {
+  font-size: 13px;
+
+  &__tree-container {
+    margin-bottom: 30rem;
+    overflow: auto;
+
+    svg {
+      width: 100%;
+    }
+
+    .node {
+      cursor: pointer;
+    }
+
+    .node circle {
+      opacity: 1;
+    }
+
+    .node.highlight text {
+      font-weight: 700;
+    }
+
+    .node-internal text {
+      text-shadow: 0 1px 0 $sds-color-gray-white, 0 -1px 0 $sds-color-gray-white,
+        1px 0 0 $sds-color-gray-white, -1px 0 0 $sds-color-gray-white;
+    }
+
+    .link {
+      fill: none;
+      stroke: $sds-color-gray-300;
+      stroke-width: 2px;
+    }
+
+    .link.highlight {
+      stroke-width: 4px;
+    }
+
+    form {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      position: absolute;
+      left: 10px;
+      top: 10px;
+    }
+
+    label {
+      display: block;
+    }
+
+    .scale {
+      .scale-line,
+      .scale-tick path {
+        fill: none;
+        stroke: $sds-color-gray-300;
+        stroke-width: 2px;
+      }
+    }
+
+    .legend {
+      background-color: $sds-color-gray-white;
+
+      .legend-background {
+        fill: $sds-color-gray-white;
+        fill-opacity: 0.8;
+      }
+
+      .legend-title {
+        font-weight: 600;
+        letter-spacing: 0.4px;
+      }
+    }
+  }
+
+  &__tooltip-container {
+    position: absolute;
+    display: none;
+
+    &.visible {
+      display: block;
+    }
+
+    .data-tooltip__label {
+      min-width: 100px;
+    }
+  }
+
+  &__metadata-select {
+    width: 200px;
+    margin: 20px 0;
+  }
+}

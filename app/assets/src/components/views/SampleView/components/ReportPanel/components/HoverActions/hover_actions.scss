@@ -1,0 +1,50 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.hoverActionsDropdown {
+  display: inline-block !important; // even if hover outside the row, if the dropdown is open, keep it open
+}
+
+.hoverActions {
+  color: $sds-color-primary-400;
+  font-size: 14px;
+
+  .actionDot {
+    margin-left: 7px;
+    font-size: 15px;
+    display: inline-block;
+
+    .countCircle {
+      @include font-body-xxs;
+
+      // This makes a circle with a number in it
+      background: $sds-color-primary-400;
+      border-radius: 50%;
+      color: $sds-color-gray-white;
+      cursor: pointer;
+      float: right;
+      font-size: 9px;
+      font-weight: $font-weight-semibold;
+      height: 12px;
+      line-height: 14px;
+      text-align: center;
+      width: 12px;
+    }
+  }
+
+  .divider {
+    margin-left: $sds-spaces-s;
+    border-left: 1px solid $sds-color-gray-300;
+  }
+}
+
+:global(.ui):global(.popup).hoverActionPopup {
+  &.actionEnabled {
+    @include font-header-xs;
+  }
+
+  &.actionDisabled {
+    @include font-body-xs;
+  }
+}

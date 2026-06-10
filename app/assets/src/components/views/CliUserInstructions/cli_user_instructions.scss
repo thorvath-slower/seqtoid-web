@@ -1,0 +1,37 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.instructionContainer {
+  h1 {
+    font-size: 24px;
+  }
+
+  h2 {
+    font-size: 22px;
+  }
+
+  h3 {
+    font-size: 20px;
+  }
+
+  h4 {
+    font-size: 18px;
+  }
+
+  h5 {
+    font-size: 16px;
+  }
+
+  margin: 1% 5%;
+
+  pre {
+    background-color: $sds-color-primary-200;
+    font-family: monospace;
+  }
+
+  a {
+    color: $sds-color-primary-400 !important;
+    cursor: pointer;
+  }
+}

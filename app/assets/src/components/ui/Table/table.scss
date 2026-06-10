@@ -1,0 +1,15 @@
+@import "~@czi-sds/components/dist/variables";
+
+.wrapper {
+  /* needed to keep search bar sticky */
+  flex: 1 1 auto;
+  overflow-y: auto;
+
+  tbody tr:hover {
+    background-color: $sds-color-primary-100;
+  }
+}
+
+.virtuoso {
+  max-height: calc(100% - 185px);
+}

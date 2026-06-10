@@ -1,0 +1,53 @@
+@use "sass:math";
+
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.subheader {
+  @include font-header-s;
+  margin-top: $sds-spaces-l;
+
+  .toggleLink {
+    @include font-caps-xxxs;
+    color: $sds-color-primary-400;
+    cursor: pointer;
+    margin-left: $sds-spaces-xs;
+  }
+}
+
+.adminUploadOptions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: $sds-spaces-xs;
+  padding: $sds-spaces-l;
+  padding-bottom: 0;
+  background-color: $sds-color-gray-100;
+}
+
+.field {
+  width: calc(33.3% - #{math.div($sds-spaces-xl * 2, 3)});
+  margin-right: $sds-spaces-xl;
+  margin-bottom: $sds-spaces-l;
+
+  &:nth-child(3n) {
+    margin-right: 0;
+  }
+
+  .label {
+    @include font-body-xs;
+    margin-bottom: $sds-spaces-xxxs;
+    display: flex;
+    align-items: center;
+  }
+
+  .input {
+    display: flex;
+  }
+
+  .helpIcon {
+    margin-left: $sds-spaces-xxs;
+    height: 14px;
+  }
+}

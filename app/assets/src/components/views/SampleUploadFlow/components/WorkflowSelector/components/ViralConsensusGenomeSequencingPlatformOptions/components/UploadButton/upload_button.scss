@@ -1,0 +1,14 @@
+@import "~@czi-sds/components/dist/variables";
+
+.button {
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.icon {
+  margin-right: $sds-spaces-xs;
+}
+
+.input {
+  display: none;
+}

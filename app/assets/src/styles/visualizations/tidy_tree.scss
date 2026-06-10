@@ -1,0 +1,69 @@
+@import "../themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.tidy-tree {
+  .node {
+    circle {
+      stroke: $sds-color-primary-400;
+      stroke-width: 2px;
+      fill: white;
+
+      &:hover {
+        cursor: pointer;
+        fill: $sds-color-primary-200;
+      }
+    }
+
+    text {
+      font-size: 8px;
+
+      &.name-missing {
+        fill: $sds-color-gray-400;
+      }
+
+      &:hover {
+        cursor: pointer;
+        fill: $sds-color-primary-400;
+      }
+    }
+
+    &__leaf,
+    &__internal {
+      &--collapsed {
+        circle {
+          fill: $sds-color-primary-400;
+
+          &:hover {
+            fill: $sds-color-primary-300;
+          }
+        }
+
+        path.cross {
+          stroke-width: 2px;
+          stroke: white;
+        }
+      }
+    }
+
+    &__leaf {
+      &--collapsed {
+        circle {
+          fill: $sds-color-primary-400;
+
+          &:hover {
+            fill: $sds-color-primary-300;
+          }
+        }
+      }
+    }
+  }
+
+  .link {
+    fill: none;
+    stroke: $sds-color-gray-400;
+
+    &.highlighted {
+      stroke: $sds-color-primary-400;
+    }
+  }
+}

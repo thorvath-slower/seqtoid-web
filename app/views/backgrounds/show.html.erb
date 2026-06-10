@@ -1,0 +1,48 @@
+<style>
+  .table-condensed > tbody > tr > td {
+    padding: 15px 5px;
+  }
+</style>
+
+<p id="notice"><%= notice %></p>
+
+<p>
+  <strong>Name:</strong>
+  <%= @background.name %>
+</p>
+
+<!--
+-->
+
+<p>
+  <strong>Date created:</strong>
+  <%= @background.created_at %>
+</p>
+
+<p>
+<strong>Composed of <%= @background.pipeline_runs.count %> pipeline runs:</strong>
+</p>
+
+<% if @background.pipeline_runs.count == 0 %>
+  No pipeline runs added yet.
+<% else %>
+  <table class="table table-condensed">
+    <thead>
+      <tr>
+        <th colspan="1"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @background.pipeline_runs.each do |p| %>
+        <tr>
+          <td><%= p.check_box_label %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<p>
+<%= link_to 'See all backgrounds', backgrounds_path %> |
+<%= link_to 'Front portal', root_path %>
+</p>

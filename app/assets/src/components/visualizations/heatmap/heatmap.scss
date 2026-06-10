@@ -1,0 +1,161 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+:export {
+  primaryLight: $sds-color-primary-400;
+}
+
+.heatmap {
+  .cell {
+    cursor: pointer;
+  }
+
+  .rowLabels,
+  .columnLabels {
+    .rowLabel,
+    .columnLabel {
+      font-size: 12px;
+
+      .removeIcon {
+        visibility: hidden;
+      }
+
+      .pinIcon {
+        // Equivalent to $sds-color-gray-400
+        opacity: 0.45;
+
+        &:hover {
+          opacity: 1;
+          cursor: pointer;
+          // The filter is defined in heatmap.js
+          filter: url("#blue");
+        }
+      }
+
+      &.highlighted {
+        fill: $sds-color-primary-400;
+      }
+
+      &:hover {
+        text {
+          fill: $sds-color-primary-400;
+          cursor: pointer;
+        }
+
+        .removeIcon {
+          visibility: visible;
+          cursor: pointer;
+          // The filter is defined in heatmap.js
+          filter: url("#blue");
+        }
+      }
+    }
+
+    .genusBorder {
+      stroke: $sds-color-gray-300;
+      stroke-width: 1;
+    }
+
+    .hideGenusBorder {
+      display: none;
+    }
+
+    .rowLabelHover rect {
+      fill: $sds-color-gray-200;
+    }
+  }
+
+  // hides genus separators in cluster mode
+  .rowLabels.rowClustering .genusBorder {
+    display: none;
+  }
+
+  .hoverTarget {
+    fill: transparent;
+  }
+
+  .dendogram {
+    .link {
+      .linkPath {
+        fill: transparent;
+        stroke: $sds-color-gray-300;
+        stroke-width: 1px;
+      }
+
+      &.highlighted {
+        path {
+          stroke: $sds-color-primary-400;
+        }
+      }
+    }
+  }
+
+  .columnMetadata {
+    pointer-events: bounding-box;
+
+    .columnMetadataLabel {
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: $font-weight-regular;
+
+      &:hover {
+        text {
+          fill: $sds-color-primary-400;
+        }
+      }
+    }
+
+    .columnMetadataAdd {
+      .metadataAddTrigger {
+        cursor: pointer;
+      }
+
+      .metadataAddIcon {
+        opacity: 0.65;
+      }
+
+      rect {
+        opacity: 0;
+      }
+
+      .metadataAddLabel {
+        @include font-header-xs;
+        cursor: pointer;
+        text-anchor: end;
+      }
+
+      &:hover {
+        .metadataAddIcon {
+          // The filter is defined in heatmap.js
+          filter: url("#blue");
+          opacity: 1;
+        }
+
+        .metadataAddLabel {
+          fill: $sds-color-primary-400;
+        }
+      }
+    }
+  }
+
+  .captionContainer {
+    .caption {
+      font-size: 12px;
+      fill: $sds-color-gray-400;
+      opacity: 0;
+    }
+  }
+
+  &.printMode {
+    .columnMetadataAdd {
+      opacity: 0;
+    }
+
+    .captionContainer {
+      .caption {
+        opacity: 1;
+      }
+    }
+  }
+}

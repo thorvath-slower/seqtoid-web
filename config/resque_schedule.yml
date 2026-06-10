@@ -1,0 +1,32 @@
+# See: https://github.com/resque/resque-scheduler#static-schedules
+# Cron times are relative to config.time_zone.
+
+HandleSfnNotificationsTimeout:
+  every: 1h
+  class: HandleSfnNotificationsTimeout
+  queue: handle_sfn_notifications_timeout
+  description: "This job checks for SFN executions that fail to update (get notified) after a maximum timeout period."
+
+CheckSoftDeletedData:
+  every: 1d
+  class: CheckSoftDeletedData
+  queue: check_soft_deleted_data
+  description: "This job checks the database for any pipeline or workflow runs that were soft deleted but never hard deleted."
+
+DeleteUnclaimedUserAccounts:
+  cron: "30 0 * * *" # 12:30am PT daily (spaced out from other hourly/daily jobs)
+  class: DeleteUnclaimedUserAccounts
+  queue: delete_unclaimed_user_accounts
+  description: "This job queries the Auth0 client for unclaimed user accounts that are 21+ days old and deletes them."
+
+DeleteOldBulkDownloads:
+  cron: "30 23 * * *" # 11:30pm PT daily (spaced out from other hourly/daily jobs)
+  class: DeleteOldBulkDownloads
+  queue: delete_old_bulk_downloads
+  description: "This job deletes all BulkDownloads (and associated S3 files) that are 7+ days old."
+
+ClearFailedResqueJobs:
+  cron: "0 1 * * 0" # 1:00am PT every Sunday
+  class: ClearResqueFailureQueue
+  queue: clear_resque_failure_queue
+  description: "This job clears the Resque failure queue of failed jobs every week"

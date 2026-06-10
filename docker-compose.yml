@@ -1,0 +1,304 @@
+# Shared variables using Docker x- extension and YAML merging syntax. IMPORTANT
+# NOTE: Unit tests in Github Actions currently run outside of Docker, so any environment
+# setup here may need to be reproduced in check.yml.
+
+x-web-variables: &web-variables
+  ? SAMPLES_BUCKET_NAME
+  ? SAMPLES_BUCKET_NAME_V1
+  ? S3_DATABASE_BUCKET
+  ? S3_WORKFLOWS_BUCKET
+  ? S3_AEGEA_ECS_EXECUTE_BUCKET
+  ? ES_ADDRESS
+  ? AIRTABLE_ACCESS_TOKEN
+  ? AIRTABLE_BASE_ID
+  ? AUTH_TOKEN_SECRET
+  ? BASESPACE_CLIENT_ID
+  ? BASESPACE_CLIENT_SECRET
+  ? BASESPACE_OAUTH_REDIRECT_URI
+  ? CLI_UPLOAD_ROLE_ARN
+  ? GIT_RELEASE_SHA
+  ? GRAPHQL_FEDERATION_SERVICE_URL
+  ? ID_SEQ_ENVS_THAT_CAN_SCALE
+  ? LOCATION_IQ_API_KEY
+  ? MAPTILER_API_KEY
+  ? PLAUSIBLE_ID
+  ? RACK_ENV
+  ? RAILS_ENV
+  ? SEGMENT_JS_ID
+  ? SEGMENT_RUBY_ID
+  ? SENTRY_DSN_BACKEND
+  ? SENTRY_DSN_FRONTEND
+  ? SERVER_DOMAIN
+  ? SMTP_PASSWORD
+  ? SMTP_USER
+  ? SYSTEM_ADMIN_USER_ID
+  ? SYSTEM_ADMIN_PROJECT_ID
+  ? HEATMAP_ES_ADDRESS
+  ? INDEXING_LAMBDA_MODE
+  ? LOCAL_TAXON_INDEXING_URL
+  ? LOCAL_EVICTION_URL
+
+x-auth0-variables: &auth0-variables
+  ? AUTH0_CLIENT_ID
+  ? AUTH0_CLIENT_SECRET
+  ? AUTH0_CONNECTION
+  ? AUTH0_DOMAIN
+  ? AUTH0_MANAGEMENT_CLIENT_ID
+  ? AUTH0_MANAGEMENT_CLIENT_SECRET
+  ? AUTH0_MANAGEMENT_DOMAIN
+
+x-aws-variables: &aws-variables
+  ? AWS_ACCESS_KEY_ID
+  ? AWS_SECRET_ACCESS_KEY
+  ? AWS_SESSION_TOKEN
+  ? AWS_REGION
+  ? AWS_DEFAULT_REGION
+
+x-env-variables: &env-variables
+  ? ENVIRONMENT
+  ? OFFLINE
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.7.0
+    environment:
+      - node.name=elasticsearch-node
+      - discovery.type=single-node
+      - cluster.name=es-docker-cluster
+      - bootstrap.memory_lock=true
+      - plugins.security.disabled=true
+      - compatibility.override_main_response_version=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./docker_data/opensearch/data:/usr/share/opensearch/data
+    ports:
+      - 9400:9200
+      - 9600:9600
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.7.0
+    environment:
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+      - OPENSEARCH_HOSTS=http://opensearch:9200
+    ports:
+      - 5601:5601
+    depends_on:
+      - opensearch
+  db:
+    image: mysql:5.7
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+      - MYSQL_DATABASE=idseq_development
+    ports:
+      - 3306:3306
+    command: ['--character-set-server=utf8', '--collation-server=utf8_unicode_ci', '--group_concat_max_len=1073741824', '--show_compatibility_56=ON']
+    platform: linux/amd64
+    volumes:
+      - ./docker_data/db/data:/var/lib/mysql
+  redis:
+    image: redis:5.0.3
+    ports:
+      - 6379:6379
+    volumes:
+      - ./redis-data:/var/lib/redis/data
+  web-proxy:
+    image: nginx
+    volumes:
+      - ./docker/etc/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 3000:3000
+    depends_on:
+      - web
+    command:
+      ["/usr/sbin/nginx", "-c", "/etc/nginx/nginx.conf"]
+  web:
+    build:
+      context: .
+      # See https://testdriven.io/blog/faster-ci-builds-with-docker-cache/
+      # and https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#leverage-build-cache#leverage-build-cache
+      cache_from:
+        - ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    platform: linux/amd64
+    volumes:
+      - .:/app
+      - ./log:/app/log
+      - ./tmp:/app/tmp
+      - ./db:/app/db
+      - ./coverage:/app/coverage
+      - ~/.aws:/root/.aws:ro
+      - ~/.aws/cli/cache:/root/.aws/cli/cache
+      - ./graphql_schema:/app/graphql_schema
+      - ./test/fixtures/czid-private-key.pem:/tmp/czid-private-key.pem
+    ports:
+      - 3001:3001
+      - 12345:12345
+    depends_on:
+      - db
+      - redis
+      - opensearch
+      - shoryuken
+    env_file:
+      - web.env
+    environment:
+      <<: [*web-variables, *aws-variables, *auth0-variables, *env-variables]
+      GRAPHQL_FEDERATION_SERVICE_URL: http://web-proxy:3000/graphqlfed
+      RUBY_DEBUG_SKIP_BP: true
+      ALLOW_DIRECT_USER_LOGIN: true
+    command: bash -c "rm -f tmp/pids/server.pid && rails server -b 0.0.0.0 -p 3001"
+  resque:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    platform: linux/amd64
+    volumes:
+      - .:/app:ro
+      - ./log:/app/log
+      - ./tmp:/app/tmp
+      - ~/.aws:/root/.aws:ro
+      - ~/.aws/cli/cache:/root/.aws/cli/cache
+      - ./test/fixtures/czid-private-key.pem:/tmp/czid-private-key.pem
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - web.env
+    environment:
+      <<: [*web-variables, *aws-variables, *env-variables]
+      GRAPHQL_FEDERATION_SERVICE_URL: http://web-proxy:3000/graphqlfed
+    command: bundle exec "COUNT=2 rake resque:workers"
+  resque-scheduler:
+    # See config/resque_schedule.yml for usages.
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    platform: linux/amd64
+    profiles: ["async-failures"]  # We *very rarely* need to run this in local-dev
+    volumes:
+      - .:/app:ro
+      - ./log:/app/log
+      - ./tmp:/app/tmp
+      - ~/.aws:/root/.aws:ro
+      - ~/.aws/cli/cache:/root/.aws/cli/cache
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - web.env
+    environment:
+      <<: [*web-variables, *aws-variables]
+    command: bundle exec "rake resque:scheduler"
+  resque-result-monitor:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    platform: linux/amd64
+    profiles: ["async-failures"]  # We *very rarely* need to run this in local-dev
+    volumes:
+      - .:/app:ro
+      - ./log:/app/log
+      - ./tmp:/app/tmp
+      - ~/.aws:/root/.aws:ro
+      - ~/.aws/cli/cache:/root/.aws/cli/cache
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - web.env
+    environment:
+      <<: [*web-variables, *aws-variables]
+    command: bundle exec "rake result_monitor"
+  resque-pipeline-monitor:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    platform: linux/amd64
+    profiles: ["async-failures"]  # We *very rarely* need to run this in local-dev
+    volumes:
+      - .:/app:ro
+      - ./log:/app/log
+      - ./tmp:/app/tmp
+      - ~/.aws:/root/.aws:ro
+      - ~/.aws/cli/cache:/root/.aws/cli/cache
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - web.env
+    environment:
+      <<: [*web-variables, *aws-variables]
+    command: bundle exec "rake pipeline_monitor"
+  shoryuken:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
+    platform: linux/amd64
+    volumes:
+      - .:/app:ro
+      - ./log:/app/log
+      - ./tmp:/app/tmp
+      - ~/.aws:/root/.aws:ro
+      - ~/.aws/cli/cache:/root/.aws/cli/cache
+      - ./test/fixtures/czid-private-key.pem:/tmp/czid-private-key.pem
+    environment:
+      <<: [*web-variables, *aws-variables, *env-variables]
+      SFN_NOTIFICATIONS_QUEUE_ARN:
+    command: bundle exec "shoryuken -R -C config/shoryuken-dev.yml"
+  concurrency-lambda:
+    # image built from idseq repo main branch
+    # for other versions, clone idseq repo, build image locally and change image to `concurreny-lambda:local`
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-local-concurreny-lambda:latest
+    platform: linux/amd64
+    profiles: ["local-lambdas"]
+    environment:
+      - LOCAL_MODE=local
+      - LOCAL_LAMBDA_ENDPOINT=indexing-lambda:8080
+      - CONCURRENCY=1 # containerized lambdas cannot run concurrently
+    ports:
+      - 9090:8080
+  indexing-lambda:
+    # image built from idseq repo main branch
+    # for other versions, clone idseq repo, build image locally and change image to `indexing-lambda:local`
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-local-indexing-lambda:latest
+    platform: linux/amd64
+    profiles: ["local-lambdas"]
+    environment:
+      - LOCAL_MODE=local
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=local
+      - MYSQL_DB=idseq_development
+      - ES_HOST=opensearch:9200
+    ports:
+      - 9091:8080
+  eviction-lambda:
+    # image built from idseq repo main branch
+    # for other versions, clone idseq repo, build image locally and change image to `eviction-lambda:local`
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-local-eviction-lambda:latest
+    platform: linux/amd64
+    profiles: ["local-lambdas"]
+    environment:
+      - LOCAL_MODE=local
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=local
+      - MYSQL_DB=idseq_development
+      - ES_HOST=opensearch:9200
+    ports:
+      - 9092:8080
+  deleted-eviction-lambda:
+    # image built from idseq repo main branch
+    # for other versions, clone idseq repo, build image locally and change image to `deleted-eviction-lambda:local`
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-local-deleted-eviction-lambda:latest
+    platform: linux/amd64
+    profiles: ["local-lambdas"]
+    environment:
+      - LOCAL_MODE=local
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_USERNAME=root
+      - MYSQL_PASSWORD=local
+      - MYSQL_DB=idseq_development
+      - ES_HOST=opensearch:9200
+    ports:
+      - 9093:8080
+networks:
+  default:
+    name: czidnet
+    driver: overlay
+    attachable: true

@@ -1,0 +1,32 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.sampleViewHeader {
+  flex: 0 0 auto;
+}
+
+.viewHeader {
+  margin-bottom: 5px;
+  z-index: 3;
+
+  .legacyLink {
+    @include font-body-xxxs;
+    color: $sds-color-gray-500;
+    padding-left: $sds-spaces-xxxs;
+    &:hover {
+      color: $sds-color-primary-400;
+    }
+  }
+
+  .sampleDetailsLink {
+    color: $sds-color-primary-400;
+    font-weight: $font-weight-semibold;
+    cursor: pointer;
+
+    &:hover {
+      opacity: 0.5;
+    }
+  }
+}

@@ -1,0 +1,42 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.tabs {
+  padding-bottom: $sds-spaces-xs;
+
+  .tab {
+    @include font-header-s;
+    color: $sds-color-gray-500;
+    margin-right: 30px;
+    cursor: pointer;
+
+    &.selected {
+      color: $sds-color-gray-black;
+    }
+  }
+
+  .tabWrapper {
+    display: flex;
+    position: relative;
+  }
+
+  .indicator {
+    position: absolute;
+    height: 3px;
+    background-color: $sds-color-primary-400;
+    transition: all 0.2s;
+    transform: translateY(22px);
+    z-index: 1;
+  }
+
+  /* The tab border extends OUTSIDE of the tab container */
+  .tabBorder {
+    height: 3px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin-top: 3px;
+    background-color: $sds-color-gray-200;
+  }
+}

@@ -1,0 +1,117 @@
+@import "./sample_upload_flow_shared";
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.uploadProgressModal {
+  padding: 0 0 $sds-spaces-xxl + $sds-spaces-xl 0;
+
+  &.uploadComplete {
+    padding-bottom: $sds-spaces-xxl;
+  }
+
+  .header {
+    margin-top: $sds-spaces-xxl;
+    text-align: center;
+
+    .uploadImg {
+      width: $img-m;
+      height: $img-m;
+    }
+
+    .title {
+      @include font-header-xl;
+      color: black;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+      margin-bottom: $sds-spaces-s;
+      padding: 0 40px;
+    }
+
+    .titleWithIcon {
+      @include font-header-xl;
+      margin-bottom: $sds-spaces-s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .alertIcon {
+        width: 18px;
+        height: 18px;
+        margin-right: $sds-spaces-xs;
+      }
+
+      .checkmarkIcon {
+        width: 25px;
+        height: 25px;
+        margin-right: $sds-spaces-xs;
+        fill: $sds-color-success-400;
+      }
+    }
+
+    .subtitle {
+      @include font-body-s;
+      padding: 0 40px;
+
+      .helpLink {
+        color: $sds-color-primary-400 !important;
+
+        &:hover {
+          cursor: pointer;
+        }
+      }
+    }
+
+    .instructions {
+      @include font-body-s;
+      max-width: 500px;
+      margin: $sds-spaces-s auto $sds-spaces-xxl;
+    }
+
+    .notificationContainer {
+      margin: $sds-spaces-l $sds-spaces-xxl $sds-spaces-s $sds-spaces-xxl;
+
+      .content {
+        display: flex;
+        justify-content: space-between;
+
+        .errorMessage {
+          @include font-header-s;
+        }
+      }
+    }
+  }
+
+  .failedSamples {
+    @include font-body-s;
+    max-width: 500px;
+    margin: $sds-spaces-s auto 40px;
+    text-align: center;
+  }
+
+  .footer {
+    text-align: center;
+    height: 34px;
+    margin-top: $sds-spaces-xxl;
+
+    .completeMessage {
+      @include font-body-xxs;
+      display: flex;
+      align-items: center;
+    }
+  }
+}
+
+.sampleRetry {
+  @include sampleUploadRetry;
+
+  &.retryAll {
+    color: $sds-color-error-400;
+
+    &:hover {
+      color: $sds-color-error-600 !important;
+    }
+  }
+}

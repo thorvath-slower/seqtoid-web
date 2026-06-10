@@ -1,0 +1,44 @@
+@charset 'utf-8';
+
+// sds variables
+@import "~@czi-sds/components/dist/variables";
+
+// legacy
+@import "styles/header";
+@import "styles/home";
+@import "styles/forbidden";
+@import "styles/samplesUpload";
+@import "styles/users";
+@import "styles/resultsfolder";
+@import "styles/visualization";
+@import "styles/variables";
+@import "styles/edit_password";
+
+// layout
+@import "styles/layout/view_header";
+
+// ui/controls
+@import "styles/ui/controls/buttons/button";
+@import "styles/ui/controls/buttons/primary_button";
+@import "styles/ui/controls/buttons/secondary_button";
+@import "styles/ui/controls/buttons/transparent_button";
+@import "styles/ui/controls/input";
+@import "styles/ui/controls/menu";
+
+// labels
+@import "styles/ui/labels/pathogen_preview";
+
+// ui/containers
+@import "styles/ui/containers/wizard";
+
+// views
+@import "styles/views/landing";
+@import "styles/views/phylo_tree/phylo_tree_creation";
+@import "styles/views/phylo_tree/phylo_tree_vis";
+@import "styles/views/report/pathogen_summary";
+@import "styles/views/report/taxon_modal";
+@import "styles/views/taxon_tree_vis";
+
+// visualizations
+@import "styles/visualizations/table/data_table";
+@import "styles/visualizations/tidy_tree";

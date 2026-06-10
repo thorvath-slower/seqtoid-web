@@ -1,0 +1,88 @@
+<% if current_user.admin? %>
+<p id="notice"><%= notice %></p>
+
+<p>
+  <strong>Name:</strong>
+  <%= @project.name %>
+</p>
+
+<p>
+  <strong>Date created:</strong>
+  <%= @project.created_at %>
+</p>
+
+<% if @project.users[0] %>
+<p>
+  <strong>Project owner:</strong>
+  <%= @project.users[0].name %>
+  (<%= @project.users[0].email %>)
+</p>
+<%= button_to 'delete project', project_path(@project), method: :delete %>
+<% end %>
+
+<h1>Samples</h1>
+
+<% if @samples.count == 0 %>
+  No samples yet.
+<% else %>
+  <div class="sample-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>ID</th>
+        <th>Uploader</th>
+        <th>Project</th>
+        <th>Workflow</th>
+        <th>Sample Status</th>
+        <th>Pipeline/Workflow Run status</th>
+        <th>Job Submitted/Executed At</th>
+        <th>&nbsp;</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <% @samples.each do |sample| %>
+        <% pipeline_run = sample.first_pipeline_run %>
+        <% first_workflow_runs = WorkflowRun::WORKFLOW.values.map { |workflow| sample.first_workflow_run(workflow) } %>
+        <% [pipeline_run, *first_workflow_runs].compact.each do |run| %>
+          <tr class=<%= sample_status_display_for_hidden_page(sample, run)%>>
+            <td><u><%= link_to sample.name, sample %></u></td>
+            <td><%= sample.id %></td>
+            <td class='small'><%= sample.user.email if sample.user %></td>
+            <td class='small'><u><%= link_to sample.project.name, sample.project %></u></td>
+            <td class='small'><%= run.workflow %></td>
+            <td><%= sample.status %>
+              <% if sample.status.to_s == 'created' and sample.created_at < 30.minutes.ago %>
+                  <%= button_to 'reupload', reupload_source_sample_path(sample), method: :put %>
+              <% end %>
+            </td>
+            <td>
+              <% if run.class == PipelineRun %>
+                <%= run.job_status %>
+                &nbsp;
+                <% if run.completed? %>
+                  <%= button_to 'rerun from top', kickoff_pipeline_sample_path(sample), method: :put, form: {target: '_blank'} %>
+                <% end %>
+              <% elsif run.class == WorkflowRun %>
+                <%= run.status %>
+                <%= button_to 'rerun', rerun_workflow_run_path(run), method: :put, form: {target: '_blank'} %>
+              <% end %>
+            </td>
+            <td class="small"><%= run&.created_at || run&.executed_at || "N/A" %></td>
+            <td><u><%= link_to 'Runs', pipeline_runs_sample_path(sample) %></u> &nbsp;
+                <u><%= link_to 'Edit', edit_sample_path(sample) %></u></td>
+          </tr>
+        <% end %>
+      <% end %>
+    </tbody>
+  </table>
+  </div>
+<% end %>
+
+<p>
+<u><%= link_to 'Edit', edit_project_path(@project) %></u> |
+<u><%= link_to 'See all projects', projects_path %></u> |
+<u><%= link_to 'Front portal', root_path %></u>
+</p>
+<% end %>

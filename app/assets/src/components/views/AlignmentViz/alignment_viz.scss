@@ -1,0 +1,22 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.heading {
+  /* override semantic-ui */
+  margin: 15px !important;
+}
+
+.accessionViz {
+  margin: 15px;
+}
+
+.warningIcon {
+  font-size: 24px;
+  color: $sds-color-gray-300;
+  margin-left: 5px;
+  transform: translateY(-1px);
+}
+
+.popup {
+  text-align: left;
+}

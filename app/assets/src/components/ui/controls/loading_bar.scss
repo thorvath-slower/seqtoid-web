@@ -1,0 +1,38 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.loadingBarBackground {
+  background-color: $sds-color-gray-200;
+  height: $sds-spaces-s;
+  border-radius: $sds-corners-corner-m;
+  overflow: hidden;
+
+  .loadingBar {
+    background-color: $sds-color-primary-400;
+    height: $sds-spaces-s;
+    width: 0px;
+    border-radius: $sds-corners-corner-m;
+
+    &.showHint {
+      min-width: $sds-spaces-xxs;
+    }
+
+    &.error {
+      background-color: $sds-color-error-400;
+    }
+  }
+
+  &.tiny {
+    height: $sds-spaces-xs;
+
+    .loadingBar {
+      height: $sds-spaces-xs;
+      border-radius: $sds-corners-corner-m;
+    }
+  }
+
+  &.loading {
+    margin-top: $sds-spaces-xxs;
+  }
+}

@@ -1,0 +1,57 @@
+@import "~styles/themes/elements";
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.bulkDownloadList {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - #{$header-total-height});
+
+  .blankScreenContainer,
+  .tableContainer {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .largeDownloadIcon {
+    width: 150px;
+    height: 150px;
+    fill: $sds-color-gray-200;
+  }
+
+  .loadingMessage {
+    margin: $sds-spaces-xxl auto 0;
+  }
+
+  .lightCell {
+    font-weight: $font-weight-regular;
+    color: $sds-color-gray-500;
+  }
+}
+
+.autoUpdateWarning {
+  margin-bottom: $sds-spaces-xxs;
+
+  .link {
+    text-decoration: underline;
+    cursor: pointer;
+  }
+}
+
+.viewHeader {
+  margin-top: $sds-spaces-xxl;
+  margin-bottom: $sds-spaces-xxl;
+}
+
+.downloadNameHeader {
+  justify-content: flex-start;
+}
+
+.tableContainer {
+  padding-top: $sds-spaces-xl;
+}
+
+.tableRow {
+  padding: 0 $sds-spaces-xl !important;
+}

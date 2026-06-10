@@ -1,0 +1,58 @@
+@import "~@czi-sds/components/dist/variables";
+
+.idseq-ui.button {
+  position: relative;
+  border-radius: $sds-corners-corner-l;
+  cursor: pointer;
+  font-family: $font-family-default;
+  font-size: 13px;
+  font-weight: 400;
+  font-style: normal;
+  font-stretch: normal;
+  height: 34px;
+  letter-spacing: 0.4px;
+  min-width: 120px;
+  padding: $sds-spaces-xxs $sds-spaces-l;
+  vertical-align: middle;
+
+  &.rectangular {
+    border-radius: $sds-corners-corner-m;
+  }
+
+  &.circular {
+    min-width: 34px;
+    padding: $sds-spaces-xxs 0;
+  }
+
+  div.icon-label {
+    height: 22px;
+    line-height: 22px;
+    vertical-align: middle;
+
+    i.icon,
+    svg {
+      height: 22px;
+      margin-right: $sds-spaces-s;
+      vertical-align: middle;
+    }
+
+    svg {
+      float: left;
+    }
+  }
+
+  &:disabled {
+    // using important due to semantic-ui styling
+    opacity: 1 !important;
+  }
+
+  &.has-dropdown-arrow {
+    padding-right: 30px;
+  }
+
+  .icon-dropdown-arrow {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+  }
+}

@@ -1,0 +1,38 @@
+<% if current_user.admin? %>
+<p id="notice"><%= notice %></p>
+
+<h1>Projects</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>User(s)</th>
+      <th>Number of samples</th>
+      <th>Date created</th>
+      <th colspan="1"></th>
+    </tr>
+  </thead>
+
+  <tbody>
+    <% @projects.each do |project| %>
+      <tr>
+        <td><u><%= link_to project.name, project %></u></td>
+        <td><% project.users[0...-1].each do |u| %>
+          <u><%= link_to u.name, u if u %></u>,
+        <% end %>
+        <u><%= link_to project.users.last.name, project.users.last if project.users.last %></u>
+        </td>
+        <td><%= current_power.project_samples(project).count %></td>
+        <td><%= project.created_at %></td>
+        <td><%= button_to 'Show', project_path(project), method: :get %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<p>
+<u><%= link_to 'New Project', new_project_path %></u> |
+<u><%= link_to 'Front portal', root_path %></u>
+</p>
+<% end %>

@@ -1,0 +1,37 @@
+default: &default
+  adapter: mysql2
+  username: root
+  host: 127.0.0.1
+  port: 3306
+  database: idseq_<%= Rails.env %>
+  encoding: utf8
+  collation: utf8_unicode_ci
+  reconnect: true
+  pool: <%= ENV['DB_CONNECTION_POOL'] || 5 %>
+  ssl_mode: 'REQUIRED'
+
+deployed: &deployed
+  <<: *default
+  host: <%= ENV['RDS_ADDRESS'] %>
+  password: <%= ENV['DB_PASSWORD'] %>
+  port: <%= ENV['DB_PORT'] %>
+  username: <%= ENV['DB_USERNAME'] %>
+
+development:
+  <<: *deployed
+  database: idseq_dev
+
+prod:
+  <<: *deployed
+
+staging:
+  <<: *deployed
+
+sandbox:
+  <<: *deployed
+
+# TODO: Renamed db to local_db to try and avoid weird "Database 'db' does not exist" errors when running the rails db:create task in a remote/AWS DB
+test:
+  <<: *default
+  host: <%= ENV['DB_HOST'] || "local_db" %>
+  database: idseq_test

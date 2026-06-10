@@ -1,0 +1,19 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.title {
+  @include font-header-m;
+  margin-top: 25px;
+  margin-bottom: $sds-spaces-m;
+}
+
+.input {
+  margin: 5px 30px 5px 0;
+  max-width: 400px;
+}
+
+.applyToAll {
+  color: $sds-color-primary-400;
+  cursor: pointer;
+}

@@ -1,0 +1,16 @@
+@import "~@czi-sds/components/dist/variables";
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+
+.dialog {
+  @include font-body-s;
+
+  .dialogTitle {
+    @include font-header-xl;
+  }
+
+  .dialogActions {
+    justify-content: flex-start;
+    margin-top: $sds-spaces-xl;
+  }
+}

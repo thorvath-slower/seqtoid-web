@@ -1,0 +1,5 @@
+{
+  "pipeline_output": {
+    "taxon_counts_attributes": [{ "tax_id": 1, "tax_level": 5, "count": 10 }]
+  }
+}

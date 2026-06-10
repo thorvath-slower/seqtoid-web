@@ -1,0 +1,8 @@
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.icon {
+  @include font-caps-xxxxs;
+  margin-left: $sds-spaces-xxxs;
+}

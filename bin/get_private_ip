@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'bundler/setup'
+require 'aws-sdk-ecs'
+require 'aws-sdk-ec2'
+require 'aws-sdk-iam'
+require 'pp'
+
+env = ARGV.shift
+if !env
+  puts 'Usage: ./bin/get_private_ip ENV'
+  abort
+end
+
+ecs_client = Aws::ECS::Client.new(region: 'us-west-2')
+ec2_client = Aws::EC2::Client.new(region: 'us-west-2')
+
+iam_client = Aws::IAM::Client.new(region: 'us-west-2')
+aws_account_alias = iam_client.list_account_aliases().account_aliases[0]
+
+cluster = if env == "sandbox" or aws_account_alias == "idseq-prod"
+            "idseq-#{env}-ecs"
+          elsif env == "dev" or env == "development"
+            "idseq-dev-ecs"
+          else
+            # TODO(2020-01-23): Rename staging clusters to new format (IDSEQ-2155).
+            env
+          end
+
+task = ecs_client.list_tasks(cluster: cluster, service_name: "czid-#{env}-web").task_arns.first
+
+tasks = ecs_client.describe_tasks(cluster: cluster, tasks: [task])
+instances = ecs_client.describe_container_instances(cluster: cluster,
+                                                    container_instances: [tasks.tasks[0].container_instance_arn])
+
+resp = ec2_client.describe_instances(instance_ids: [instances.container_instances[0].ec2_instance_id])
+
+private_ip = resp.reservations.first.instances.first.private_ip_address
+
+puts private_ip

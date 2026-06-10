@@ -1,0 +1,133 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.header {
+  background: $sds-color-gray-black;
+  padding: 2rem 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    padding: 15px $sds-spaces-xl;
+  }
+}
+
+.headerLogo {
+  display: block;
+  height: 40px;
+
+  @media (max-width: 768px) {
+    height: 32px;
+  }
+}
+
+.textLink,
+.buttonLink {
+  color: $sds-color-gray-white !important;
+  text-decoration: none;
+  font-family: $sds-font-font-family;
+  padding: 7px $sds-spaces-l;
+  margin: 0 5px;
+  @include font-body-xs;
+  font-weight: $font-weight-semibold;
+}
+
+.textLinkActive {
+  text-decoration: underline;
+  text-decoration-thickness: $sds-spaces-xxxs;
+  text-decoration-color: rgba($sds-color-gray-white, 0.5);
+  text-underline-offset: $sds-spaces-s;
+}
+
+.buttonLink {
+  display: inline-block;
+  text-align: center;
+  width: 131px;
+  border: 1px solid $sds-color-gray-white;
+  border-radius: 999px;
+
+  @media (max-width: 768px) {
+    width: 112px;
+  }
+
+  &:hover {
+    background: $sds-color-gray-white;
+    color: $sds-color-gray-black !important;
+  }
+}
+
+.hideMobile {
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.hamburgerIcon {
+  display: none;
+
+  @media (max-width: 768px) {
+    display: inline-block;
+    cursor: pointer;
+  }
+}
+
+.bar1,
+.bar2,
+.bar3 {
+  width: 17px;
+  height: 1px;
+  background-color: $sds-color-gray-white;
+  margin: 5px 0;
+}
+
+.mobileNav {
+  height: 100vh;
+  width: 90%;
+  max-width: 260px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  background-color: $sds-color-gray-white;
+  z-index: 10;
+  transition: all 0.4s;
+}
+
+.mobileNavCloseContainer {
+  width: 100%;
+  text-align: right;
+  padding-top: 24px;
+}
+
+.mobileNavClose {
+  cursor: pointer;
+  padding-right: 26px;
+}
+
+.mobileNavLinkContainer {
+  padding-top: 30px;
+  padding-left: 40px;
+}
+
+.mobileNavLink {
+  display: block;
+  text-decoration: none;
+  font-family: $sds-font-font-family;
+  color: $sds-color-gray-black;
+  @include font-body-xs;
+  font-weight: $font-weight-semibold;
+  margin: $sds-spaces-xl 0;
+  transition: opacity 0.2s;
+
+  &:nth-of-type(2) {
+    margin-top: 27px;
+  }
+}
+
+.mobileNavSeparator {
+  width: 60px;
+  height: 1px;
+  background-color: $sds-color-gray-300;
+}

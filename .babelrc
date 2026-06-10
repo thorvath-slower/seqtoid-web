@@ -1,0 +1,21 @@
+{
+  "presets": [
+    [
+      "@babel/preset-env", {
+        "useBuiltIns": "entry",
+        "corejs": "3"
+      }
+    ],
+    "@babel/preset-react",
+    "@babel/typescript"
+  ],
+  "plugins": [
+    "relay",
+    "@babel/plugin-proposal-export-default-from",
+    "@babel/plugin-proposal-object-rest-spread",
+    "@babel/transform-arrow-functions",
+    "@babel/plugin-transform-modules-commonjs",
+    "@babel/plugin-transform-regenerator",
+    "@babel/plugin-transform-runtime"
+  ]
+}

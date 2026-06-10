@@ -1,0 +1,79 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+// NOTE: Omit px so value can be exported for parseInt
+$metadata-input-width: 110;
+$metadata-input-extra-width: 225;
+
+:export {
+  metadataInputWidth: $metadata-input-width;
+  metadataInputExtraWidth: $metadata-input-extra-width;
+}
+
+.metadataManualInput {
+  .columnPicker {
+    /* Override semantic ui */
+    position: absolute !important;
+    left: calc(100% + 4px);
+    top: 13px;
+  }
+
+  .tableContainer {
+    position: relative;
+  }
+
+  .tableScrollWrapper {
+    overflow: auto;
+    max-height: 450px;
+  }
+
+  .requiredMessage {
+    @include font-header-xs;
+    color: $sds-color-gray-500;
+  }
+
+  .inputTable {
+    margin-bottom: 20px;
+
+    td {
+      vertical-align: top !important; // override semantic ui
+    }
+
+    .sampleName {
+      padding: $sds-spaces-l 0; // align vertically with inputs
+      font-weight: $font-weight-semibold;
+    }
+
+    .requiredStar {
+      color: $sds-color-gray-500;
+    }
+
+    .input {
+      margin: $sds-spaces-xs $sds-spaces-l $sds-spaces-xs 0;
+      width: $metadata-input-width + 0px;
+      vertical-align: top; // for host organism to align to others
+
+      &.extraWidth {
+        width: $metadata-input-extra-width + 0px;
+      }
+    }
+
+    .noInput {
+      color: $sds-color-gray-500;
+    }
+
+    .applyToAll {
+      color: $sds-color-primary-400;
+      cursor: pointer;
+    }
+  }
+
+  .autoPopulateButton {
+    @include font-caps-xxxs;
+    color: $sds-color-primary-400;
+    cursor: pointer;
+    margin-top: $sds-spaces-xxs;
+  }
+}

@@ -1,0 +1,12 @@
+@import "~@czi-sds/components/dist/variables";
+
+.menuItem {
+  .labelContainer {
+    visibility: hidden;
+    margin-right: $sds-spaces-s;
+  }
+
+  &:hover .labelContainer {
+    visibility: visible;
+  }
+}

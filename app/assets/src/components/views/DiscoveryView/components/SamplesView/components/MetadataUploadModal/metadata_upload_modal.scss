@@ -1,0 +1,58 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.metadataUploadModal {
+  min-height: 500px;
+
+  .projectName {
+    font-weight: 600;
+  }
+}
+
+.tableContainer {
+  overflow: auto;
+  max-height: 300px;
+}
+
+.uploadPage {
+  .link {
+    // Overwrite <a> inherit rule in header.scss
+    color: $sds-color-primary-400 !important;
+    cursor: pointer;
+  }
+}
+
+.uploadInstructions {
+  .backButton {
+    padding-left: 0;
+    margin-left: -$sds-spaces-m;
+  }
+
+  .title {
+    font: $sds-font-header-xl-600-font;
+  }
+
+  .sectionTitle {
+    margin-top: $sds-spaces-xl;
+    font: $sds-font-header-s-600-font;
+  }
+
+  .section {
+    padding-left: 16px;
+    line-height: 25px;
+
+    li {
+      padding-left: $sds-spaces-xxxs;
+    }
+
+    .link {
+      // Overwrite <a> inherit rule in header.scss
+      color: $sds-color-primary-400 !important;
+      cursor: pointer;
+    }
+  }
+
+  &.standalone {
+    margin-top: 50px;
+  }
+}

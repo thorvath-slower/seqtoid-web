@@ -1,0 +1,37 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+:global(.ui):global(.popup) {
+  &.annotationPopup {
+    @include font-header-xs;
+  }
+
+  &.annotationPreviewPopup {
+    @include font-body-xs;
+  }
+}
+
+.interactiveFlag {
+  vertical-align: -10%;
+
+  &:hover {
+    cursor: pointer;
+  }
+}
+
+.staticFlag {
+  vertical-align: -4%;
+}
+
+.flagCheck {
+  fill: $sds-color-success-400 !important;
+}
+
+.flagXmark {
+  fill: $sds-color-gray-500 !important;
+}
+
+.flagQuestionmark {
+  fill: $sds-color-primary-400 !important;
+}

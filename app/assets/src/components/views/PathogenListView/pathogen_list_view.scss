@@ -1,0 +1,76 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.pathogenListViewContainer {
+  display: flex;
+  flex-direction: column;
+  margin-top: 90px;
+  padding-bottom: $sds-spaces-xxl;
+
+  .title {
+    h1 {
+      @include font-header-xxl;
+      margin: 0px;
+    }
+
+    h4.subtitle {
+      @include font-body-xxs;
+      margin: $sds-spaces-xxs 0px $sds-spaces-xl 0px;
+      color: $sds-color-gray-500;
+    }
+  }
+
+  .content {
+    display: flex;
+    flex-direction: row;
+
+    .marginLeft,
+    .marginRight {
+      flex: 1;
+    }
+
+    .intro {
+      border-bottom: $sds-borders-gray-200;
+      padding-bottom: $sds-spaces-l;
+
+      a {
+        // Override _header.scss
+        color: $sds-color-primary-400 !important;
+      }
+
+      p {
+        @include font-body-s;
+        margin-bottom: $sds-spaces-l;
+      }
+    }
+
+    .citations {
+      h3 {
+        @include font-header-xxs;
+        margin-bottom: $sds-spaces-xs;
+      }
+
+      .list {
+        padding-inline-start: $sds-spaces-xl;
+        margin: 0px;
+
+        li {
+          @include font-body-xxs;
+          margin-bottom: $sds-spaces-xs;
+        }
+
+        li:last-child {
+          margin-bottom: 0px;
+        }
+      }
+    }
+  }
+
+  .anchorMenu {
+    position: sticky;
+    top: $sds-spaces-xxl;
+    margin-left: $sds-spaces-xxl;
+  }
+}

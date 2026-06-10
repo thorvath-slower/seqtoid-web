@@ -1,0 +1,30 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+:global(.ui):global(.dropdown).thresholdFilterDropdown {
+  &:global(.active) {
+    .dropdownTrigger {
+      border: $sds-borders-primary-400;
+    }
+  }
+
+  .container {
+    width: 412px;
+    padding: $sds-spaces-m;
+
+    .thresholdButtons {
+      /* Override row css */
+      margin-top: $sds-spaces-xxl;
+      text-align: center;
+
+      .button {
+        margin-left: $sds-spaces-m;
+
+        &:first-child {
+          margin-left: 0;
+        }
+      }
+    }
+  }
+}

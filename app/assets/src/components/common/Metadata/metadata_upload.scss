@@ -1,0 +1,117 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.metadataUpload {
+  position: relative;
+  margin-bottom: 20px;
+
+  .tabs {
+    margin: 20px 0 $sds-spaces-m;
+  }
+
+  .link {
+    // Overwrite <a> inherit rule in header.scss
+    color: $sds-color-primary-400 !important;
+    cursor: pointer;
+  }
+
+  .metadataCSVUpload {
+    margin-top: 40px;
+    margin-bottom: $sds-spaces-m;
+  }
+
+  .loadingMsg {
+    @include font-body-s;
+    margin-top: $sds-spaces-m;
+  }
+
+  .details {
+    margin-bottom: $sds-spaces-m;
+
+    .label {
+      font-weight: 600;
+    }
+  }
+
+  .info {
+    background-color: $sds-color-gray-100;
+    padding: 20px 20px $sds-spaces-m;
+    margin-top: $sds-spaces-m;
+    margin-bottom: $sds-spaces-m;
+  }
+
+  .validationMessage {
+    @include font-body-s;
+    color: $sds-color-gray-500;
+    margin-top: 25px;
+
+    .loadingIcon {
+      margin-right: 5px;
+    }
+  }
+}
+
+.issues {
+  margin-top: 25px;
+}
+
+.issueGroup {
+  margin-top: $sds-spaces-xs;
+  border-radius: $sds-corners-corner-m;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.errors .header {
+  color: $sds-color-error-400;
+}
+
+.warnings .header {
+  color: $sds-color-warning-600;
+}
+
+.errors,
+.warnings {
+  margin-top: 12px;
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  .header {
+    @include font-header-s;
+    margin-bottom: $sds-spaces-m;
+    display: flex;
+    align-items: flex-start;
+  }
+}
+
+.issue {
+  display: flex;
+  align-items: center;
+  padding: $sds-spaces-m;
+  border-radius: $sds-corners-corner-m;
+  margin-top: $sds-spaces-xs;
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  &.warning {
+    background-color: $sds-color-warning-100;
+  }
+
+  &.error {
+    background-color: $sds-color-error-100;
+  }
+
+  .icon {
+    width: 20px;
+    height: 20px;
+    margin-right: $sds-spaces-m;
+  }
+}

@@ -1,0 +1,14 @@
+@import "~@czi-sds/components/dist/variables";
+
+.geneCell {
+  display: flex;
+  align-items: center;
+}
+
+.geneNameButton {
+  font: $sds-font-body-s-600-font;
+  display: flex;
+  justify-content: flex-start;
+  text-align: left;
+  min-width: 0;
+}

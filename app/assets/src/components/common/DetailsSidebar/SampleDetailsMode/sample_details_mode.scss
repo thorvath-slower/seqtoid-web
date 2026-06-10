@@ -1,0 +1,226 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.content {
+  padding: 30px 20px;
+  position: relative;
+}
+
+.title {
+  @include font-header-xl;
+  margin: 0 $sds-spaces-m;
+  margin-right: 60px;
+  word-break: break-all;
+  line-height: 1.4em;
+}
+
+.tabs {
+  margin: 30px $sds-spaces-m $sds-spaces-l;
+}
+
+.workflowTabs {
+  margin: 0 $sds-spaces-m;
+}
+
+.tabLabels {
+  @include font-header-xs;
+  color: $sds-color-gray-500;
+  margin-right: 30px;
+  cursor: pointer;
+}
+
+.dropdownContainer {
+  width: 340px;
+  margin: $sds-spaces-l $sds-spaces-m $sds-spaces-xl;
+}
+
+.noData {
+  color: $sds-color-gray-300;
+  margin-left: $sds-spaces-m;
+}
+
+.loading {
+  @include font-body-s;
+  padding: 0 0 0 $sds-spaces-default;
+  color: $sds-color-gray-500;
+  display: inline-block;
+
+  .loadingIcon {
+    fill: $sds-color-gray-500;
+    width: $icon-s;
+    height: $icon-s;
+    vertical-align: -0.1em;
+  }
+}
+
+.pipelineInfoFields,
+.metadataFields {
+  .inputWrapper,
+  .sampleNameInput {
+    flex: 1 1 0;
+    min-width: 0;
+
+    .metadataInput {
+      width: 100%;
+
+      :global(.ui):global(.input) {
+        width: 100%;
+      }
+    }
+
+    :global(.warning) {
+      margin-bottom: $sds-spaces-s;
+    }
+
+    .error {
+      @include font-body-xxs;
+      color: $sds-color-error-400;
+      margin-top: 5px;
+    }
+  }
+
+  .metadataValue {
+    color: $sds-color-gray-500;
+    word-break: break-all;
+    display: flex;
+  }
+
+  .emptyValue {
+    color: $sds-color-gray-300;
+    font-weight: $font-weight-regular;
+  }
+
+  .projectLink {
+    /* overwrite header.scss */
+    color: $sds-color-primary-400 !important;
+
+    &:hover {
+      /* overwrite header.scss */
+      opacity: 0.5;
+    }
+  }
+
+  .pipelineVersion {
+    white-space: nowrap;
+  }
+
+  .vizLink {
+    @include font-header-xxs;
+    // Override color: inherit in _header.scss.
+    color: $sds-color-primary-400 !important;
+    margin-left: $sds-spaces-l;
+    word-break: break-word;
+  }
+}
+
+.readsRemainingRow {
+  padding: $sds-spaces-m 0;
+  display: flex;
+  align-items: center;
+
+  &:nth-child(even) {
+    background-color: $sds-color-gray-100;
+  }
+
+  .label {
+    font-weight: $font-weight-semibold;
+    width: 160px;
+    flex-shrink: 0;
+    margin-right: 20px;
+    margin-left: $sds-spaces-m;
+
+    .labelText {
+      width: 120px;
+      &:hover {
+        color: $sds-color-primary-400;
+        cursor: default;
+      }
+    }
+
+    .header {
+      color: $sds-color-gray-500;
+    }
+  }
+
+  .narrowMetadataValueContainer {
+    width: 140px; // to fit largest plausible numbers
+    margin-right: 15px;
+    display: inline-flex;
+    text-align: right;
+    justify-content: flex-end;
+
+    .labelText {
+      font-weight: $font-weight-semibold;
+      color: $sds-color-gray-500;
+    }
+  }
+
+  .metadataValue {
+    color: $sds-color-gray-500;
+    word-break: break-all;
+  }
+}
+
+.reportLink {
+  margin: 5px $sds-spaces-m;
+
+  a {
+    /* overwrite header.scss */
+    color: $sds-color-primary-400 !important;
+
+    &:hover {
+      /* overwrite header.scss */
+      opacity: 0.5;
+    }
+  }
+}
+
+.erccScatterplotSection {
+  .graphContainer {
+    margin-top: 20px;
+    margin-right: $sds-spaces-m;
+  }
+}
+
+.downloadSectionContent {
+  padding-top: 5px;
+
+  .downloadLink {
+    padding: 5px $sds-spaces-m;
+    display: block;
+    margin: 5px 0;
+    /* overwrite header.scss */
+    color: $sds-color-primary-400 !important;
+
+    &:hover {
+      opacity: 0.5;
+    }
+  }
+}
+
+.notesSection {
+  .note {
+    font: $sds-font-body-s-400-font;
+    line-height: 23px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 15px $sds-spaces-m;
+  }
+
+  .noData {
+    color: $sds-color-gray-300;
+    margin: 20px $sds-spaces-m;
+  }
+
+  .textareaContainer {
+    margin: 15px $sds-spaces-m 0 $sds-spaces-m;
+  }
+
+  .textarea {
+    height: 600px;
+    resize: vertical;
+    width: 100%;
+  }
+}

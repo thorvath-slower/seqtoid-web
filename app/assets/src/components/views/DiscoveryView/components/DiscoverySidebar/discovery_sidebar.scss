@@ -1,0 +1,170 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.sidebar {
+  font-size: 12px;
+  width: 300px;
+  overflow-y: scroll;
+
+  .noData {
+    color: $sds-color-gray-500;
+    margin: 20px;
+  }
+}
+
+.metadataSection {
+  border-bottom: $sds-borders-gray-300;
+}
+
+.metadataContainer {
+  .hasBackground {
+    padding-left: $sds-spaces-m;
+    padding-right: 5px;
+
+    &:not(.statsRow) {
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+  }
+
+  .hasBackground:nth-child(odd) {
+    background-color: $sds-color-gray-100;
+  }
+
+  // See SampleDetailsMode/metadata_section.scss
+  .title {
+    @include font-caps-xxs;
+    line-height: 40px;
+    color: $sds-color-gray-black;
+    padding: 0 $sds-spaces-m;
+    height: 40px;
+  }
+
+  .rowLabel {
+    @include font-header-xxs;
+    display: block;
+    margin: 3px 0;
+  }
+}
+
+.histogramContainer {
+  margin-top: $sds-spaces-m;
+  margin-left: $sds-spaces-m;
+  margin-right: $sds-spaces-m;
+
+  .dateHistogram {
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: space-evenly;
+    align-items: flex-end;
+    border-bottom: $sds-borders-gray-200;
+
+    .bar {
+      margin: 0 1px;
+      flex: 1 0;
+      background-color: $sds-color-primary-300;
+      max-width: 14px;
+    }
+  }
+
+  .histogramLabels {
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: space-between;
+    align-items: flex-end;
+
+    .label {
+      margin: $sds-spaces-xxs 0;
+      flex: 0 0;
+      white-space: nowrap;
+      font-size: smaller;
+    }
+
+    &.evenly {
+      justify-content: space-evenly;
+    }
+  }
+}
+
+.descriptionContainer {
+  @include font-body-xxs;
+  white-space: pre-wrap;
+  color: $sds-color-gray-500;
+}
+
+.dataList {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  margin: 0;
+
+  .barChartRow {
+    width: 100%;
+  }
+
+  dt,
+  dd {
+    word-break: break-word;
+    min-width: 33%;
+    margin: 5px 0;
+    padding: 0px;
+    display: inline-block;
+  }
+
+  dt {
+    max-width: 33%;
+  }
+
+  dd {
+    width: 66%;
+    vertical-align: top;
+  }
+
+  .statsDt {
+    min-width: 50%;
+  }
+
+  .statsDd {
+    max-width: 50%;
+    line-height: 18px;
+  }
+
+  .barLabel {
+    cursor: pointer;
+    padding-right: 3px;
+    text-align: right;
+  }
+
+  .bar {
+    background-color: $sds-color-primary-300;
+    color: white;
+    cursor: pointer;
+    display: inline-block;
+    height: 10px;
+    margin-left: 5px;
+    margin-right: 5px;
+    margin-top: 4.5px;
+    text-align: right;
+  }
+
+  .showHide {
+    @include font-body-xxxs;
+    text-transform: uppercase;
+    margin-top: 5px;
+    margin-bottom: $sds-spaces-m;
+    color: $sds-color-primary-400;
+    cursor: pointer;
+  }
+
+  .count {
+    color: $sds-color-gray-500;
+    font-weight: 600;
+    vertical-align: top;
+  }
+}
+
+.boldText {
+  font-weight: $font-weight-semibold;
+}

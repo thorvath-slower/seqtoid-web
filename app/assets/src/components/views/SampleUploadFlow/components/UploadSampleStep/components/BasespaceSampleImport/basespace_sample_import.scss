@@ -1,0 +1,40 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.basespaceSampleImport {
+  .projectSelectContainer {
+    display: flex;
+  }
+
+  .helpText {
+    @include font-body-xxs;
+    margin-bottom: $sds-spaces-m;
+    color: $sds-color-gray-500;
+  }
+
+  .connectProjectButton {
+    width: 180px;
+    margin-left: $sds-spaces-m;
+  }
+
+  .label {
+    @include font-header-s;
+    margin-bottom: 5px;
+  }
+
+  .loadingMessage {
+    @include font-body-xxs;
+    color: $sds-color-gray-500;
+    margin-top: 5px;
+    margin-left: $sds-spaces-xxxs;
+
+    span {
+      margin-left: 5px;
+    }
+  }
+
+  .notification {
+    margin-top: $sds-spaces-m;
+  }
+}

@@ -1,0 +1,27 @@
+name: idseq-web build-and-test
+
+on:
+  workflow_dispatch:
+#  pull_request:
+#    types: [opened, synchronize]
+
+env:
+  AWS_DEFAULT_OUTPUT: json
+  AWS_REGION: us-west-2
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+  ENVIRONMENT: dev
+  EXECUTOR_ROLE: czid-staging-gh-actions-executor
+
+jobs:
+  cancel_outdated_builds:
+    runs-on: ubuntu-latest
+    # This will cancel the whole workflow for non-current pushes on your branch
+    steps:
+      - name: Cancel Outdated Builds
+        uses: styfle/cancel-workflow-action@0.11.0
+        with:
+          access_token: ${{ github.token }}
+
+  build_docker_image:
+    uses: ./.github/workflows/reusable-build-docker-image.yml
+    secrets: inherit

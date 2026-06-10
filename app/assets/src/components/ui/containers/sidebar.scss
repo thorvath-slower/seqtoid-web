@@ -1,0 +1,44 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+:global(.ui):global(.sidebar).sidebar {
+  background-color: white;
+  transition: transform 0.5s ease;
+
+  &:global(.visible) {
+    box-shadow: $sds-drop-shadows-shadow-l;
+  }
+
+  &.left,
+  &.right {
+    // So the content doesn't overlap with the Header.
+    padding-top: 50px;
+  }
+
+  &.bottom {
+    cursor: auto; // Override .bottom in samples.scss
+  }
+
+  .closeIcon {
+    position: absolute;
+    right: 40px;
+    top: 30px;
+    opacity: 0.3;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    fill: $sds-color-gray-600;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  &.left,
+  &.right {
+    .closeIcon {
+      top: 80px;
+    }
+  }
+}

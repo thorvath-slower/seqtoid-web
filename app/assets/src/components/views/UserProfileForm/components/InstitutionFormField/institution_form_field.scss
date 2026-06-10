@@ -1,0 +1,15 @@
+@import "~@czi-sds/components/dist/variables";
+
+.titleSection {
+  padding-bottom: $sds-spaces-xs;
+}
+.titleMainText {
+  font: $sds-font-header-s-600-font;
+  color: $sds-color-gray-black;
+}
+.main {
+  padding-bottom: $sds-spaces-xl;
+}
+.autocomplete {
+  max-width: 500px;
+}

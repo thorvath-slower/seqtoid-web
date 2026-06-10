@@ -1,0 +1,32 @@
+@import "~styles/themes/elements";
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.blankScreenMessage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .content {
+    display: flex;
+    align-items: center;
+    // The content looks better if it is slightly higher than vertically center.
+    margin-bottom: 10%;
+  }
+
+  .text {
+    margin-right: $sds-spaces-xl;
+  }
+
+  .message {
+    @include font-header-l;
+    margin-bottom: $sds-spaces-xxs;
+  }
+
+  .tagline {
+    @include font-body-s;
+  }
+}

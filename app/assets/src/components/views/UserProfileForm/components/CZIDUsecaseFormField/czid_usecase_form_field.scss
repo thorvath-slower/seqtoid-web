@@ -1,0 +1,30 @@
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.titleSection {
+  padding-bottom: $sds-spaces-m;
+}
+.titleMainText {
+  @include font-header-s;
+  color: $sds-color-gray-black;
+}
+.titleSubText {
+  @include font-body-s;
+  color: $sds-color-gray-black;
+}
+.main {
+  padding-bottom: $sds-spaces-xl;
+}
+
+@media (min-width: 992px) {
+  .optionsContainer {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: $sds-spaces-xxl;
+  }
+
+  .option {
+    width: 50%;
+    max-width: 381px;
+  }
+}

@@ -1,0 +1,100 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.searchBoxList {
+  background-color: $sds-color-gray-white;
+  border: $sds-borders-gray-300;
+  border-radius: $sds-corners-corner-m;
+  box-shadow: $sds-drop-shadows-shadow-s;
+  display: inline-block;
+  font-size: 13px;
+  min-width: 240px;
+  padding: $sds-spaces-m;
+  text-align: left;
+
+  .searchBox {
+    margin-bottom: $sds-spaces-m;
+
+    .searchBoxIcon {
+      margin: 0;
+      padding: 0;
+      position: absolute;
+      // TODO: These are centering the icon in the input. So, they depend heavily on the dimensions of the component.
+      // For that reason, i think they should not depend on space variables.
+      // They should, however, be relative to dimensions of the parent component.
+      right: 10px;
+      top: 10px;
+    }
+  }
+
+  .title {
+    font-weight: 700;
+    margin-bottom: $sds-spaces-m;
+  }
+
+  .listBox {
+    height: 200px;
+    overflow-y: auto;
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background-color: $sds-color-gray-200;
+      border-radius: $sds-corners-corner-m;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: $sds-color-gray-400;
+    }
+
+    .listColumnTitles {
+      height: 24px;
+      margin-right: $sds-spaces-m;
+      white-space: nowrap;
+      display: flex;
+      flex-direction: row;
+      flex: 1 0 auto;
+      justify-content: space-between;
+    }
+
+    .listColumnTitle {
+      display: inline-block;
+      color: $sds-color-gray-500;
+      font-weight: $font-weight-semibold;
+    }
+
+    .listElement {
+      cursor: pointer;
+      height: 24px;
+      margin-right: $sds-spaces-m;
+      white-space: nowrap;
+      display: flex;
+      flex-direction: row;
+      flex: 1 0 auto;
+    }
+
+    .listCheckmark {
+      display: inline-block;
+      width: 20px;
+    }
+
+    .listLabel {
+      display: inline-block;
+
+      &:hover {
+        color: $sds-color-primary-400;
+      }
+    }
+
+    .listElementCount {
+      color: $sds-color-gray-400;
+      display: inline-block;
+      margin-left: auto;
+      padding-left: $sds-spaces-xxl;
+    }
+  }
+}

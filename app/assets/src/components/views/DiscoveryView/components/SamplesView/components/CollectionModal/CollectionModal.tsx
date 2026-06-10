@@ -1,0 +1,419 @@
+import { Icon } from "@czi-sds/components";
+import cx from "classnames";
+import { compact, isNull, map, toLower, trim, uniq } from "lodash/fp";
+import React from "react";
+import {
+  createBackground,
+  getMassNormalizedBackgroundAvailability,
+} from "~/api";
+import { validateSampleIds } from "~/api/access_control";
+import ExternalLink from "~/components/ui/controls/ExternalLink";
+import { GlobalContext } from "~/globalContext/reducer";
+import ColumnHeaderTooltip from "~ui/containers/ColumnHeaderTooltip";
+import Modal from "~ui/containers/Modal";
+import PrimaryButton from "~ui/controls/buttons/PrimaryButton";
+import SecondaryButton from "~ui/controls/buttons/SecondaryButton";
+import SubtextDropdown from "~ui/controls/dropdowns/SubtextDropdown";
+import Input from "~ui/controls/Input";
+import Textarea from "~ui/controls/Textarea";
+import AccordionNotification from "~ui/notifications/AccordionNotification";
+import Notification from "~ui/notifications/Notification";
+import cs from "./collection_modal.scss";
+import {
+  BACKGROUND_CORRECTION_METHODS,
+  PROHIBITED_BACKGROUND_MODEL_NAMES,
+} from "./constants";
+
+interface CollectionModalProps {
+  allowedFeatures: string[];
+  maxSamplesShown?: number;
+  numDescriptionRows?: number;
+  fetchedSamples?: {
+    id: number;
+    sample: { name: string; project: string; ncbiIndexVersion: string };
+  }[];
+  selectedSampleIds?: Set<number>;
+  trigger: React.ReactNode;
+  workflow?: string;
+}
+
+interface CollectionModalState {
+  appliedMethod: string;
+  backgroundCreationResponse?: { status: string; message: string };
+  backgroundDescription?: unknown;
+  backgroundName: string;
+  enableMassNormalizedBackgrounds?: boolean;
+  invalidBackgroundName: unknown;
+  invalidSampleNames: string[];
+  modalOpen: boolean;
+  validSampleIds: number[];
+}
+
+/**
+ * NOTE: "Collections" were an unrealized generalization of the background concept.
+ * For the time being, a collection is equivalent to a background.
+ */
+class CollectionModal extends React.Component<
+  CollectionModalProps,
+  CollectionModalState
+> {
+  constructor(props: CollectionModalProps) {
+    super(props);
+    this.state = {
+      appliedMethod: "",
+      // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+      backgroundCreationResponse: null,
+      backgroundDescription: null,
+      backgroundName: "",
+      invalidBackgroundName: null,
+      invalidSampleNames: [],
+      modalOpen: false,
+      validSampleIds: [],
+    };
+  }
+  static contextType = GlobalContext;
+
+  componentDidMount() {
+    this.fetchBackgroundAvailability();
+    this.fetchSampleValidation();
+  }
+
+  componentDidUpdate(prevProps: CollectionModalProps) {
+    const prevSamples = prevProps.selectedSampleIds;
+    if (prevSamples !== this.props.selectedSampleIds) {
+      this.fetchBackgroundAvailability();
+      this.fetchSampleValidation();
+    }
+  }
+
+  openModal = () =>
+    this.setState({
+      modalOpen: true,
+      appliedMethod: this.state.enableMassNormalizedBackgrounds
+        ? "massNormalized"
+        : "standard",
+    });
+  closeModal = () => this.setState({ modalOpen: false });
+
+  renderSampleList = () => {
+    const { fetchedSamples, selectedSampleIds, maxSamplesShown } = this.props;
+
+    // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2532
+    const samplesToDisplay = fetchedSamples.slice(0, maxSamplesShown);
+    const numSamplesNotDisplayed =
+      // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2532
+      selectedSampleIds.size - samplesToDisplay.length;
+
+    return (
+      <div className={cs.sampleList}>
+        <div className={cs.label}>Selected samples:</div>
+        <ul className={cs.selectedSamples}>
+          {samplesToDisplay.map(sample => (
+            <li key={sample.id}>
+              <span className={cs.sampleName}>{sample.sample.name}</span>
+              <span
+                className={cs.sampleDetails}
+              >{`(Project: ${sample.sample.project})`}</span>
+            </li>
+          ))}
+        </ul>
+        {numSamplesNotDisplayed > 0 && (
+          <div className={cs.moreSamplesCount}>
+            and {numSamplesNotDisplayed} more...
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  renderInvalidSamplesWarning() {
+    const { invalidSampleNames } = this.state;
+
+    const header = (
+      <div>
+        <span className={cs.highlight}>
+          {invalidSampleNames.length} sample
+          {invalidSampleNames.length > 1 ? "s" : ""} won&apos;t be included in
+          the background model
+        </span>
+        , because they either failed or are still processing:
+      </div>
+    );
+
+    const content = invalidSampleNames.map(name => (
+      <div key={name} className={cs.messageLine}>
+        {name}
+      </div>
+    ));
+
+    return (
+      <AccordionNotification
+        className={cs.notificationContainer}
+        content={content}
+        displayStyle="flat"
+        header={header}
+        open={false}
+        type="warning"
+      />
+    );
+  }
+
+  handleNameChange = backgroundName => {
+    const { invalidBackgroundName } = this.state;
+
+    this.setState({
+      backgroundName,
+      invalidBackgroundName:
+        invalidBackgroundName && backgroundName !== invalidBackgroundName
+          ? null
+          : invalidBackgroundName,
+    });
+  };
+
+  handleDescriptionChange = backgroundDescription => {
+    this.setState({ backgroundDescription });
+  };
+
+  handleMethodChange = appliedMethod => {
+    this.setState({ appliedMethod });
+  };
+
+  handleCreateBackground = async () => {
+    const { selectedSampleIds } = this.props;
+    const { backgroundName, backgroundDescription, appliedMethod } = this.state;
+
+    const normalizedBackgroundName = toLower(trim(backgroundName));
+    if (PROHIBITED_BACKGROUND_MODEL_NAMES.has(normalizedBackgroundName)) {
+      this.setState({ invalidBackgroundName: normalizedBackgroundName });
+      return;
+    }
+
+    let backgroundCreationResponse = null;
+    try {
+      backgroundCreationResponse = await createBackground({
+        name: backgroundName,
+        description: backgroundDescription,
+        // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2769
+        sampleIds: Array.from(selectedSampleIds),
+        massNormalized: appliedMethod === "massNormalized",
+      });
+    } catch (_) {
+      // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+      backgroundCreationResponse = {
+        status: "error",
+        message: "Something went wrong.",
+      };
+    }
+    // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+    this.setState({ backgroundCreationResponse });
+  };
+
+  fetchBackgroundAvailability = async () => {
+    const { selectedSampleIds } = this.props;
+    const enableMassNormalizedBackgrounds =
+      await getMassNormalizedBackgroundAvailability(
+        // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2769
+        Array.from(selectedSampleIds),
+      );
+
+    this.setState({
+      enableMassNormalizedBackgrounds:
+        enableMassNormalizedBackgrounds.massNormalizedBackgroundsAvailable,
+    });
+  };
+
+  fetchSampleValidation = async () => {
+    const { selectedSampleIds, workflow } = this.props;
+    const { validIds, invalidSampleNames } = await validateSampleIds({
+      // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2769
+      sampleIds: Array.from(selectedSampleIds),
+      workflow,
+    });
+    this.setState({
+      validSampleIds: validIds,
+      invalidSampleNames,
+    });
+  };
+
+  renderForm = () => {
+    const { numDescriptionRows } = this.props;
+
+    const {
+      appliedMethod,
+      enableMassNormalizedBackgrounds,
+      invalidBackgroundName,
+      invalidSampleNames,
+      validSampleIds,
+    } = this.state;
+
+    const dropdownOptions = BACKGROUND_CORRECTION_METHODS;
+    if (enableMassNormalizedBackgrounds) {
+      dropdownOptions.massNormalized.disabled = false;
+      // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+      dropdownOptions.massNormalized.tooltip = null;
+    } else {
+      dropdownOptions.massNormalized.disabled = true;
+      dropdownOptions.massNormalized.tooltip =
+        "Only for ERCC samples run on Pipeline v4.0 or later";
+    }
+
+    const validSamples = this.props.fetchedSamples?.filter(sample =>
+      validSampleIds.includes(sample.id),
+    );
+    const indexVersions = uniq(
+      compact(
+        map(sampleObject => sampleObject.sample.ncbiIndexVersion, validSamples),
+      ) as string[],
+    );
+
+    return (
+      <div className={cs.form}>
+        <div className={cs.sectionHeader}>
+          <div className={cs.label}>Name</div>
+        </div>
+        <Input
+          fluid
+          onChange={this.handleNameChange}
+          value={this.state.backgroundName}
+          // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+          className={!isNull(invalidBackgroundName) && "error"}
+        />
+        {!isNull(invalidBackgroundName) && (
+          <div className={cs.errorMessageContainer}>
+            <Icon
+              sdsIcon="infoCircle"
+              sdsSize="s"
+              sdsType="static"
+              className={cx(cs.infoIcon, cs.error)}
+            />
+            <div className={cs.errorMessage}>
+              Background model cannot be named &quot;{invalidBackgroundName}
+              &quot;, please enter a different name.
+            </div>
+          </div>
+        )}
+        <div className={cs.sectionHeader}>
+          <div className={cs.label}>Description</div>
+          <span className={cs.optional}>Optional</span>
+        </div>
+        <Textarea
+          className={cs.textArea}
+          rows={numDescriptionRows}
+          onChange={this.handleDescriptionChange}
+        />
+        <div className={cs.sectionHeader}>
+          <div className={cs.label}>Applied Correction Method</div>
+          <ColumnHeaderTooltip
+            trigger={
+              <span>
+                <Icon
+                  sdsIcon="infoCircle"
+                  sdsSize="s"
+                  sdsType="interactive"
+                  className={cx(cs.infoIcon, cs.extraSpacing)}
+                />
+              </span>
+            }
+            content="Applied Correction Method is the method used when comparing a chosen set of samples against a background model."
+            link="https://helpcenter.seqtoid.org/articles/background-models/#how-are-standard-and-mass-normalized-background-models-different"
+          />
+        </div>
+        <SubtextDropdown
+          fluid
+          className={cs.dropdown}
+          options={Object.values(dropdownOptions)}
+          initialSelectedValue={appliedMethod}
+          onChange={this.handleMethodChange}
+        />
+        {this.renderSampleList()}
+        {indexVersions.length > 1 && (
+          <Notification
+            className={cs.notificationContainer}
+            type="warning"
+            displayStyle="flat"
+          >
+            <span className={cs.highlight}>
+              The selected samples were run using different versions of our NCBI
+              index: {indexVersions.join(", ")}.{" "}
+            </span>
+            We recommend using samples that were run against the same NCBI index
+            date.
+          </Notification>
+        )}
+        {invalidSampleNames.length > 0 && this.renderInvalidSamplesWarning()}
+        <div className={cs.buttons}>
+          <PrimaryButton text="Create" onClick={this.handleCreateBackground} />
+          <SecondaryButton text="Cancel" onClick={this.closeModal} />
+        </div>
+        <div className={cs.details}>
+          A large number of samples may increase the processing time.
+        </div>
+      </div>
+    );
+  };
+
+  renderStatus = () => {
+    const { backgroundCreationResponse } = this.state;
+    return (
+      <div>
+        {/* @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2532 */}
+        {backgroundCreationResponse.status === "ok" ? (
+          <Notification className={cs.notification} type="success">
+            Your Background Model is being created and will be visible on the
+            report page once statistics have been computed.
+          </Notification>
+        ) : (
+          <Notification className={cs.notification} type="error">
+            {/* @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2532 */}
+            {backgroundCreationResponse.message}
+          </Notification>
+        )}
+      </div>
+    );
+  };
+
+  render() {
+    const { trigger } = this.props;
+    const { backgroundCreationResponse } = this.state;
+
+    return (
+      <div>
+        <button className="noStyleButton" onClick={this.openModal}>
+          {trigger}
+        </button>
+        {this.state.modalOpen && (
+          <Modal
+            open
+            narrow
+            className={cs.collectionModal}
+            onClose={this.closeModal}
+          >
+            <div className={cs.title}>Create a Background Model</div>
+            <div className={cs.description}>
+              A background is a group of samples. You can use a background as a
+              statistical model to compare your samples to. When you select a
+              background on a report or heatmap, the z-scores will indicate how
+              much a sample deviates from the mean of that background.{" "}
+              <ExternalLink
+                className={cs.link}
+                href="https://helpcenter.seqtoid.org/articles/background-models/"
+              >
+                Learn More
+              </ExternalLink>
+              .
+            </div>
+            {this.renderForm()}
+            {backgroundCreationResponse && this.renderStatus()}
+          </Modal>
+        )}
+      </div>
+    );
+  }
+}
+// @ts-expect-error Property 'defaultProps' does not exist on type 'typeof CollectionModal'
+CollectionModal.defaultProps = {
+  maxSamplesShown: 10,
+  numDescriptionRows: 7,
+};
+
+export default CollectionModal;

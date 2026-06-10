@@ -1,0 +1,31 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.footer {
+  padding-top: $sds-spaces-l;
+
+  .downloadDisclaimer {
+    @include font-body-xxs;
+    color: $sds-color-gray-500;
+    margin-top: $sds-spaces-xs;
+  }
+}
+
+.listContainer {
+  background-color: $sds-color-warning-100;
+  margin-bottom: $sds-spaces-l;
+}
+
+.notificationContainer {
+  margin: $sds-spaces-l 0 $sds-spaces-l;
+
+  .errorMessage {
+    @include font-header-xxs;
+  }
+}
+
+.notifications {
+  margin-bottom: $sds-spaces-xxl;
+}

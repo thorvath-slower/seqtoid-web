@@ -1,0 +1,35 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.bannerContainer {
+  text-align: center;
+
+  .banner {
+    @include font-body-xxxs;
+
+    background: $sds-color-gray-white;
+    border-radius: $sds-corners-corner-m;
+    box-shadow: $sds-drop-shadows-shadow-s;
+    cursor: default;
+    display: inline-block;
+    margin: $sds-spaces-s auto auto;
+    padding: 6px $sds-spaces-s;
+    text-align: center;
+
+    .clearAll {
+      color: $sds-color-primary-400;
+      cursor: pointer;
+    }
+
+    .emphasis {
+      font-weight: $font-weight-semibold;
+    }
+
+    .infoIcon {
+      margin-left: 5px;
+      vertical-align: text-top;
+    }
+  }
+}

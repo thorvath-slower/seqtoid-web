@@ -1,0 +1,34 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+// Use .ui to make selector higher precedence than semantic-ui.
+:global(.ui) {
+  &.pathogenLabel {
+    @include font-body-xxxs;
+    padding: $sds-spaces-xxxs $sds-spaces-xs;
+
+    &:first-child {
+      margin-left: $sds-spaces-m;
+    }
+
+    &:global(.red.label) {
+      background-color: $sds-color-error-600 !important;
+      border-color: $sds-color-error-600 !important;
+    }
+
+    &:global(.dimRed.label) {
+      color: white !important; // Override gray color applied to dimmed row text
+      background-color: $sds-color-error-200 !important;
+      border-color: $sds-color-error-200 !important;
+    }
+
+    &:hover {
+      cursor: pointer;
+    }
+  }
+}
+
+:global(.ui):global(.popup).pathogenLabelPopup {
+  @include font-body-xs;
+}

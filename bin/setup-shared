@@ -1,0 +1,44 @@
+#!/bin/bash
+set -e
+# multi-platform compatible setup script to be shared by platform specific setup scripts
+
+gem install bundler --conservative
+
+echo "== Running npm install and webpack =="
+npm install && ./node_modules/.bin/webpack --config webpack.config.dev.js
+
+echo "== Starting DB =="
+make local-start-db
+sleep 10
+
+echo "== Syncing DB =="
+if [ "${OFFLINE:-0}" = "1" ]; then
+    DOCKER_CMD="docker compose"
+else
+    DOCKER_CMD="aws-oidc exec -- docker compose"
+fi
+
+if $DOCKER_CMD run --rm -e RAILS_ENV=development web bin/rails db:exists; then
+    echo "=== development DB exists, running migrations ==="
+    make local-migrate
+else
+    echo "=== development DB does not exist, setting up DB ==="
+    make local-db-setup
+    make local-import-taxon-lineage-slice
+fi
+if $DOCKER_CMD run --rm web bin/rails db:exists RAILS_ENV=test; then
+    echo "=== test DB exists, running migrations ==="
+    # No seeded / data migrations needed for test DB
+    make local-migrate-without-data rails_env=test
+else
+    # Reached if the test DB gets dropped without the dev DB getting dropped
+    echo "=== test DB does not exist, setting up DB ==="
+    # The test DB does not need to be seeded as our unit tests set up their own data
+    make local-db-create-schema rails_env=test
+fi
+
+echo "== Bringing up all services =="
+make local-start
+sleep 10
+
+bash bin/setup-elasticsearch

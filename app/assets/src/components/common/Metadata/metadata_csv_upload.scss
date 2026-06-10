@@ -1,0 +1,14 @@
+@import "~styles/themes/colors";
+
+.metadataCSVUpload {
+  display: flex;
+  flex-direction: column;
+}
+
+.csvUpload {
+  height: 160px;
+
+  &.uploaded {
+    height: 80px;
+  }
+}

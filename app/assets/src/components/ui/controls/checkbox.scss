@@ -1,0 +1,72 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.checkbox {
+  display: flex;
+  position: relative;
+  padding: 0px 0px 0px 0px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+
+  input[type="checkbox"] {
+    opacity: 0;
+    cursor: pointer;
+    position: absolute;
+  }
+
+  &.disabled {
+    cursor: default !important;
+    border: $sds-color-gray-200;
+    pointer-events: none;
+  }
+
+  .checkmark {
+    position: relative;
+    height: 16px;
+    width: 16px;
+    flex: none;
+    border: $sds-borders-gray-300;
+    border-radius: $sds-corners-corner-s;
+    opacity: 100;
+
+    &:hover {
+      border: $sds-borders-gray-400;
+    }
+
+    &:after {
+      content: "";
+      position: relative;
+      display: none;
+      left: 4px;
+      top: 1px;
+      width: 6px;
+      height: 9px;
+      border: solid $sds-color-gray-white;
+      border-radius: $sds-corners-corner-s;
+      border-width: 0 2px 2px 0;
+      -webkit-transform: rotate(40deg);
+      -ms-transform: rotate(40deg);
+      transform: rotate(40deg);
+    }
+  }
+
+  & input:checked ~ .checkmark {
+    background-color: $sds-color-primary-400;
+
+    &:after {
+      display: block;
+    }
+  }
+
+  .label {
+    line-height: 18px;
+    padding: 0 $sds-spaces-m 0 $sds-spaces-m;
+  }
+}

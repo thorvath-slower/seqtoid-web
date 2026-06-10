@@ -1,0 +1,42 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.idseq-ui.button.transparent-btn {
+  border: 1px solid $sds-color-gray-white;
+  background-color: transparent;
+  color: $sds-color-gray-white;
+  height: 2rem;
+  min-width: 8rem;
+  margin-top: 0.4rem;
+
+  .icon-label {
+    svg {
+      fill: $sds-color-gray-white;
+    }
+  }
+
+  &:hover {
+    background: $sds-color-primary-400;
+    border: $sds-borders-gray-500;
+    color: $sds-color-gray-white;
+  }
+
+  &:active,
+  &:focus {
+    border: $sds-borders-gray-500;
+    background-color: $sds-color-primary-500;
+    color: $sds-color-gray-white;
+  }
+
+  &:disabled {
+    // using important due to semantic-ui styling
+    opacity: 0.5 !important;
+
+    .icon-label {
+      svg {
+        fill: $sds-color-gray-400;
+      }
+    }
+  }
+}

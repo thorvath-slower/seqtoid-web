@@ -1,0 +1,84 @@
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.ui.button {
+  padding: 7px 30px;
+  border-radius: $sds-corners-corner-l;
+  cursor: pointer;
+  display: inline-block;
+  &.primary {
+    border: $sds-borders-primary-400;
+    background: $primary-blue !important;
+    color: $sds-color-gray-white !important;
+    &:hover {
+      background: $sds-color-gray-white !important;
+      color: $primary-blue !important;
+    }
+  }
+  &.secondary {
+    border: $sds-borders-primary-400;
+    background: $sds-color-gray-white !important;
+    color: $primary-blue !important;
+  }
+}
+
+.ui.dropdown {
+  border: $sds-borders-gray-300;
+  padding: 5px 1.75em 5px 1em;
+  border-radius: $sds-corners-corner-l;
+  &.custom-dropdown {
+    padding: 5px $sds-spaces-m;
+  }
+  .menu {
+    margin-top: $sds-spaces-xxxs;
+    width: 100%;
+  }
+  .text {
+    display: block;
+    white-space: nowrap;
+    font-size: 8pt;
+  }
+  > .text {
+    overflow: hidden;
+  }
+  .dropdown.icon {
+    pointer-events: none;
+    position: absolute !important;
+    // TODO: These are centering the icon in the input. So, they depend heavily on the dimensions of the component.
+    // For that reason, i think they should not depend on space variables.
+    // They should, however, be relative to dimensions of the parent component.
+    top: 8px;
+    right: 10px;
+    &:before {
+      font-family: FontAwesome;
+      content: "\f107";
+    }
+  }
+  .label {
+    float: right;
+    font-size: 11px;
+    text-align: center;
+    height: 20px;
+    line-height: 20px;
+    border-radius: $sds-corners-corner-l;
+    background-color: $sds-color-gray-100;
+    color: $primary-blue;
+    font-weight: normal;
+    font-size: inherit;
+  }
+  span.title {
+    display: inline-block;
+    width: 100%;
+    white-space: nowrap;
+    overflow-x: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.ui.dropdown.labeled-filter-dropdown {
+  input[type="checkbox"] {
+    opacity: 1;
+    position: static;
+    margin-right: 0.5em;
+  }
+}

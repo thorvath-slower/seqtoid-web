@@ -1,0 +1,47 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.publicProjectConfirmation {
+  .title {
+    @include font-header-xl;
+    font-weight: $font-weight-regular;
+    color: black;
+  }
+
+  .highlight {
+    font-weight: $font-weight-semibold;
+  }
+
+  .text {
+    @include font-body-xs;
+    margin-top: $sds-spaces-m;
+    margin-bottom: 30px;
+
+    p:not(:first-child) {
+      margin-top: $sds-spaces-m;
+    }
+
+    .link {
+      // important to override _header.scss
+      color: $sds-color-primary-400 !important;
+      cursor: pointer;
+    }
+  }
+
+  .actions {
+    margin-top: $sds-spaces-m;
+    display: flex;
+
+    .item {
+      &:not(:first-child) {
+        margin-left: $sds-spaces-xs;
+      }
+
+      &:not(:last-child) {
+        margin-right: $sds-spaces-xs;
+      }
+    }
+  }
+}

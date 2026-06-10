@@ -1,0 +1,13 @@
+node_modules/
+.cache/
+.env.staging
+.env.sandbox
+.env.local
+.env.dev
+storage/state.json
+playwright-report/
+html-reports/
+summary.json
+artifacts/
+testcases.csv
+setup/__assets__

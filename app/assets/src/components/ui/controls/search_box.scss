@@ -1,0 +1,21 @@
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.searchBox {
+  &.rounded {
+    input[type="text"] {
+      border-radius: $sds-corners-corner-l;
+    }
+  }
+}
+
+.searchIcon {
+  fill: $sds-color-gray-400;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  // These are centering the icon in the input. So, they depend heavily on the dimensions of the component.
+  // For that reason, i think they should not depend on those variables.
+  right: 10px;
+  top: 10px;
+}

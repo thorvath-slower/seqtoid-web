@@ -1,0 +1,79 @@
+@import "~@czi-sds/components/dist/variables";
+
+// Select all elements with contigsColumnGroup class inside of styledTableRow
+// Give them all a left border
+.styledTableRow > .contigsColumnGroup {
+  border-left: $sds-borders-gray-300;
+}
+
+// Select all elements with contigsColumnGroup class inside of styledTableRow
+// except for the first one
+// Remove the border
+.styledTableRow > .contigsColumnGroup ~ .contigsColumnGroup {
+  border-left: none;
+}
+
+// Select all elements with readsColumnGroup class inside of styledTableRow
+// Give them all a left border
+.styledTableRow > .readsColumnGroup {
+  border-left: $sds-borders-gray-300;
+}
+
+// Select all elements with readsColumnGroup class inside of styledTableRow
+// except for the first one
+// Remove the border
+.styledTableRow > .readsColumnGroup ~ .readsColumnGroup {
+  border-left: none;
+}
+
+// Styles for all styleTableRow elements
+.styledTableRow {
+  &:hover {
+    background-color: $sds-color-primary-100;
+
+    // download icon in GeneCell is styled based on hover behavior of its parent, the row
+    .downloadIcon {
+      color: $sds-color-primary-400;
+
+      &:focus,
+      &:active,
+      &:hover {
+        color: $sds-color-primary-600;
+      }
+
+      &:disabled {
+        color: $sds-color-gray-300;
+      }
+    }
+
+    .showHoverActions {
+      color: $sds-color-primary-600;
+    }
+  }
+
+  .downloadIcon {
+    color: transparent;
+    display: inline-block;
+    margin-left: $sds-spaces-xs;
+    &:focus,
+    &:active {
+      color: $sds-color-primary-600;
+    }
+  }
+
+  // when a user opens the dropdown and then mouses away,
+  // this keeps the dropdown open even when the user is no longer hovering
+  .showHoverActions {
+    color: $sds-color-primary-600;
+  }
+
+  th {
+    border-bottom: 2px solid $sds-color-gray-300;
+    min-width: unset;
+  }
+
+  td {
+    border-bottom: $sds-borders-gray-300;
+    min-width: unset;
+  }
+}

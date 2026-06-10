@@ -1,0 +1,105 @@
+{
+    "events": [
+      {
+        "timestamp": 1583876218.113,
+        "type": "ExecutionStarted",
+        "id": 1,
+        "previousEventId": 0,
+        "executionStartedEventDetails": {
+          "roleArn": "arn:aws:iam::123456789012:role/idseq-dev-sfn-service"
+        }
+      },
+      {
+        "timestamp": 1583876218.135,
+        "type": "TaskStateEntered",
+        "id": 2,
+        "previousEventId": 0,
+        "stateEnteredEventDetails": {
+          "name": "PreprocessInput"
+        }
+      },
+      {
+        "timestamp": 1583876218.227,
+        "type": "TaskStateExited",
+        "id": 6,
+        "previousEventId": 5,
+        "stateExitedEventDetails": {
+          "name": "PreprocessInput"
+        }
+      },
+      {
+        "timestamp": 1583876218.284,
+        "type": "TaskStateEntered",
+        "id": 7,
+        "previousEventId": 6,
+        "stateEnteredEventDetails": {
+          "name": "HostFilterSPOT"
+        }
+      },
+      {
+        "timestamp": 1583876230.291,
+        "type": "TaskStateExited",
+        "id": 12,
+        "previousEventId": 11,
+        "stateExitedEventDetails": {
+          "name": "HostFilterSPOT"
+        }
+      },
+      {
+        "timestamp": 1583876230.298,
+        "type": "TaskStateEntered",
+        "id": 13,
+        "previousEventId": 12,
+        "stateEnteredEventDetails": {
+          "name": "HostFilterSPOTReadOutput"
+        }
+      },
+      {
+        "timestamp": 1583876231.087,
+        "type": "TaskStateExited",
+        "id": 17,
+        "previousEventId": 16,
+        "stateExitedEventDetails": {
+          "name": "HostFilterSPOTReadOutput"
+        }
+      },
+      {
+        "timestamp": 1583876231.096,
+        "type": "PassStateEntered",
+        "id": 18,
+        "previousEventId": 17,
+        "stateEnteredEventDetails": {
+          "name": "HostFilterFailed"
+        }
+      },
+      {
+        "timestamp": 1583876231.096,
+        "type": "PassStateExited",
+        "id": 19,
+        "previousEventId": 18,
+        "stateExitedEventDetails": {
+          "name": "HostFilterFailed"
+        }
+      },
+      {
+        "timestamp": 1583876231.197,
+        "type": "TaskStateEntered",
+        "id": 20,
+        "previousEventId": 19,
+        "stateEnteredEventDetails": {
+          "name": "HandleFailure"
+        }
+      },
+      {
+        "timestamp": 1583876231.791,
+        "type": "ExecutionFailed",
+        "id": 24,
+        "previousEventId": 23,
+        "executionFailedEventDetails": {
+          "error": "JSONDecodeError",
+          "cause": "{\"errorMessage\":\"Expecting value: line 1 column 1 (char 0)\",\"errorType\":\"JSONDecodeError\",\"stackTrace\":[[\"/var/task/app.py\",73,\"handle_failure\",\"raise failure_type(cause)\"]]}"
+        }
+      }
+    ]
+  }
+  

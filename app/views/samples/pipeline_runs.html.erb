@@ -1,0 +1,238 @@
+<style>
+  .table-condensed > thead > tr > th {
+    border-bottom: 1px solid #d0d0d0;
+  }
+
+  .table-condensed > tbody > tr > td {
+    padding: 15px 5px;
+  }
+</style>
+<script>
+
+function showhide(id) {
+    var e = document.getElementById(id);
+    e.style.display = (e.style.display == 'block') ? 'none' : 'block';
+}
+</script>
+
+<p>
+  <strong>Name:</strong>
+  <%= @sample.name %>
+</p>
+<p>
+  <strong>Project:</strong>
+  <u><%= link_to @sample.project.name, @sample.project %></u>
+</p>
+<p>
+  <strong>Date created:</strong>
+  <%= @sample.created_at %>
+</p>
+<% if @sample.user %>
+  <p>
+    <strong>Sample owner:</strong>
+    <%= @sample.user.name %>
+    (<%= @sample.user.email %>)
+    (ID: <%= @sample.user.id %>)
+  </p>
+<% end %>
+<% if @sample.upload_error %>
+  <p>
+    <strong>Upload error:</strong>
+    <strong class="failed"><%= @sample.upload_error %></strong>
+  </p>
+<% end %>
+<% if @sample.input_files.fastq.present? %>
+  <p>
+    <strong>Input fastq files:</strong>
+    <%= @sample.input_files.fastq&.[](0)&.source_type %>
+    <%= "(#{@sample.input_files.fastq&.[](0)&.upload_client})" %>
+    [<%= @sample.input_files.fastq&.[](0)&.source %>,
+    <%= @sample.input_files.fastq&.[](1)&.source %>]
+  </p>
+<% end %>
+<% if @sample.input_files.reference_sequence.present? %>
+  <p>
+    <strong>Input reference sequence file:</strong>
+    <%= @sample.input_files.reference_sequence&.[](0)&.source_type %>
+    <%= "(#{@sample.input_files.reference_sequence&.[](0)&.upload_client})" %>
+    [<%= @sample.input_files.reference_sequence&.[](0)&.source %>]
+  </p>
+<% end %>
+<% if @sample.input_files.primer_bed.present? %>
+  <p>
+    <strong>Input primer bed file:</strong>
+    <%= @sample.input_files.primer_bed&.[](0)&.source_type %>
+    <%= "(#{@sample.input_files.primer_bed&.[](0)&.upload_client})" %>
+    [<%= @sample.input_files.primer_bed&.[](0)&.source %>]
+  </p>
+<% end %>
+
+<% pipeline_run = @sample.first_pipeline_run %>
+<% if pipeline_run && pipeline_run.completed? %>
+  <%= button_to 'rerun from top', kickoff_pipeline_sample_path(@sample), method: :put, form: {target: '_blank'} %>
+<% end %>
+<% ongoing_pipeline_run = @sample.pipeline_runs.where(finalized: 0, deprecated: false).first %>
+<% if ongoing_pipeline_run%>
+  <%= button_to 'cancel pipeline run', cancel_pipeline_run_sample_path(@sample), method: :put, form: {target: '_blank'} %>
+  <% flash.each do |key, message| %>
+    <p><%= message %></p>
+  <% end%>
+<% end %>
+<%= form_with(url: "#{sample_path(@sample)}/move_to_project", method: :put) do |form| %>
+  <%= form.label :project_id, "Move to project ID:" %>
+  <%= form.number_field :project_id %>
+  <%= form.submit "Move" %>
+<% end %>
+
+<% if @sample.first_pipeline_run %>
+  <table class="table table-condensed">
+    <thead>
+      <tr>
+        <th> Run ID </th>
+        <th> Status </th>
+        <% if pipeline_run %>
+          <% if pipeline_run.step_function? %>
+            <th>SFN Execution</th>
+          <% else %>
+            <th> Job Id </th>
+            <th> Job Log </th>
+          <% end %>
+        <% end %>
+        <th>Remaining reads</th>
+        <th>Version</th>
+        <th>Job Started</th>
+        <th>Duration</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @sample.pipeline_runs.each do |pipeline_run| %>
+        <% if pipeline_run.pipeline_run_stages.present? %>
+          <% prs = pipeline_run.pipeline_run_stages %>
+          <% prs.each do |run_stage| %>
+            <tr>
+              <td> <%= "#{pipeline_run.id} - #{run_stage.name}" %> </td>
+              <td class="<%= run_stage.job_status == "FAILED" ? "failed" : "" %>">
+              <%= run_stage.job_status %>
+              <p>
+              <code>
+                <%= run_stage.job_status == "FAILED" ? pipeline_run.error_message : "" %>
+              </code>
+              </p>
+              </td>
+              <% if pipeline_run %>
+                <% if pipeline_run && pipeline_run.step_function? %>
+                  <td><u><%= link_to pipeline_run.sfn_execution_arn, AwsUtil.get_sfn_execution_url(pipeline_run.sfn_execution_arn), target: :_blank  %></u></td>
+                <% else %>
+                  <td><u><%= run_stage.job_id ? (link_to run_stage.job_id, run_stage.batch_job_status_url, target: :_blank) : nil %></u></td>
+                  <td><u><%= link_to 'Logs', run_stage.log_url, target: :_blank  %></u></td>
+                <% end %>
+              <% end %>
+              <td><%= pipeline_run.adjusted_remaining_reads %> &nbsp;</td>
+              <td><%= pipeline_run.wdl_version || pipeline_run.pipeline_version %> &nbsp;</td>
+              <td><%= run_stage.created_at %></td>
+              <td><%= run_stage.duration_hrs %></td>
+            </tr>
+          <% end %>
+        <% end %>
+        <% if pipeline_run.technology == PipelineRun::TECHNOLOGY_INPUT[:nanopore] %>
+          <tr>
+            <td><%= pipeline_run.id %></td>
+            <td>
+              <%= pipeline_run.job_status %>
+            </td>
+            <% if pipeline_run.sfn_execution_arn %>
+              <td><u><%= link_to pipeline_run.sfn_execution_arn, AwsUtil.get_sfn_execution_url(pipeline_run.sfn_execution_arn), target: :_blank  %></u></td>
+            <% else %>
+              <td>Missing SFN Execution ARN</td>
+            <% end %>
+            <td><%= pipeline_run.adjusted_remaining_reads %> &nbsp;</td>
+            <td><%= pipeline_run.wdl_version || pipeline_run.pipeline_version %> &nbsp;</td>
+          </tr>
+        <% end %>
+        <% if pipeline_run.output_states.present? %>
+          <% pipeline_run.output_states.each do |output_state| %>
+            <tr>
+              <td>  <%= "#{pipeline_run.id} - Output - #{output_state.output}" %> </td>
+              <td> <%= output_state.state %> </td>
+              <td colspan=4> &nbsp; </td>
+              <td> <%= output_state.updated_at %> </td>
+            </tr>
+          <% end %>
+        <% else %>
+          <tr>
+            <td> <%= pipeline_run.id %> </td>
+            <td> <%= pipeline_run.job_status %></td>
+            <td> <%= pipeline_run.job_id %></td>
+            <td> </td>
+            <td><%= pipeline_run.adjusted_remaining_reads %> &nbsp;</td>
+            <td><%= pipeline_run.pipeline_version %> &nbsp;</td>
+            <td><%= pipeline_run.created_at %></td>
+          </tr>
+        <% end %>
+        <tr>
+          <td colspan="5"> <%= pipeline_run.id %> - S3 Path - <%= pipeline_run.sfn_results_path %> </td>
+        </tr>
+        <tr>
+          <td>&nbsp;</td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+  <%= button_to 'Run AMR', kickoff_workflow_sample_path(@sample), method: :post, params: {:workflow => 'amr', :inputs_json => {start_from_mngs: true} } %>
+  <%= button_to 'Show Logs', pipeline_logs_sample_path(@sample), method: :get %>
+<% end %>
+
+<% if @sample.workflow_runs.size > 0 %>
+  <table class="table table-condensed">
+    <thead>
+      <tr>
+        <th>WorkflowRun ID</th>
+        <th>Workflow</th>
+        <th>Accession ID</th>
+        <th>Version</th>
+        <th>Status</th>
+        <th>SFN Execution</th>
+        <th>Job Started</th>
+        <th>Deprecated?</th>
+        <th>Rerun?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @sample.workflow_runs.each do |workflow_run| %>
+        <tr>
+          <td><u><%= link_to workflow_run.id, workflow_run_path(workflow_run.id) %></u></td>
+          <td><%= workflow_run.workflow %></td>
+          <td><%= workflow_run.inputs&.[]("accession_id") %></td>
+          <td><%= workflow_run.wdl_version %></td>
+          <td>
+          <p class="<%= workflow_run.status == "FAILED" ? "failed" : "succeeded" %>">
+          <%= workflow_run.status %>
+          </p>
+          <% if workflow_run.status != "SUCCEEDED" %>
+            <code>
+            <%=  workflow_run.error_message_display %>
+            </code>
+          <% end %>
+          </td>
+          <% if workflow_run.sfn_execution_arn %>
+            <td><u><%= link_to workflow_run.sfn_execution_arn, AwsUtil.get_sfn_execution_url(workflow_run.sfn_execution_arn), target: :_blank  %></u></td>
+          <% else %>
+            <td>Missing SFN Execution ARN</td>
+          <% end %>
+          <td><%= workflow_run.executed_at %></td>
+          <td><%= workflow_run.deprecated ? "DEPRECATED" : "ACTIVE" %></td>
+          <td><%= workflow_run.rerun_from || "NO" %></td>
+          <td>
+            <% if !workflow_run.deprecated %>
+              <%= button_to 'rerun', rerun_workflow_run_path(workflow_run), method: :put, form: {target: '_blank'} %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<p>
+  <u><%= link_to 'See all samples', samples_path %></u>
+</p>

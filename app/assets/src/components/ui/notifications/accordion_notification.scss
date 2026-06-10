@@ -1,0 +1,39 @@
+@import "~styles/themes/typography";
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.listContainer {
+  margin-bottom: $sds-spaces-xs;
+  &.error {
+    border-color: $sds-color-error-400;
+    background-color: $sds-color-error-100;
+  }
+
+  &.warning {
+    border-color: $sds-color-warning-400;
+    background-color: $sds-color-warning-100;
+  }
+
+  &.info {
+    border-color: $sds-color-primary-400;
+    background-color: $sds-color-primary-200;
+  }
+
+  &.success {
+    border-color: $sds-color-success-400;
+    background-color: $sds-color-success-100;
+  }
+}
+
+.notificationContainer {
+  @include font-body-xxs;
+  margin: $sds-spaces-xs 0;
+}
+
+.messageContainer {
+  max-height: 150px;
+  overflow: auto;
+  margin-top: $sds-spaces-l;
+  word-break: break-word;
+}

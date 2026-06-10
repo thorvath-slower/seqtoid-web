@@ -1,0 +1,15 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.divider {
+  height: 0px;
+  border-bottom: 2px solid $sds-color-gray-100;
+
+  &.thin {
+    border-bottom: $sds-borders-gray-200;
+  }
+
+  &.medium {
+    border-bottom: 2px solid $sds-color-gray-200;
+  }
+}

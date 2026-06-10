@@ -1,0 +1,7 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.noData {
+  color: $sds-color-gray-300;
+  margin-left: $sds-spaces-m;
+}

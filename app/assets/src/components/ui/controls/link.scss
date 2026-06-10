@@ -1,0 +1,30 @@
+@import "~styles/themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+// !important uses needed to override materialize.css
+.linkDefault {
+  color: $sds-color-primary-400 !important;
+
+  &:hover,
+  &:active {
+    color: $sds-color-primary-600 !important;
+  }
+
+  &.linkDisabled {
+    cursor: default !important;
+    color: $sds-color-gray-300 !important;
+  }
+}
+
+.linkBlack {
+  color: $sds-color-gray-black !important;
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+
+  &:hover,
+  &:active {
+    color: $sds-color-gray-black !important;
+    text-decoration-line: underline;
+    text-decoration-style: solid;
+  }
+}

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+DEF=$1
+
+aws ecs run-task --cluster staging --task-definition $DEF --overrides '{"containerOverrides": [{"name": "rails", "command": ["rails", "db:migrate:with_data"]}]}' --started-by deploy

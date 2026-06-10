@@ -1,0 +1,76 @@
+@import "themes/colors";
+@import "~@czi-sds/components/dist/variables";
+
+.scatterplot {
+  .trendline {
+    stroke: $sds-color-primary-400;
+    stroke-width: 2;
+    fill: none;
+  }
+  .axis path,
+  .axis line {
+    fill: none;
+    stroke: $sds-color-gray-black;
+    shape-rendering: crispEdges;
+  }
+
+  .axis text {
+    font-size: 10px;
+  }
+
+  .text-label {
+    font-size: 10px;
+  }
+
+  .point {
+    stroke: $sds-color-gray-black;
+    stroke-width: 1px;
+    fill: $sds-color-gray-white;
+    &:hover {
+      fill: $sds-color-primary-400;
+    }
+  }
+}
+
+.mono {
+  font-size: 8pt;
+}
+
+#project-visualization {
+  .heatmap-legend {
+    padding: 5px 0 0 0;
+    margin-bottom: -$sds-spaces-m;
+  }
+  .heatmap-header {
+    padding: $sds-spaces-m 2em 30px 2em;
+    .button {
+      margin-top: 20px;
+      float: right;
+    }
+    h2 {
+      font-size: 24px;
+    }
+  }
+  .sub-menu {
+    padding: $sds-spaces-m;
+    background: $sds-color-gray-white;
+    margin: 0;
+  }
+  .visualization-content {
+    margin-top: 2em;
+  }
+  select {
+    display: block;
+  }
+}
+
+#PipelineSampleReads_page {
+  .d3-tree {
+    border: $sds-borders-gray-200;
+    margin: 1em 0;
+  }
+  .data-type-chooser {
+    margin: 1em;
+    position: absolute;
+  }
+}

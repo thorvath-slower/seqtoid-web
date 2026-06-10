@@ -1,0 +1,56 @@
+@import "../../themes/colors.scss";
+@import "~@czi-sds/components/dist/variables";
+
+.wizard {
+  font-size: 13px;
+
+  // Used for hiding the wizard page when overlay is showing.
+  // We still render the page so the page's state isn't lost.
+  &.wizard__hidden {
+    display: none;
+  }
+
+  // TODO: overrides home.scss, remove after refactoring
+  table thead {
+    th,
+    td {
+      font-size: 12px;
+    }
+  }
+
+  &__header {
+    display: block;
+    margin-bottom: 5px;
+    width: 100%;
+
+    &__title {
+      font-size: 22px;
+      letter-spacing: 0.4px;
+      line-height: 30px;
+      vertical-align: middle;
+    }
+
+    &__page {
+      color: $sds-color-gray-300;
+      letter-spacing: 0.4px;
+    }
+  }
+
+  &__page_wrapper {
+    // This min-height pushes the nav to the bottom of the wizard.
+    min-height: 330px;
+  }
+
+  &__nav {
+    align-items: center;
+    display: flex;
+
+    button:not(:last-child) {
+      margin-right: 20px !important; // override PrimaryButton's 0 margin-right
+    }
+  }
+
+  &__action {
+    cursor: pointer;
+  }
+}

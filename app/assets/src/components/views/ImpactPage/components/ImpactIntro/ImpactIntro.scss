@@ -1,0 +1,246 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.introContainer {
+  display: flex;
+  max-width: 1440px;
+  margin: 0 auto;
+  position: relative;
+  align-items: center;
+  overflow: hidden;
+  padding: 60px 5% 40px 5%;
+
+  @media (max-width: 992px) {
+    flex-direction: column;
+    width: auto;
+    padding: 30px 5%;
+  }
+
+  h2 {
+    font-size: 32px;
+    margin-bottom: 20px;
+
+    @media (max-width: 992px) {
+      text-align: center;
+    }
+  }
+
+  p {
+    font-size: 16px;
+    line-height: 26px;
+    color: #545454;
+    max-width: 435px;
+    margin-bottom: 18px;
+
+    &:last-of-type {
+      margin-bottom: 22px;
+    }
+
+    @media (max-width: 992px) {
+      max-width: none;
+    }
+  }
+
+  span.impactMapDotLabel {
+    color: #ffffff;
+    @include font-body-xxs;
+
+    @media (max-width: 992px) {
+      text-align: center;
+      display: block;
+      margin-bottom: 20px;
+    }
+  }
+}
+
+.introTextWrap {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+
+  @media (min-width: 992px) {
+    width: 47%;
+  }
+
+  .introTextLink {
+    color: #3867fa !important;
+  }
+}
+
+.logoLinkContainer {
+  display: flex;
+  margin-top: 15px;
+  width: 500px;
+
+  @media (max-width: 992px) {
+    justify-content: center;
+    width: initial;
+  }
+}
+
+.logoLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 70px;
+  border: 1px solid #eaeaea;
+  border-radius: 3px;
+  transition: 0.35s;
+
+  @media (min-width: 993px) {
+    width: 141px;
+  }
+
+  @media (max-width: 992px) {
+    width: 30%;
+    max-width: 141px;
+  }
+
+  @media (max-width: 500px) {
+    padding: 10px;
+  }
+
+  & + .logoLink {
+    margin-left: 12px;
+  }
+
+  &:first-of-type {
+    width: 200px;
+    padding: 0 10px;
+
+    svg {
+      padding-left: 5px;
+      padding-right: 5px;
+    }
+  }
+
+  &:nth-of-type(2) {
+    img {
+      max-width: 70px;
+      width: 100%;
+      height: auto;
+    }
+  }
+
+  &:last-of-type {
+    img {
+      max-width: 103px;
+      width: 100%;
+      height: auto;
+    }
+  }
+
+  &:hover {
+    border-color: $gray-light;
+  }
+}
+
+.mapContainer {
+  width: 100%;
+  position: relative;
+  max-width: 800px;
+
+  .impactMap {
+    width: 100%;
+    height: auto;
+
+    &Dot {
+      position: absolute;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: 0.2s;
+
+      &:hover {
+        &.cycle1 {
+          box-shadow: 0 0 0 10px rgba(60, 179, 113, 0.2);
+        }
+
+        &.cycle2 {
+          box-shadow: 0 0 0 10px rgba(56, 103, 250, 0.2);
+        }
+
+        .impactMapDotLabel {
+          opacity: 1;
+          z-index: 2;
+        }
+      }
+
+      &.cycle1 {
+        background-color: #3cb371;
+
+        .impactMapDotLabel {
+          background: rgb(60, 179, 113);
+        }
+      }
+
+      &.cycle2 {
+        background-color: #3867fa;
+
+        .impactMapDotLabel {
+          background: rgb(56, 103, 250);
+        }
+      }
+
+      &Label {
+        display: inline-block;
+        opacity: 0;
+        transition: 0.2s;
+        padding: 7px 20px;
+        border-radius: 19px 19px 19px 0;
+        bottom: 3.5rem;
+        left: 0.4rem;
+        position: relative;
+        pointer-events: none;
+        color: #ffffff;
+        text-transform: none;
+        letter-spacing: 0.28px;
+        width: max-content;
+      }
+    }
+
+    &Legend {
+      display: flex;
+      position: absolute;
+      bottom: -20px;
+      right: 18%;
+
+      @media (min-width: 992px) {
+        bottom: 0;
+      }
+
+      &Item {
+        display: flex;
+        align-items: center;
+        margin-left: 18px;
+
+        span.impactMapDot {
+          position: relative;
+          display: inline-block;
+        }
+      }
+
+      &Text {
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0.3px;
+        color: #767676;
+        margin-bottom: 0;
+        text-transform: none;
+        margin-left: 7.5px;
+      }
+    }
+  }
+
+  @media (max-width: 1260px) {
+    right: 0;
+  }
+
+  @media (max-width: 992px) {
+    position: relative;
+    margin: 40px auto 0 auto;
+  }
+}

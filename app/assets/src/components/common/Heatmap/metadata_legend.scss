@@ -1,0 +1,36 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.tooltip {
+  position: absolute;
+  display: none;
+
+  &.visible {
+    display: block;
+  }
+}
+
+.legend {
+  padding: $sds-spaces-m;
+  background-color: $sds-color-gray-white;
+  border: $sds-borders-gray-300;
+  border-radius: $sds-corners-corner-m;
+  box-shadow: $sds-drop-shadows-shadow-m;
+  font-size: 8pt;
+
+  .legendRow {
+    vertical-align: middle;
+
+    &:not(:last-child) {
+      margin-bottom: $sds-spaces-m;
+    }
+
+    .legendEntryColor {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      margin-right: $sds-spaces-m;
+    }
+  }
+}

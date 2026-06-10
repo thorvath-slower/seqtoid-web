@@ -1,0 +1,111 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+/* Style the buttons that are used to open and close the accordion panel */
+
+.accordion {
+  background-color: $sds-color-gray-white;
+  font-family: $sds-font-font-family;
+  color: $sds-color-gray-black;
+  cursor: pointer;
+  padding: 26px 45px;
+  text-align: left;
+  border-bottom: $sds-borders-gray-300;
+  border-top: none;
+  border-left: $sds-borders-gray-300;
+  border-right: $sds-borders-gray-300;
+  outline: none;
+  transition: 0.4s;
+  position: relative;
+
+  @media (max-width: 768px) {
+    padding-left: 65px;
+    text-indent: -$sds-spaces-xxl;
+  }
+
+  &:hover {
+    color: $sds-color-primary-400;
+
+    svg {
+      .plusStroke {
+        stroke: $sds-color-primary-400;
+      }
+    }
+  }
+
+  p {
+    color: $sds-color-gray-600;
+    margin-top: 1em;
+  }
+
+  &:first-of-type {
+    border-top: $sds-borders-gray-300;
+
+    @media (max-width: 768px) {
+      border-radius: 5px 5px 0 0;
+    }
+  }
+
+  &:last-of-type {
+    @media (max-width: 768px) {
+      border-radius: 0 0 5px 5px;
+    }
+  }
+
+  svg {
+    position: absolute;
+    top: 28px;
+
+    circle,
+    path {
+      transition: 0.4s;
+    }
+  }
+}
+
+.accordionTitle,
+.accordionText {
+  margin-left: $sds-spaces-xxl;
+}
+
+.accordionTitle {
+  @include font-header-l;
+
+  @media (max-width: 768px) {
+    @include font-header-s;
+  }
+}
+
+.accordionText {
+  @include font-body-s;
+
+  @media (max-width: 768px) {
+    @include font-body-xs;
+    text-indent: 0px;
+  }
+}
+
+/* Style the accordion panel. Note: hidden by default */
+.panel {
+  padding: 0;
+  background-color: $sds-color-gray-white;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease-out;
+
+  a {
+    color: $sds-color-primary-400 !important;
+    text-decoration: none !important;
+
+    &:hover,
+    &:active {
+      color: $sds-color-primary-600 !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    margin-left: -37px;
+  }
+}

@@ -1,0 +1,39 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.projectHeader {
+  display: flex;
+  margin: $sds-spaces-xxs 0px $sds-spaces-l 0px;
+
+  .name {
+    @include font-header-xl;
+
+    flex: 0 1 auto;
+  }
+
+  .fillIn {
+    flex: 1;
+  }
+
+  .item {
+    @include font-body-s;
+    color: $sds-color-gray-500;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+
+    .icon {
+      color: $sds-color-gray-500;
+    }
+
+    svg {
+      margin-right: $sds-spaces-xxxs;
+    }
+
+    &:not(:first-child) {
+      margin-left: $sds-spaces-l;
+    }
+  }
+}

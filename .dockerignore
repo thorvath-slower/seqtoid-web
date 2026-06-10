@@ -1,0 +1,19 @@
+tmp
+log
+.git
+node_modules
+
+# sql and sql.gz files that are typically generate to
+# populate the db for local development
+/*.sql
+/*.sql.gz
+
+# docker_data folder contains volume data for db and elasticsearch
+docker_data
+
+# Other files/folders that don't need to be added to images
+.github
+Makefile
+*.md
+.env*
+.database_imported

@@ -1,0 +1,22 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.taxonFilterLabel {
+  @include font-caps-xxxs;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+
+  color: $sds-color-gray-500;
+
+  &.disabled {
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.45;
+  }
+
+  .dropdownArrow {
+    margin-left: $sds-spaces-m;
+  }
+}

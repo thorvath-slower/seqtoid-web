@@ -1,0 +1,61 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.liveSearchPopBox {
+  &:not(.rectangular) {
+    input[type="text"] {
+      border-radius: $sds-corners-corner-l;
+    }
+  }
+
+  &:not(.rectangular) {
+    input[type="text"] {
+      border-radius: $sds-corners-corner-m;
+    }
+  }
+
+  :global(.menu) {
+    margin-top: $sds-spaces-xs;
+    max-width: 400px;
+  }
+
+  :global(.item) {
+    height: auto;
+  }
+
+  .category {
+    @include font-caps-xxxs;
+
+    background-color: transparent;
+    color: $sds-color-gray-300;
+    margin: $sds-spaces-l $sds-spaces-l 0;
+    padding: $sds-spaces-xxs 0;
+    text-transform: uppercase;
+    border-top: 2px solid $sds-color-gray-200;
+  }
+
+  // skip divider line
+  .category:first-child {
+    margin-top: 0;
+    border: none;
+  }
+
+  .entry {
+    padding: 5px 0;
+
+    .title {
+      @include font-header-xs;
+
+      color: $sds-color-gray-black;
+      font-weight: $font-weight-semibold;
+    }
+
+    .description {
+      @include font-body-xxs;
+
+      color: $sds-color-gray-500;
+    }
+  }
+}

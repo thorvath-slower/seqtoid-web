@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+#  In order for this script to work, you will need PEM credentials for SSH.
+#
+#  Usage:
+#
+#      bin/clam staging bash
+#
+#      bin/clam staging 'echo $HOSTNAME'
+#
+#      bin/clam staging 'mysqldump -h $RDS_ADDRESS -u $DB_USERNAME --password=$DB_PASSWORD idseq_staging | gzip -c' > id_staging.sql.gz
+#
+#  Above, the specified commands run in the web container on environment "staging",
+#  so that the $HOSTNAME, $RDS_ADDRESS, etc variables are expanded in that
+#  environment
+#
+#  Race conditions during (re)deploy may cause this script to fail or timeout.
+#
+
+ENV=$1
+shift
+
+MACHINE=`bin/get_private_ip $ENV`
+
+CONTAINER=`ssh $MACHINE "sudo docker ps | grep ecs-idseq-$ENV-web | head -1" | awk '{print $NF}'`
+
+ssh $MACHINE 'sudo docker exec '$CONTAINER' bin/entrypoint.sh '"'$*'"

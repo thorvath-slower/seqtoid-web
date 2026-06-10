@@ -1,0 +1,31 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.listElement {
+  display: flex;
+  align-items: center;
+
+  .listCheckmark {
+    height: 16px;
+    margin-right: $sds-spaces-m;
+    text-align: center;
+    width: 16px;
+
+    .icon {
+      color: transparent;
+      margin: auto;
+    }
+
+    &.boxed {
+      border: $sds-borders-gray-400;
+      border-radius: $sds-corners-corner-s;
+    }
+
+    &.checked {
+      .icon {
+        color: $sds-color-primary-400;
+      }
+    }
+  }
+}
