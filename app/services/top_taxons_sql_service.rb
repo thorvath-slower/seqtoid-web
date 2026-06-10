@@ -226,7 +226,7 @@ class TopTaxonsSqlService
     mass_normalized_zscore_sql = "((count/total_ercc_reads) - mean_mass_normalized) / stdev_mass_normalized"
     "COALESCE(
       GREATEST(#{ReportHelper::ZSCORE_MIN}, LEAST(#{ReportHelper::ZSCORE_MAX},
-        IF(mean_mass_normalized IS NULL, #{standard_z_score_sql}, #{mass_normalized_zscore_sql})
+        CASE WHEN mean_mass_normalized IS NULL THEN #{standard_z_score_sql} ELSE #{mass_normalized_zscore_sql} END
       )),
       #{ReportHelper::ZSCORE_WHEN_ABSENT_FROM_BACKGROUND})"
   end

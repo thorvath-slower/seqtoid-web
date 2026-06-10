@@ -46,13 +46,13 @@ class Visualization < ApplicationRecord
     project_list_alias = "project_list"
 
     sorted_visualization_ids =
-      select("visualizations.id, GROUP_CONCAT(DISTINCT projects.name ORDER BY projects.name ASC) AS #{project_list_alias}")
+      select("visualizations.id, string_agg(DISTINCT projects.name, ',' ORDER BY projects.name ASC) AS #{project_list_alias}")
       .left_joins(samples: [:project])
       .group(:id)
       .order(Arel.sql("#{project_list_alias} #{order_dir}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
       .collect(&:id)
 
-    where(id: sorted_visualization_ids).order(Arel.sql("field(visualizations.id, #{sorted_visualization_ids.join ','})"))
+    where(id: sorted_visualization_ids).order(Arel.sql("array_position(ARRAY[#{sorted_visualization_ids.join ','}]::bigint[], visualizations.id)"))
   }
 
   # In the common case, a visualization will come from a single project.

@@ -55,6 +55,9 @@ class Background < ApplicationRecord
   end
 
   def summarize
+    # bug-#010/#011: the adjusted read count was computed with a MySQL session
+    # variable (@adjusted_total_reads := ...) and IFNULL. Compute it once in a
+    # subquery with COALESCE — portable to PostgreSQL, same result.
     rows = TaxonCount.connection.select_all("
       SELECT
         tax_id,
@@ -62,12 +65,20 @@ class Background < ApplicationRecord
         count_type,
         tax_level,
         total_ercc_reads,
-        @adjusted_total_reads := (total_reads - IFNULL(total_ercc_reads, 0)) * IFNULL(fraction_subsampled, 1.0),
-        (1.0*1e6*count)/@adjusted_total_reads as rpm
-      FROM `taxon_counts`
-      INNER JOIN `pipeline_runs` ON
-        `pipeline_runs`.`id` = `taxon_counts`.`pipeline_run_id`
-      WHERE (pipeline_run_id in (select pipeline_run_id from backgrounds_pipeline_runs where background_id = #{id}))
+        (1.0*1e6*count)/adjusted_total_reads as rpm
+      FROM (
+        SELECT
+          tax_id,
+          count,
+          count_type,
+          tax_level,
+          total_ercc_reads,
+          (total_reads - COALESCE(total_ercc_reads, 0)) * COALESCE(fraction_subsampled, 1.0) AS adjusted_total_reads
+        FROM taxon_counts
+        INNER JOIN pipeline_runs ON
+          pipeline_runs.id = taxon_counts.pipeline_run_id
+        WHERE (pipeline_run_id in (select pipeline_run_id from backgrounds_pipeline_runs where background_id = #{id}))
+      ) adjusted
       ORDER BY tax_id, count_type, tax_level
     ").to_a
     n = pipeline_runs.count
