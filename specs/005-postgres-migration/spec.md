@@ -22,8 +22,15 @@ Because the reporting path drives scientific results, **this is gated and tests-
 - `GROUP_CONCAT(… ORDER BY … SEPARATOR …)` → `string_agg(… , … ORDER BY …)`: `app/models/project.rb` (L58, L70), `app/models/visualization.rb` (L49), `app/controllers/projects_controller.rb` (L113–L116).
 - `IFNULL(a,b)` → `COALESCE(a,b)`: `projects_controller.rb` (L115), `background.rb` (L65).
 - `JSON_EXTRACT(col,'$.x')` → `col->>'x'` / `jsonb_path_query` (and a `JSON_TABLE`-free `IN`): `app/models/workflow_run.rb` (L230, L236, L253). *(Note: requires the JSON columns to be `jsonb` on Postgres — covered under schema review.)*
-- `unix_timestamp(col)` → `EXTRACT(EPOCH FROM col)`: `lib/tasks/pipeline_monitor.rake` (L193).
+- `unix_timestamp(col)` → `EXTRACT(EPOCH FROM col)`; `from_unixtime(n)` → `to_timestamp(n)`: `lib/tasks/pipeline_monitor.rake` (L193, L197).
 - Backtick identifiers (`` `rank` ``, `` `inputs_json` ``) → standard double-quotes or none.
+
+**Bug #011 — additional MySQL-isms found during implementation (not in the first cut):**
+- `field(id, <list>)` ordering → `array_position(ARRAY[<list>]::bigint[], id)`: `project.rb` (×3), `visualization.rb` (×1).
+- `IF(cond, a, b)` → `CASE WHEN cond THEN a ELSE b END`: `top_taxons_sql_service.rb` (zscore), `projects_controller.rb` (`BIT_OR(IF…)`), `samples_helper.rb` (×2).
+- `DATE_ADD(col, INTERVAL n DAY)` → `col + (n || ' days')::interval`: `samples_helper.rb` (×2), `sample.rb` (×3).
+- `ISNULL(x)` → `x IS NULL`: `workflow_run.rb`.
+- Double-quoted `"string"` literal → single-quoted: `pipeline_monitor.rake`.
 
 *(Ruby `rand()` calls in `snapshot_link.rb`, `hard_delete_objects.rb`, `metadata_helper.rb` are application code, not SQL — out of scope.)*
 
