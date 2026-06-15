@@ -571,7 +571,9 @@ RSpec.describe BulkDownloadsHelper, type: :helper do
                            name: "Test Sample 1",
                            project: project,
                            metadata_fields: { collection_location_v2: "San Francisco, USA", sample_type: "Serum" })
-          @workflow_run = create(:workflow_run, sample: @sample, cached_results: cached_results, inputs_json: inputs_json.to_json, executed_at: Time.current)
+          # reload so executed_at carries the DB-stored precision (Postgres truncates
+          # to microseconds); the expected row compares against the round-tripped value.
+          @workflow_run = create(:workflow_run, sample: @sample, cached_results: cached_results, inputs_json: inputs_json.to_json, executed_at: Time.current).reload
           @sample_metadata_headers, @metadata_keys, @metadata_by_sample_id = BulkDownloadsHelper.generate_sample_metadata_csv_info(samples: [@sample])
         end
 
@@ -723,7 +725,9 @@ RSpec.describe BulkDownloadsHelper, type: :helper do
                            name: "Test Sample 1",
                            project: project,
                            metadata_fields: { collection_location_v2: "San Francisco, USA", sample_type: "Serum" })
-          @workflow_run = create(:workflow_run, sample: @sample, cached_results: cached_results, inputs_json: inputs_json.to_json, executed_at: Time.current)
+          # reload so executed_at carries the DB-stored precision (Postgres truncates
+          # to microseconds); the expected row compares against the round-tripped value.
+          @workflow_run = create(:workflow_run, sample: @sample, cached_results: cached_results, inputs_json: inputs_json.to_json, executed_at: Time.current).reload
           @sample_metadata_headers, @metadata_keys, @metadata_by_sample_id = BulkDownloadsHelper.generate_sample_metadata_csv_info(samples: [@sample])
         end
 
