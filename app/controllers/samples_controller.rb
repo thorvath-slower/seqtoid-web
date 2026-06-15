@@ -353,7 +353,7 @@ class SamplesController < ApplicationController
       avg_total_reads, avg_remaining_reads = PipelineRun
                                              .where(id: pipeline_run_ids)
                                              .non_deleted
-                                             .pick(Arel.sql("ROUND(AVG(`pipeline_runs`.`total_reads`)), ROUND(AVG(`pipeline_runs`.`adjusted_remaining_reads`))"))
+                                             .pick(Arel.sql("ROUND(AVG(pipeline_runs.total_reads)), ROUND(AVG(pipeline_runs.adjusted_remaining_reads))"))
                                              &.map(&:to_i)
     end
 
