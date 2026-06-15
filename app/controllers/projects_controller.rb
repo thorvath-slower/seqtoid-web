@@ -121,7 +121,10 @@ class ProjectsController < ApplicationController
           group_concat_host = Arel.sql("string_agg(DISTINCT host_genomes.name, '::' ORDER BY host_genomes.name) AS hosts")
           group_concat_sample_type = Arel.sql("string_agg(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END, '::' ORDER BY CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END) AS sample_types")
           group_concat_location = Arel.sql("string_agg(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN COALESCE(locations.name, metadata.string_validated_value) ELSE NULL END, '::') AS locations")
-          group_concat_users = Arel.sql("string_agg(DISTINCT CONCAT(users.name,'|',users.email), '::' ORDER BY CONCAT(users.name,'|',users.email)) AS users")
+          # Use || (not CONCAT): Postgres CONCAT ignores NULLs and would emit a
+          # partial "|email" for null-user rows, whereas MySQL CONCAT returns NULL
+          # (skipped by the aggregate). || preserves that NULL-if-any-NULL semantics.
+          group_concat_users = Arel.sql("string_agg(DISTINCT (users.name || '|' || users.email), '::' ORDER BY (users.name || '|' || users.email)) AS users")
           editable = Arel.sql("BIT_OR(CASE WHEN users.id=#{current_user.id} OR #{current_user.admin?} THEN 1 ELSE 0 END) AS editable")
           creator = Arel.sql("creators_projects.name AS creator")
           creator_id = Arel.sql("creators_projects.id AS creator_id")
