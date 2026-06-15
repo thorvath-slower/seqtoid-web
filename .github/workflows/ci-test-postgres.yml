@@ -1,0 +1,96 @@
+name: ci-test (postgres)
+
+# PR test gate for seqtoid-web running the Rails suite against PostgreSQL — incl.
+# the MySQL->Postgres parity specs (improvement-#005). This is the gate that
+# validates the migration: it boots the app on a Postgres service, loads the
+# Postgres schema (citext etc.), and runs the suite. Self-contained — dummy AWS
+# creds + service containers — so it runs in the fork with no cloud access.
+#
+# NOTE (CZID-101): triggers include this branch's name so the gate runs now while
+# the pipeline is being built; scope `push` to [main] once it lands.
+
+on:
+  pull_request:
+  push:
+    branches: [main, "improvement-#016-ci-pipeline"]
+  workflow_dispatch:
+
+jobs:
+  ruby_test_postgres:
+    name: Ruby Test (PostgreSQL)
+    runs-on: ubuntu-latest
+    container: ruby:3.1.6
+    env:
+      # Dummy secret — test only.
+      AUTH_TOKEN_SECRET: 'GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ='
+      DB_USERNAME: test_user
+      DB_PASSWORD: test_password
+      DB_HOST: postgres
+      RAILS_ENV: test
+      AWS_REGION: us-west-2
+      AWS_ACCOUNT_ID: test
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: idseq_test
+        options: >-
+          --health-cmd "pg_isready -U test_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Determine Kernel Version
+        run: echo "KERNEL_VERSION=`uname -r`" >> $GITHUB_ENV
+      - name: Cache Ruby Dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems
+      - name: Install Ruby Dependencies
+        run: |
+          gem install bundler
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+      - name: Cache Python Dependencies
+        uses: actions/cache@v4
+        with:
+          path: /root/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip
+      - name: Install Extra Dependencies
+        run: |
+          apt-get update && apt-get install -y python3-pip nodejs postgresql-client
+          pip3 config set global.break-system-packages true
+          pip3 install --upgrade pip
+          pip3 install --cache-dir /root/.cache/pip "cython<3.0.0"
+          pip3 install "pyyaml==5.4.1" --no-build-isolation
+          pip3 install --cache-dir /root/.cache/pip -r requirements.txt
+      - name: Setup Dummy Static Files
+        run: |
+          mkdir -p app/assets/dist
+          for f in main.bundle.min.css main.bundle.min.js vendors.bundle.min.css vendors.bundle.min.js; do echo foo > "app/assets/dist/$f"; done
+      - name: Load Postgres schema
+        # DB idseq_test is pre-created by the postgres service; load the schema
+        # (enable_extension citext etc. — test_user is superuser).
+        run: bundle exec bin/rails db:schema:load
+      - name: RSpec (incl. MySQL->Postgres parity specs)
+        run: bundle exec rspec
+        env:
+          SAMPLES_BUCKET_NAME: idseq-samples-development
