@@ -306,7 +306,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         }
 
         post :create, params: bulk_download_params
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_content)
 
         json_response = JSON.parse(response.body)
         expect(json_response["error"]).to eq(BulkDownloadsHelper::COLLABORATOR_ONLY_DOWNLOAD_TYPE)
@@ -441,7 +441,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         allow_any_instance_of(BulkDownloadsHelper).to receive(:validate_bulk_download_create_params).and_raise(StandardError)
 
         post :consensus_genome_overview_data, params: bulk_download_params
-        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response).to have_http_status(:unprocessable_content)
 
         json_response = JSON.parse(response.body)
         expect(json_response["error"]).to eq(BulkDownloadsHelper::KICKOFF_FAILURE_HUMAN_READABLE)

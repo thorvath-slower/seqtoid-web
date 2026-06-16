@@ -21,7 +21,10 @@ class PipelineRun < ApplicationRecord
   belongs_to :sample
   belongs_to :alignment_config
   has_many :annotations, dependent: :destroy
-  has_many :pipeline_run_stages, dependent: :destroy
+  # Default to step_number order: stages are always processed/displayed in
+  # pipeline order. Postgres has no implicit row ordering (MySQL returned PK
+  # order), so scope the association to keep every read deterministic.
+  has_many :pipeline_run_stages, -> { order(:step_number) }, inverse_of: :pipeline_run, dependent: :destroy
   accepts_nested_attributes_for :pipeline_run_stages
   has_and_belongs_to_many :backgrounds
   has_and_belongs_to_many :phylo_trees
@@ -929,7 +932,9 @@ class PipelineRun < ApplicationRecord
       # This will update existing records with the same unique key (pipeline_run_id, taxid, hit_type)
       result = TaxonByterange.import(
         import_data,
-        on_duplicate_key_update: [:first_byte, :last_byte, :updated_at],
+        # bug-#011: Hash form with conflict_target works on both MySQL (ON DUPLICATE
+        # KEY UPDATE) and PostgreSQL (ON CONFLICT); Postgres requires the target.
+        on_duplicate_key_update: { conflict_target: [:pipeline_run_id, :taxid, :hit_type], columns: [:first_byte, :last_byte, :updated_at] },
         validate: false, # Skip validations for performance, data is already validated from pipeline
         batch_size: 1000 # Let activerecord-import handle internal batching for large datasets
       )

@@ -1,21 +1,18 @@
 default: &default
-  adapter: mysql2
-  username: root
-  host: 127.0.0.1
-  port: 3306
+  adapter: postgresql
+  username: <%= ENV['DB_USERNAME'] || 'postgres' %>
+  password: <%= ENV['DB_PASSWORD'] %>
+  host: <%= ENV['DB_HOST'] || '127.0.0.1' %>
+  port: <%= ENV['DB_PORT'] || 5432 %>
   database: idseq_<%= Rails.env %>
-  encoding: utf8
-  collation: utf8_unicode_ci
-  reconnect: true
+  encoding: unicode
   pool: <%= ENV['DB_CONNECTION_POOL'] || 5 %>
-  ssl_mode: 'REQUIRED'
 
 deployed: &deployed
   <<: *default
   host: <%= ENV['RDS_ADDRESS'] %>
-  password: <%= ENV['DB_PASSWORD'] %>
-  port: <%= ENV['DB_PORT'] %>
-  username: <%= ENV['DB_USERNAME'] %>
+  # RDS / CloudNativePG require TLS in transit (Constitution Principle VII).
+  sslmode: <%= ENV['DB_SSLMODE'] || 'require' %>
 
 development:
   <<: *deployed

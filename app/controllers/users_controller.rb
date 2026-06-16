@@ -33,7 +33,7 @@ class UsersController < ApplicationController
       status: :internal_server_error
     )
   rescue StandardError => err
-    render json: [err], status: :unprocessable_entity
+    render json: [err], status: :unprocessable_content
   end
 
   # GET /users/1/edit
@@ -58,7 +58,7 @@ class UsersController < ApplicationController
     else
       respond_to do |format|
         format.html { render :edit }
-        format.json { render json: @user.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @user.errors.full_messages, status: :unprocessable_content }
       end
     end
   end
@@ -88,7 +88,7 @@ class UsersController < ApplicationController
       render json: { message: "User data successfully updated" }, status: :ok
     else
       respond_to do |_format|
-        render json: @user.errors.full_messages, status: :unprocessable_entity
+        render json: @user.errors.full_messages, status: :unprocessable_content
       end
     end
   end

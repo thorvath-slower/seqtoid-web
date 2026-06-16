@@ -269,7 +269,7 @@ class SamplesController < ApplicationController
       span = (max_date - min_date + 1).to_i
       if span <= MAX_BINS
         # we group by day if the span is shorter than MAX_BINS days
-        bins_map = samples.group("DATE(`samples`.`created_at`)").count.map do |timestamp, count|
+        bins_map = samples.group("DATE(samples.created_at)").count.map do |timestamp, count|
           [timestamp.strftime("%Y-%m-%d"), count]
         end.to_h
         time_bins = (0...span).map do |offset|
@@ -286,7 +286,9 @@ class SamplesController < ApplicationController
         bins_map = samples.group(
           ActiveRecord::Base.send(
             :sanitize_sql_array,
-            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `samples`.`created_at`)/:step)", { min_date: min_date, step: step }]
+            # Postgres has no TIMESTAMPDIFF; date subtraction yields integer days.
+            # Cast to int so the GROUP BY key is an Integer matching bins_map[bucket].
+            ["FLOOR((samples.created_at::date - :min_date)::numeric / :step)::int", { min_date: min_date, step: step }]
           )
         ).count
         time_bins = (0...MAX_BINS).map do |bucket|
@@ -353,7 +355,7 @@ class SamplesController < ApplicationController
       avg_total_reads, avg_remaining_reads = PipelineRun
                                              .where(id: pipeline_run_ids)
                                              .non_deleted
-                                             .pick(Arel.sql("ROUND(AVG(`pipeline_runs`.`total_reads`)), ROUND(AVG(`pipeline_runs`.`adjusted_remaining_reads`))"))
+                                             .pick(Arel.sql("ROUND(AVG(pipeline_runs.total_reads)), ROUND(AVG(pipeline_runs.adjusted_remaining_reads))"))
                                              &.map(&:to_i)
     end
 
@@ -635,12 +637,12 @@ class SamplesController < ApplicationController
     @project_id = params[:project_id]
     @project = Project.find(@project_id)
     unless current_power.updatable_project?(@project)
-      render json: { status: "Sorry, your email doesn’t have permissions to upload to this project." }, status: :unprocessable_entity
+      render json: { status: "Sorry, your email doesn’t have permissions to upload to this project." }, status: :unprocessable_content
       return
     end
 
     unless current_user.can_upload(params[:bulk_path])
-      render json: { status: "Sorry, it looks like your email doesn’t have permissions to this s3 bucket." }, status: :unprocessable_entity
+      render json: { status: "Sorry, it looks like your email doesn’t have permissions to this s3 bucket." }, status: :unprocessable_content
       return
     end
 
@@ -652,7 +654,7 @@ class SamplesController < ApplicationController
         if @samples.present?
           render json: { samples: @samples }
         else
-          render json: { status: "Sorry, we couldn’t find any valid samples in this s3 bucket. There may be an issue with permissions or the file format. Click the \"More Info\" link above for more detailed instructions." }, status: :unprocessable_entity
+          render json: { status: "Sorry, we couldn’t find any valid samples in this s3 bucket. There may be an issue with permissions or the file format. Click the \"More Info\" link above for more detailed instructions." }, status: :unprocessable_content
         end
       end
     end
@@ -1407,7 +1409,7 @@ class SamplesController < ApplicationController
         format.json { render :show, status: :ok, location: @sample }
       else
         format.html { render :edit }
-        format.json { render json: @sample.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @sample.errors.full_messages, status: :unprocessable_content }
       end
     end
   end
@@ -1431,7 +1433,7 @@ class SamplesController < ApplicationController
         format.json { head :no_content }
       else
         format.html { redirect_to pipeline_runs_sample_path(@sample), notice: 'No pipeline run in progress.' }
-        format.json { render json: @sample.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @sample.errors.full_messages, status: :unprocessable_content }
       end
     end
   end

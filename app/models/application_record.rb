@@ -1,6 +1,14 @@
 class ApplicationRecord < ActiveRecord::Base
   self.abstract_class = true
 
+  # MySQL sorts NULLs as the lowest value (NULLs first on ASC, last on DESC);
+  # PostgreSQL defaults to the opposite. Append the result of this to a nullable
+  # sort column's ORDER BY direction to preserve MySQL's ordering after the
+  # Postgres migration (bug-#011 parity). Tiebreaker columns (id) are never NULL.
+  def self.mysql_nulls(order_dir)
+    order_dir.to_s.casecmp("asc").zero? ? "NULLS FIRST" : "NULLS LAST"
+  end
+
   # We have auto-analytics tracking set up for specific DB models we flag.
   # For models that are flagged, we fire off tracking events for any create,
   # change, or delete of that model. Originally, we did this for all models,

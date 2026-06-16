@@ -19,7 +19,7 @@ class Visualization < ApplicationRecord
   ] }
   validates :data, presence: true
 
-  serialize :data, JSON
+  serialize :data, coder: JSON
 
   delegate :count, to: :samples, prefix: true
 
@@ -38,7 +38,7 @@ class Visualization < ApplicationRecord
   TIEBREAKER_SORT_KEY = "id".freeze
 
   scope :sort_by_sample_count, lambda { |order_dir|
-    order_statement = "COUNT(samples.id) #{order_dir}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "COUNT(samples.id) #{order_dir} #{mysql_nulls(order_dir)}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     left_outer_joins(:samples).group(:id).order(ActiveRecord::Base.sanitize_sql_array(order_statement))
   }
 
@@ -46,13 +46,13 @@ class Visualization < ApplicationRecord
     project_list_alias = "project_list"
 
     sorted_visualization_ids =
-      select("visualizations.id, GROUP_CONCAT(DISTINCT projects.name ORDER BY projects.name ASC) AS #{project_list_alias}")
+      select("visualizations.id, string_agg(DISTINCT projects.name, ',' ORDER BY projects.name ASC) AS #{project_list_alias}")
       .left_joins(samples: [:project])
       .group(:id)
-      .order(Arel.sql("#{project_list_alias} #{order_dir}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
+      .order(Arel.sql("#{project_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
       .collect(&:id)
 
-    where(id: sorted_visualization_ids).order(Arel.sql("field(visualizations.id, #{sorted_visualization_ids.join ','})"))
+    where(id: sorted_visualization_ids).order(Arel.sql("array_position(ARRAY[#{sorted_visualization_ids.join ','}]::bigint[], visualizations.id)"))
   }
 
   # In the common case, a visualization will come from a single project.
@@ -93,7 +93,7 @@ class Visualization < ApplicationRecord
     sort_key = DATA_KEY_TO_SORT_KEY[order_by.to_s]
 
     if VISUALIZATIONS_SORT_KEYS.include?(sort_key)
-      visualizations.order("visualizations.#{sort_key} #{order_dir}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+      visualizations.order("visualizations.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}")
     elsif sort_key == SAMPLES_COUNT_SORT_KEY
       visualizations.sort_by_sample_count(order_dir)
     elsif sort_key == PROJECT_SORT_KEY

@@ -107,14 +107,25 @@ class ProjectsController < ApplicationController
         else
           limited_projects = limited_projects
                              .includes(:creator, samples: [:host_genome, :user, { metadata: [:metadata_field, :location] }, :pipeline_runs, :workflow_runs])
-                             .group(:id)
+                             # Postgres requires every non-aggregated selected column to appear in
+                             # GROUP BY (MySQL relaxed this). Besides projects.id (the PK, which
+                             # functionally determines the other projects.* columns), this query
+                             # also selects the non-aggregated creator columns from the second
+                             # users join (aliased creators_projects), so they must be grouped too.
+                             .group("projects.id", "creators_projects.id", "creators_projects.name")
                              .references(:pipeline_runs, :samples, :workflow_runs)
-          # get aggregated lists of association values in string by using MySQL's GROUP_CONCAT (should update to JSON_ARRAYAGG when possible)
-          group_concat_host = Arel.sql("GROUP_CONCAT(DISTINCT host_genomes.name ORDER BY host_genomes.name SEPARATOR '::') AS hosts")
-          group_concat_sample_type = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END ORDER BY 1 SEPARATOR '::') AS sample_types") # order by sample type
-          group_concat_location = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN IFNULL(locations.name, metadata.string_validated_value) ELSE NULL END SEPARATOR '::') AS locations")
-          group_concat_users = Arel.sql("GROUP_CONCAT(DISTINCT CONCAT(users.name,'|',users.email) ORDER BY users.name SEPARATOR '::') AS users")
-          editable = Arel.sql("BIT_OR(IF(users.id=#{current_user.id} OR #{current_user.admin?}, 1, 0)) AS editable")
+          # aggregated lists of association values as strings. Portable string_agg
+          # (Postgres/MySQL 8+); separator '::', and DISTINCT aggregates order by the
+          # aggregated expression itself (Postgres requires the ORDER BY key to be in
+          # the argument list). bug-#011.
+          group_concat_host = Arel.sql("string_agg(DISTINCT host_genomes.name, '::' ORDER BY host_genomes.name) AS hosts")
+          group_concat_sample_type = Arel.sql("string_agg(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END, '::' ORDER BY CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END) AS sample_types")
+          group_concat_location = Arel.sql("string_agg(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN COALESCE(locations.name, metadata.string_validated_value) ELSE NULL END, '::') AS locations")
+          # Use || (not CONCAT): Postgres CONCAT ignores NULLs and would emit a
+          # partial "|email" for null-user rows, whereas MySQL CONCAT returns NULL
+          # (skipped by the aggregate). || preserves that NULL-if-any-NULL semantics.
+          group_concat_users = Arel.sql("string_agg(DISTINCT (users.name || '|' || users.email), '::' ORDER BY (users.name || '|' || users.email)) AS users")
+          editable = Arel.sql("BIT_OR(CASE WHEN users.id=#{current_user.id} OR #{current_user.admin?} THEN 1 ELSE 0 END) AS editable")
           creator = Arel.sql("creators_projects.name AS creator")
           creator_id = Arel.sql("creators_projects.id AS creator_id")
           mngs_runs_count = Arel.sql("COUNT(DISTINCT CASE WHEN samples.initial_workflow='#{WorkflowRun::WORKFLOW[:short_read_mngs]}' THEN samples.id ELSE NULL END) AS mngs_runs_count")
@@ -231,7 +242,7 @@ class ProjectsController < ApplicationController
       span = (max_date - min_date + 1).to_i
       if span <= MAX_BINS
         # we group by day if the span is shorter than MAX_BINS days
-        bins_map = projects.group("DATE(`projects`.`created_at`)").count.map do |timestamp, count|
+        bins_map = projects.group("DATE(projects.created_at)").count.map do |timestamp, count|
           [timestamp.strftime("%Y-%m-%d"), count]
         end.to_h
         time_bins = (0...span).map do |offset|
@@ -248,7 +259,9 @@ class ProjectsController < ApplicationController
         bins_map = projects.group(
           ActiveRecord::Base.send(
             :sanitize_sql_array,
-            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `projects`.`created_at`)/:step)", { min_date: min_date, step: step }]
+            # Postgres has no TIMESTAMPDIFF; date subtraction yields integer days.
+            # Cast to int so the GROUP BY key is an Integer matching bins_map[bucket].
+            ["FLOOR((projects.created_at::date - :min_date)::numeric / :step)::int", { min_date: min_date, step: step }]
           )
         ).count
         time_bins = (0...MAX_BINS).map do |bucket|
@@ -362,7 +375,7 @@ class ProjectsController < ApplicationController
     else
       render json: {
         message: 'Unable to set visibility for project',
-        status: :unprocessable_entity,
+        status: :unprocessable_content,
         errors: errors,
       }
     end
@@ -394,7 +407,7 @@ class ProjectsController < ApplicationController
         format.json { render :show, status: :created, location: @project, project: @project }
       else
         format.html { render :new }
-        format.json { render json: @project.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @project.errors.full_messages, status: :unprocessable_content }
       end
     end
   rescue ActiveRecord::RecordNotUnique
@@ -402,7 +415,7 @@ class ProjectsController < ApplicationController
       format.html {}
       format.json do
         render json: "Duplicate name",
-               status: :unprocessable_entity
+               status: :unprocessable_content
       end
     end
   end
@@ -452,7 +465,7 @@ class ProjectsController < ApplicationController
         format.json { head :no_content }
       else
         format.html { render :edit }
-        format.json { render json: { message: 'Cannot delete this project' }, status: :unprocessable_entity }
+        format.json { render json: { message: 'Cannot delete this project' }, status: :unprocessable_content }
       end
     end
   end

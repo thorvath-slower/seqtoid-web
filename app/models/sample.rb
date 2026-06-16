@@ -21,7 +21,12 @@ class Sample < ApplicationRecord
   belongs_to :host_genome, counter_cache: true # use .size for cache, use .count to force COUNT query
   has_many :pipeline_runs, -> { order(created_at: :desc) }, dependent: :destroy
   has_many :backgrounds, through: :pipeline_runs
-  has_many :input_files, dependent: :destroy
+  # Default to :id order so fastq R1/R2 (input_files.fastq[0]/[1]) and other
+  # input-file reads are deterministic. Postgres has no implicit row order
+  # (MySQL returned PK = insertion order, i.e. R1 before R2); restore that.
+  # inverse_of is required because the order(:id) scope disables Rails' automatic
+  # inverse detection; without it nested builds (factories) fail "sample must exist".
+  has_many :input_files, -> { order(:id) }, inverse_of: :sample, dependent: :destroy
   accepts_nested_attributes_for :input_files
   validates_associated :input_files
   has_many :metadata, dependent: :destroy
@@ -112,7 +117,7 @@ class Sample < ApplicationRecord
     # Note: if the samples do not contain the specified metadata, all metadata.string_validated_value's will be nil
     # and samples will be sorted by TIEBREAKER_SORT_KEY
     joins_statement = "LEFT JOIN metadata ON (samples.id = metadata.sample_id AND metadata.key = '#{sort_key}')"
-    order_statement = "metadata.string_validated_value #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "metadata.string_validated_value #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(ActiveRecord::Base.sanitize_sql_array(joins_statement)).order(ActiveRecord::Base.sanitize_sql_array(order_statement))
   }
 
@@ -123,12 +128,12 @@ class Sample < ApplicationRecord
     "
     # TODO(ihan): Investigate location metadata creation. I've implemented a workaround solution below,
     # but ideally, all location info should be stored by location_id.
-    order_statement = "(CASE WHEN ISNULL(metadata.location_id) THEN metadata.string_validated_value ELSE locations.name END) #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "(CASE WHEN metadata.location_id IS NULL THEN metadata.string_validated_value ELSE locations.name END) #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :sort_by_host_genome, lambda { |order_dir|
-    order_statement = "host_genomes.name #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "host_genomes.name #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     left_outer_joins(:host_genome).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -138,7 +143,7 @@ class Sample < ApplicationRecord
       LEFT JOIN pipeline_runs ON samples.id = pipeline_runs.sample_id AND
       pipeline_runs.id = (SELECT MAX(id) FROM pipeline_runs WHERE samples.id = pipeline_runs.sample_id)
     "
-    order_statement = "pipeline_runs.#{sort_key} #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "pipeline_runs.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -149,7 +154,7 @@ class Sample < ApplicationRecord
       pipeline_runs.id = (SELECT MAX(id) FROM pipeline_runs WHERE samples.id = pipeline_runs.sample_id)
       LEFT JOIN insert_size_metric_sets ON insert_size_metric_sets.pipeline_run_id = pipeline_runs.id
     "
-    order_statement = "insert_size_metric_sets.mean #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "insert_size_metric_sets.mean #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -833,7 +838,7 @@ class Sample < ApplicationRecord
       joins(:project)
         .where("(project_id in (?) or
                 projects.public_access = 1 or
-                DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < ?)",
+                samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < ?)",
                project_ids, Time.current)
     end
   end
@@ -856,14 +861,14 @@ class Sample < ApplicationRecord
   def self.public_samples
     joins(:project)
       .where("(projects.public_access = 1 OR
-              DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < ?)",
+              samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < ?)",
              Time.current)
   end
 
   def self.private_samples
     joins(:project)
       .where("(projects.public_access = 0 AND
-              DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) >= ?)",
+              samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval >= ?)",
              Time.current)
   end
 
@@ -1147,7 +1152,7 @@ class Sample < ApplicationRecord
     metadata_sort_key = sanitize_metadata_field_name(order_by)
 
     if SAMPLES_SORT_KEYS.include?(sort_key)
-      samples.order("samples.#{sort_key} #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+      samples.order("samples.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}")
     elsif sort_key == "host"
       samples.sort_by_host_genome(order_dir)
     elsif PIPELINE_RUNS_SORT_KEYS.include?(sort_key)
@@ -1188,9 +1193,11 @@ class Sample < ApplicationRecord
 
     queries_by_count_type = threshold_filters_by_count_type.each_with_object({}) do |(count_type, filter_queries), queries|
       filter_statement = filter_queries.join(" AND ")
-      sanitized_filter_statement = ActiveRecord::Base.sanitize_sql_array(["(`taxon_counts`.`count_type` = '#{count_type}' AND #{filter_statement})"])
+      sanitized_filter_statement = ActiveRecord::Base.sanitize_sql_array(["(taxon_counts.count_type = '#{count_type}' AND #{filter_statement})"])
       # TODO: Test out creating new composite index (pipeline_run_id, count_type, tax_id)
-      left_join_statement = "LEFT OUTER JOIN `pipeline_runs` ON `pipeline_runs`.`sample_id` = `samples`.`id` LEFT OUTER JOIN `taxon_counts` FORCE INDEX FOR JOIN (`index_pr_tax_hit_level_tc`) ON `taxon_counts`.`pipeline_run_id` = `pipeline_runs`.`id`"
+      # NOTE: MySQL `FORCE INDEX FOR JOIN` hint dropped -- Postgres has no query-hint
+      # syntax; it was an optimizer hint with no effect on results.
+      left_join_statement = "LEFT OUTER JOIN pipeline_runs ON pipeline_runs.sample_id = samples.id LEFT OUTER JOIN taxon_counts ON taxon_counts.pipeline_run_id = pipeline_runs.id"
       queries[count_type] = joins(left_join_statement).where(
         pipeline_runs: {
           deprecated: false,
