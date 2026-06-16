@@ -375,7 +375,7 @@ class ProjectsController < ApplicationController
     else
       render json: {
         message: 'Unable to set visibility for project',
-        status: :unprocessable_entity,
+        status: :unprocessable_content,
         errors: errors,
       }
     end
@@ -407,7 +407,7 @@ class ProjectsController < ApplicationController
         format.json { render :show, status: :created, location: @project, project: @project }
       else
         format.html { render :new }
-        format.json { render json: @project.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @project.errors.full_messages, status: :unprocessable_content }
       end
     end
   rescue ActiveRecord::RecordNotUnique
@@ -415,7 +415,7 @@ class ProjectsController < ApplicationController
       format.html {}
       format.json do
         render json: "Duplicate name",
-               status: :unprocessable_entity
+               status: :unprocessable_content
       end
     end
   end
@@ -465,7 +465,7 @@ class ProjectsController < ApplicationController
         format.json { head :no_content }
       else
         format.html { render :edit }
-        format.json { render json: { message: 'Cannot delete this project' }, status: :unprocessable_entity }
+        format.json { render json: { message: 'Cannot delete this project' }, status: :unprocessable_content }
       end
     end
   end

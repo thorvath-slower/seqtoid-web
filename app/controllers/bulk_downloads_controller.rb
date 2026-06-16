@@ -69,7 +69,7 @@ class BulkDownloadsController < ApplicationController
         exception: e,
         params: create_params
       )
-      render json: { error: e }, status: :unprocessable_entity
+      render json: { error: e }, status: :unprocessable_content
       return
     end
 
@@ -111,7 +111,7 @@ class BulkDownloadsController < ApplicationController
         error_message: bulk_download.errors.full_messages,
         params: params
       )
-      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_entity
+      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_content
     end
   end
 
@@ -121,7 +121,7 @@ class BulkDownloadsController < ApplicationController
     begin
       workflow_run_ids = get_workflow_run_ids_of_viewable_objects(bulk_download_params)
     rescue StandardError
-      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_entity
+      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_content
       return
     end
 
@@ -139,7 +139,7 @@ class BulkDownloadsController < ApplicationController
     sample_ids, = validate_sample_metadata_params(sample_metadata_params, current_user)
 
     unless sample_ids.is_a?(Array)
-      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_entity
+      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_content
       return
     end
     metadata_arr = BulkDownloadsHelper.generate_cg_sample_metadata(sample_ids, current_user)
@@ -152,7 +152,7 @@ class BulkDownloadsController < ApplicationController
       params: sample_metadata_params
     )
 
-    render json: { error: e.message }, status: :unprocessable_entity
+    render json: { error: e.message }, status: :unprocessable_content
   end
 
   # POST /bulk_downloads/sample_metadata.json
@@ -160,7 +160,7 @@ class BulkDownloadsController < ApplicationController
     sample_ids, samples = validate_sample_metadata_params(sample_metadata_params, current_user)
 
     unless sample_ids.is_a?(Array)
-      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_entity
+      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_content
       return
     end
     metadata_arr = BulkDownloadsHelper.generate_metadata_arr(samples)
@@ -173,7 +173,7 @@ class BulkDownloadsController < ApplicationController
       params: sample_metadata_params
     )
 
-    render json: { error: e.message }, status: :unprocessable_entity
+    render json: { error: e.message }, status: :unprocessable_content
   end
 
   # GET /bulk_downloads
