@@ -19,7 +19,7 @@ class Visualization < ApplicationRecord
   ] }
   validates :data, presence: true
 
-  serialize :data, JSON
+  serialize :data, coder: JSON
 
   delegate :count, to: :samples, prefix: true
 
