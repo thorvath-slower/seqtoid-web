@@ -637,12 +637,12 @@ class SamplesController < ApplicationController
     @project_id = params[:project_id]
     @project = Project.find(@project_id)
     unless current_power.updatable_project?(@project)
-      render json: { status: "Sorry, your email doesn’t have permissions to upload to this project." }, status: :unprocessable_entity
+      render json: { status: "Sorry, your email doesn’t have permissions to upload to this project." }, status: :unprocessable_content
       return
     end
 
     unless current_user.can_upload(params[:bulk_path])
-      render json: { status: "Sorry, it looks like your email doesn’t have permissions to this s3 bucket." }, status: :unprocessable_entity
+      render json: { status: "Sorry, it looks like your email doesn’t have permissions to this s3 bucket." }, status: :unprocessable_content
       return
     end
 
@@ -654,7 +654,7 @@ class SamplesController < ApplicationController
         if @samples.present?
           render json: { samples: @samples }
         else
-          render json: { status: "Sorry, we couldn’t find any valid samples in this s3 bucket. There may be an issue with permissions or the file format. Click the \"More Info\" link above for more detailed instructions." }, status: :unprocessable_entity
+          render json: { status: "Sorry, we couldn’t find any valid samples in this s3 bucket. There may be an issue with permissions or the file format. Click the \"More Info\" link above for more detailed instructions." }, status: :unprocessable_content
         end
       end
     end
@@ -1409,7 +1409,7 @@ class SamplesController < ApplicationController
         format.json { render :show, status: :ok, location: @sample }
       else
         format.html { render :edit }
-        format.json { render json: @sample.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @sample.errors.full_messages, status: :unprocessable_content }
       end
     end
   end
@@ -1433,7 +1433,7 @@ class SamplesController < ApplicationController
         format.json { head :no_content }
       else
         format.html { redirect_to pipeline_runs_sample_path(@sample), notice: 'No pipeline run in progress.' }
-        format.json { render json: @sample.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @sample.errors.full_messages, status: :unprocessable_content }
       end
     end
   end
