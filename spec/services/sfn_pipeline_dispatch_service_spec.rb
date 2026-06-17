@@ -67,6 +67,9 @@ RSpec.describe SfnPipelineDispatchService, type: :service do
     before do
       allow(ENV).to receive(:[]).and_call_original
       allow(ENV).to receive(:[]).with('SAMPLES_BUCKET_NAME').and_return(FAKE_SAMPLES_BUCKET)
+      # SAMPLES_BUCKET_NAME is a constant assigned at boot from ENV (config/initializers/s3.rb),
+      # so stubbing ENV does not change it. Stub the constant directly. (CZID-120)
+      stub_const("SAMPLES_BUCKET_NAME", FAKE_SAMPLES_BUCKET)
       allow(ENV).to receive(:[]).with('AWS_REGION').and_return(FAKE_REGION)
 
       create(:app_config, key: AppConfig::SFN_MNGS_ARN, value: FAKE_SFN_ARN)
@@ -115,7 +118,7 @@ RSpec.describe SfnPipelineDispatchService, type: :service do
         expect(subject).to include_json(pipeline_version: FAKE_WDL_VERSION.split('.').slice(0, 2).join('.'))
       end
 
-      it "returns sfn input containing fastq input files", skip: "CZID-120: SAMPLES_BUCKET_NAME constant vs ENV-stub (pre-existing, not Postgres)" do
+      it "returns sfn input containing fastq input files" do
         expect(subject).to include_json(
           sfn_input_json: {
             Input: {

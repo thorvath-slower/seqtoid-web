@@ -110,9 +110,13 @@ describe BulkDownload, type: :model do
       stub_const('ENV', ENV.to_hash.merge("SERVER_DOMAIN" => "https://czid.org",
                                           "SAMPLES_BUCKET_NAME" => "czi-infectious-disease-development-samples",
                                           "SAMPLES_BUCKET_NAME_V1" => "czi-infectious-disease-development-samples"))
+      # The sample fastq S3 paths (--src-urls) come from the SAMPLES_BUCKET_NAME constant
+      # (assigned at boot in config/initializers/s3.rb), which stubbing ENV does not change.
+      # Stub the constant directly so it matches the V1 bucket used for the dest-url. (CZID-120)
+      stub_const("SAMPLES_BUCKET_NAME", "czi-infectious-disease-development-samples")
     end
 
-    it "returns the correct task command for original_input_file download type", skip: "CZID-120: SAMPLES_BUCKET_NAME/test bucket config (pre-existing, not Postgres)" do
+    it "returns the correct task command for original_input_file download type" do
       @bulk_download = create(:bulk_download, user: @joe, download_type: BulkDownloadTypesHelper::ORIGINAL_INPUT_FILE_BULK_DOWNLOAD_TYPE, pipeline_run_ids: [
                                 @sample_one.first_pipeline_run.id,
                                 @sample_two.first_pipeline_run.id,
@@ -146,7 +150,7 @@ describe BulkDownload, type: :model do
       expect(@bulk_download.bulk_download_ecs_task_command).to eq(task_command)
     end
 
-    it "returns the correct task command for original_input_file download type for samples with additional (non-fastq) input files", skip: "CZID-120: SAMPLES_BUCKET_NAME/test bucket config (pre-existing, not Postgres)" do
+    it "returns the correct task command for original_input_file download type for samples with additional (non-fastq) input files" do
       reference_sequence_file1 = create(:local_web_reference_sequence_input_file, sample: @sample_one)
       primer_bed_file1 = create(:local_web_primer_bed_input_file, sample: @sample_one)
       @sample_one.input_files += [reference_sequence_file1, primer_bed_file1]
@@ -701,7 +705,7 @@ describe BulkDownload, type: :model do
       expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
     end
 
-    it "outputs correct command in development", skip: "CZID-120: test bucket/config constants (pre-existing, not Postgres)" do
+    it "outputs correct command in development", skip: "CZID-186: aegea staging-for-dev cluster/bucket override unimplemented (not a SAMPLES_BUCKET_NAME issue)" do
       allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
       stub_const('ENV', ENV.to_hash.merge("SAMPLES_BUCKET_NAME" => "czid-samples-development",
                                           "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development"))

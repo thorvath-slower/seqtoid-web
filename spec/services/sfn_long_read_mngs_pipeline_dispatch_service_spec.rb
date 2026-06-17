@@ -56,6 +56,9 @@ RSpec.describe SfnLongReadMngsPipelineDispatchService, type: :service do
       before do
         allow(ENV).to receive(:[]).and_call_original
         allow(ENV).to receive(:[]).with('SAMPLES_BUCKET_NAME').and_return(fake_samples_bucket)
+        # SAMPLES_BUCKET_NAME is a constant assigned at boot from ENV (config/initializers/s3.rb),
+        # so stubbing ENV does not change it. Stub the constant directly. (CZID-120)
+        stub_const("SAMPLES_BUCKET_NAME", fake_samples_bucket)
 
         create(:app_config, key: AppConfig::SFN_SINGLE_WDL_ARN, value: fake_sfn_arn)
         create(:alignment_config, name: fake_alignment_config)
@@ -92,7 +95,7 @@ RSpec.describe SfnLongReadMngsPipelineDispatchService, type: :service do
           )
         end
 
-        it "returns sfn input containing fastq input files", skip: "CZID-120: SAMPLES_BUCKET_NAME constant vs ENV-stub (pre-existing, not Postgres)" do
+        it "returns sfn input containing fastq input files" do
           expect(subject).to include_json(
             sfn_input_json: {
               Input: {
