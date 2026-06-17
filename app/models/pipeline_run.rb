@@ -677,7 +677,10 @@ class PipelineRun < ApplicationRecord
   def generate_contig_mapping_table_file
     # generate a csv file for contig mapping based on lineage_json and top m8
     local_file_name = "#{LOCAL_JSON_PATH}/#{CONTIG_MAPPING_NAME}#{id}"
-    Open3.capture3("mkdir -p #{File.dirname(local_file_name)}")
+    # Pure-Ruby dir creation (no shell). Replaces a single-string Open3.capture3
+    # ("mkdir -p ...") that spawned /bin/sh and interpreted the path (a
+    # command-injection-prone pattern). (CZID-191)
+    FileUtils.mkdir_p(File.dirname(local_file_name))
     CSVSafe.open(local_file_name, 'w') do |writer|
       write_contig_mapping_table_csv(writer)
     end
