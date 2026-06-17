@@ -10,6 +10,11 @@
 # Ignore bundler config.
 /.bundle
 
+# Vendored gems — the local Docker CI harness (docker-compose.ci.yml) mounts a
+# bundle-cache volume at /app/vendor/bundle, surfacing this dir in the host tree.
+# Keep it out of commits (CZID-109).
+/vendor/bundle
+
 # Ignore yarn.lock because we manage packages using npm
 /yarn.lock
 /node_modules
