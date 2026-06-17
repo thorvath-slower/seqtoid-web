@@ -155,6 +155,7 @@ class Project < ApplicationRecord
 
   # order_by stores a sortable column's dataKey (refer to: ProjectsView.jsx)
   def self.sort_projects(projects, order_by, order_dir)
+    order_dir = safe_order_dir(order_dir)
     sort_key = DATA_KEY_TO_SORT_KEY[order_by]
 
     if PROJECTS_SORT_KEYS.include?(sort_key)

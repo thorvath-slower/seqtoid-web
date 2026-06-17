@@ -1148,6 +1148,7 @@ class Sample < ApplicationRecord
 
   # order_by stores a sortable column's dataKey (refer to: columnConfigurations.ts)
   def self.sort_samples(samples, order_by, order_dir)
+    order_dir = safe_order_dir(order_dir)
     sort_key = DATA_KEY_TO_SORT_KEY[order_by.to_s]
     metadata_sort_key = sanitize_metadata_field_name(order_by)
 

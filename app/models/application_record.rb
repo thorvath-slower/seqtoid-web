@@ -9,6 +9,16 @@ class ApplicationRecord < ActiveRecord::Base
     order_dir.to_s.casecmp("asc").zero? ? "NULLS FIRST" : "NULLS LAST"
   end
 
+  # order_dir is interpolated directly into raw ORDER BY strings in the various
+  # sort_* model methods, so clamp it to an allow-list before use — the same
+  # defense the sort_key already gets. Anything that isn't asc/desc falls back
+  # to "asc". Defense-in-depth against SQL injection / unexpected ordering.
+  # (CZID-51 / APP-4)
+  ORDER_DIRECTIONS = %w[asc desc].freeze
+  def self.safe_order_dir(order_dir)
+    ORDER_DIRECTIONS.include?(order_dir.to_s.downcase) ? order_dir.to_s.downcase : "asc"
+  end
+
   # We have auto-analytics tracking set up for specific DB models we flag.
   # For models that are flagged, we fire off tracking events for any create,
   # change, or delete of that model. Originally, we did this for all models,

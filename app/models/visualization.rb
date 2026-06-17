@@ -90,6 +90,7 @@ class Visualization < ApplicationRecord
 
   # order_by stores a sortable column's dataKey (refer to: VisualizationsView.jsx)
   def self.sort_visualizations(visualizations, order_by, order_dir)
+    order_dir = safe_order_dir(order_dir)
     sort_key = DATA_KEY_TO_SORT_KEY[order_by.to_s]
 
     if VISUALIZATIONS_SORT_KEYS.include?(sort_key)
