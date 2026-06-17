@@ -412,6 +412,7 @@ class WorkflowRun < ApplicationRecord
 
   # order_by stores a sortable column's dataKey (refer to: columnConfigurations.ts)
   def self.sort_workflow_runs(workflow_runs, order_by, order_dir)
+    order_dir = safe_order_dir(order_dir)
     sort_key = order_by.to_s
     if DATA_KEY_TO_SORT_KEY.key?(sort_key)
       sort_key = DATA_KEY_TO_SORT_KEY[sort_key]
