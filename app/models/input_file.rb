@@ -65,8 +65,17 @@ class InputFile < ApplicationRecord
         ".#{matched_single[2]}",
       ]
     end
-    # TODO: Should never reach here
-    Rails.logger.warn("InputFile.split_name.unknown_format=#{file_name}")
+    # Not a paired/single bulk fastq (e.g. a reference fasta or a primer .bed).
+    # Derive the extension from the argument — the instance #file_extension does
+    # the same against `name`; referencing it here (a class method) raised a
+    # NameError. (CZID-118)
+    file_extension =
+      if (match = FILE_REGEX.match(file_name))
+        ".#{match[1]}"
+      else
+        Rails.logger.warn("InputFile.split_name.unknown_format=#{file_name}")
+        File.extname(file_name)
+      end
     [
       file_name.delete_suffix(file_extension),
       file_extension,
