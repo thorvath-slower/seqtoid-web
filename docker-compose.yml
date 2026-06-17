@@ -99,13 +99,13 @@ services:
     volumes:
       - ./docker_data/db/data:/var/lib/mysql
   redis:
-    image: redis:5.0.3
+    image: redis:7.4
     ports:
       - 6379:6379
     volumes:
       - ./redis-data:/var/lib/redis/data
   web-proxy:
-    image: nginx
+    image: nginx:1.27
     volumes:
       - ./docker/etc/nginx.conf:/etc/nginx/nginx.conf
     ports:
