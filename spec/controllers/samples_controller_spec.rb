@@ -735,7 +735,7 @@ RSpec.describe SamplesController, type: :controller do
         sign_in @joe
       end
 
-      it "can get credentials for a sample", skip: "CZID-119: AWS assume_role test stub (pre-existing, not Postgres)" do
+      it "can get credentials for a sample" do
         allow(ENV).to receive(:[]).and_call_original
         allow(ENV).to receive(:[]).with('CLI_UPLOAD_ROLE_ARN').and_return(fake_role_arn)
         allow(ENV).to receive(:[]).with('AWS_REGION').and_return(fake_region)
@@ -745,6 +745,11 @@ RSpec.describe SamplesController, type: :controller do
           :assume_role,
           credentials: {
             access_key_id: fake_access_key_id,
+            # aws-sdk-core 3.248 validates the stubbed response shape: assume_role
+            # credentials require these fields too, else ArgumentError. (CZID-119)
+            secret_access_key: "fake-secret-access-key",
+            session_token: "fake-session-token",
+            expiration: Time.zone.now + 3600,
           }
         )
         mock_client.stub_responses(:assume_role, creds)

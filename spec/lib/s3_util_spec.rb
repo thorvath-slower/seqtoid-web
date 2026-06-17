@@ -14,16 +14,6 @@ RSpec.describe S3Util do
       },
     ].each
   end
-  let(:unsuccessful_stream_response) do
-    [
-      {
-        message_type: 'error',
-        error_code: 'InternalError',
-        error_message: 'We encountered an internal error. Please try again.',
-      },
-    ].each
-  end
-
   before do
     @mock_aws_clients = {
       s3: Aws::S3::Client.new(stub_responses: true),
@@ -44,8 +34,11 @@ RSpec.describe S3Util do
     end
 
     # On error (like a gene name not found in the json file), return a blank string.
-    it "handles errors from S3", skip: "CZID-119: AWS SDK test stub (pre-existing, not Postgres)" do
-      @mock_aws_clients[:s3].stub_responses(:select_object_content, { payload: unsuccessful_stream_response })
+    it "handles errors from S3" do
+      # S3 Select surfaces a server-side failure as an Aws::S3::Errors::ServiceError,
+      # which s3_select_json rescues and turns into "". (CZID-119: the old in-stream
+      # error-event stub format is no longer valid under aws-sdk-core 3.248.)
+      @mock_aws_clients[:s3].stub_responses(:select_object_content, 'InternalError')
       expect { S3Util.s3_select_json(fake_database_bucket, ontology_file_key, test_expression) }.not_to raise_error
       entry = S3Util.s3_select_json(fake_database_bucket, ontology_file_key, test_expression)
       expect(entry).to be_instance_of(String)
