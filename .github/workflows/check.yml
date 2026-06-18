@@ -206,7 +206,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
     - name: Flake8
-      uses: julianwachholz/flake8-action@v1
+      # Modernized fork of julianwachholz/flake8-action (upstream is node16/EOL).
+      # SSOT: pinned by immutable commit SHA (tag v2-node24). See CZID-204 / CZID-89.
+      uses: thorvath-slower/flake8-action@5339669b2632410de09f39205e4fc81f67ecf2f4 # v2-node24
+      with:
+        checkName: "Python Lint"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Test
