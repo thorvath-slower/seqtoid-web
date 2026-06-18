@@ -16,9 +16,15 @@ RUN apt-get update && \
 RUN curl -L https://github.com/samtools/samtools/releases/download/1.17/samtools-1.17.tar.bz2 | \
   tar xj && cd samtools-1.17/ && make && make install
 
-# Install node + npm (bug-#003: Node 16 EOL -> 20 LTS)
-RUN curl -sL https://deb.nodesource.com/setup_20.x | bash -
-RUN apt-get install -y nodejs
+# Install node pinned to the exact .node-version (single source of truth), instead of
+# the floating NodeSource setup_20.x line which installs whatever the latest 20.x is at
+# build time. Uses the official nodejs.org binaries. Image builds linux/amd64 -> x64. (CZID-197)
+COPY .node-version /tmp/.node-version
+RUN NODE_VERSION="$(cat /tmp/.node-version)" \
+  && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
+  && tar -xzf "node-v${NODE_VERSION}-linux-x64.tar.gz" -C /usr/local --strip-components=1 --no-same-owner \
+  && rm "node-v${NODE_VERSION}-linux-x64.tar.gz" \
+  && node --version && npm --version
 
 # Node 20 ships npm 10; pin to a known-good npm 10 line for reproducibility.
 RUN npm i -g npm@10.9.0
