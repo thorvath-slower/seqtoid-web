@@ -7,6 +7,7 @@ FROM ruby:3.3.6@sha256:347edd0c70ee08d87de9f01b99de2f14a64cedb5d1bfb38457dfe8cd0
 RUN apt-get update && \
   apt-get install -y \
   build-essential \
+  libpq-dev \
   python3-dev \
   python3-pip \
   lsb-release \

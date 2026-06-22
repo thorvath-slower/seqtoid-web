@@ -15,8 +15,8 @@ deployed: &deployed
   sslmode: <%= ENV['DB_SSLMODE'] || 'require' %>
 
 development:
-  <<: *deployed
-  database: idseq_dev
+  <<: *default
+  database: idseq_development
 
 prod:
   <<: *deployed
