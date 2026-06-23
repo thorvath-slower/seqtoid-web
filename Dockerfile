@@ -49,8 +49,11 @@ RUN mkdir -p /app
 WORKDIR /app
 
 # Copy package.json and install packages, allowing the
-# dependencies to be cached
-COPY package.json package-lock.json ./
+# dependencies to be cached. .npmrc carries legacy-peer-deps=true (bug-#003):
+# npm 10 enforces peer deps strictly and the legacy frontend tree (e.g.
+# @sentry/react@5 peers react 15/16/17 vs the app's react 18) trips `npm ci`
+# without it. It must be present BEFORE `npm ci`, not via the later `COPY . ./`.
+COPY .npmrc package.json package-lock.json ./
 
 # Copy aws-sdk-js-v3 packages that are installed from file
 COPY vendor/aws-sdk-js-v3/* ./vendor/aws-sdk-js-v3/
@@ -79,8 +82,10 @@ RUN mkdir -p app/assets/dist && npm run build-img && ls -l app/assets/dist/
 # Copy the Gemfile as well as the Gemfile.lock and install
 # the RubyGems. This is a separate step so the dependencies
 # will be cached unless changes to one of those two files
-# are made.
-COPY Gemfile Gemfile.lock ./
+# are made. .ruby-version is required here too: the Gemfile pins the runtime
+# via `ruby file: '.ruby-version'`, so bundler reads it during install (before
+# the later `COPY . ./`).
+COPY Gemfile Gemfile.lock .ruby-version ./
 RUN gem install bundler -v '2.5.22'
 
 # allow nokogiri to install on arm64 / M1 Macs
