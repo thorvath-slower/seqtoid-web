@@ -52,7 +52,7 @@ class Visualization < ApplicationRecord
       .order(Arel.sql("#{project_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
       .collect(&:id)
 
-    where(id: sorted_visualization_ids).order(Arel.sql("array_position(ARRAY[#{sorted_visualization_ids.join ','}]::bigint[], visualizations.id)"))
+    where(id: sorted_visualization_ids).order(Arel.sql("FIELD(visualizations.id, #{sorted_visualization_ids.join ','})"))
   }
 
   # In the common case, a visualization will come from a single project.

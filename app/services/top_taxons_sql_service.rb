@@ -263,21 +263,29 @@ class TopTaxonsSqlService
 
     count_type_order_clause = count_type.present? ? "count_type = '#{count_type}' DESC," : ""
 
-    "SELECT *
+    # MySQL 5.7 has no window functions, so emulate ROW_NUMBER() OVER (PARTITION
+    # BY pipeline_run_id ORDER BY ...) with session variables over a pre-ordered
+    # derived table. Also valid on MySQL 8. The inner table is explicitly ordered
+    # so the @rn counter increments in the intended per-partition order.
+    "SELECT z.*
       FROM (
         SELECT
-          ROW_NUMBER() OVER (
-            PARTITION BY pipeline_run_id
-            ORDER BY
-              #{count_type_order_clause}
-              #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
-          ) AS rank,
-          x.*
+          @rn := IF(@prev = ordered.pipeline_run_id, @rn + 1, 1) AS rnk,
+          @prev := ordered.pipeline_run_id AS _prev_pr,
+          ordered.*
         FROM (
-          #{query}
-        ) x
-      ) y
-      WHERE rank <= #{num_results}
+          SELECT x.*
+          FROM (
+            #{query}
+          ) x
+          ORDER BY
+            x.pipeline_run_id,
+            #{count_type_order_clause}
+            #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
+        ) ordered
+        CROSS JOIN (SELECT @rn := 0, @prev := NULL) vars
+      ) z
+      WHERE z.rnk <= #{num_results}
     "
   end
 

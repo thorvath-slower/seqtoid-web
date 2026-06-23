@@ -941,7 +941,7 @@ class PipelineRun < ApplicationRecord
         import_data,
         # bug-#011: Hash form with conflict_target works on both MySQL (ON DUPLICATE
         # KEY UPDATE) and PostgreSQL (ON CONFLICT); Postgres requires the target.
-        on_duplicate_key_update: { conflict_target: [:pipeline_run_id, :taxid, :hit_type], columns: [:first_byte, :last_byte, :updated_at] },
+        on_duplicate_key_update: [:first_byte, :last_byte, :updated_at],
         validate: false, # Skip validations for performance, data is already validated from pipeline
         batch_size: 1000 # Let activerecord-import handle internal batching for large datasets
       )

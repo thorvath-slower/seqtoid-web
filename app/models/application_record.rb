@@ -5,8 +5,10 @@ class ApplicationRecord < ActiveRecord::Base
   # PostgreSQL defaults to the opposite. Append the result of this to a nullable
   # sort column's ORDER BY direction to preserve MySQL's ordering after the
   # Postgres migration (bug-#011 parity). Tiebreaker columns (id) are never NULL.
-  def self.mysql_nulls(order_dir)
-    order_dir.to_s.casecmp("asc").zero? ? "NULLS FIRST" : "NULLS LAST"
+  def self.mysql_nulls(_order_dir)
+    # MySQL orders NULLs natively (NULLs first on ASC, last on DESC) and does not
+    # support the Postgres "NULLS FIRST/LAST" syntax, so emit nothing.
+    ""
   end
 
   # order_dir is interpolated directly into raw ORDER BY strings in the various

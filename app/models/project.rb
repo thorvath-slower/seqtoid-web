@@ -47,7 +47,7 @@ class Project < ApplicationRecord
                          .order(Arel.sql("#{sample_count_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
                          .collect(&:id)
 
-    where(id: sorted_project_ids).order(Arel.sql("array_position(ARRAY[#{sorted_project_ids.join ','}]::bigint[], projects.id)"))
+    where(id: sorted_project_ids).order(Arel.sql("FIELD(projects.id, #{sorted_project_ids.join ','})"))
   }
 
   # For these sort scopes, GROUP_CONCAT assembles a sort key, but the select filters out other fields
@@ -61,7 +61,7 @@ class Project < ApplicationRecord
                          .order(Arel.sql("#{host_genome_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
                          .collect(&:id)
 
-    where(id: sorted_project_ids).order(Arel.sql("array_position(ARRAY[#{sorted_project_ids.join ','}]::bigint[], projects.id)"))
+    where(id: sorted_project_ids).order(Arel.sql("FIELD(projects.id, #{sorted_project_ids.join ','})"))
   }
 
   scope :sort_by_sample_types, lambda { |order_dir|
@@ -74,7 +74,7 @@ class Project < ApplicationRecord
                          .order(Arel.sql("#{sample_type_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
                          .collect(&:id)
 
-    where(id: sorted_project_ids).order(Arel.sql("array_position(ARRAY[#{sorted_project_ids.join ','}]::bigint[], projects.id)"))
+    where(id: sorted_project_ids).order(Arel.sql("FIELD(projects.id, #{sorted_project_ids.join ','})"))
   }
 
   # Disable samples function. have to go through power
