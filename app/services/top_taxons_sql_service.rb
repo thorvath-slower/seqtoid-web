@@ -113,9 +113,9 @@ class TopTaxonsSqlService
         mean,
         stdev_mass_normalized,
         mean_mass_normalized,
-        percent_identity    AS  percentidentity,
-        alignment_length    AS  alignmentlength,
-        COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}) AS logevalue,
+        ROUND(percent_identity, 4)    AS  percentidentity,
+        ROUND(alignment_length, 4)    AS  alignmentlength,
+        ROUND(COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}), 4) AS logevalue,
         -- First pass of ranking in SQL. Second pass in Ruby.
         #{count_per_million_sql} AS rpm,
         #{zscore_sql} AS zscore"
@@ -134,9 +134,9 @@ class TopTaxonsSqlService
         is_phage,
         base_count               AS  b,
         count               AS  r,
-        percent_identity    AS  percentidentity,
-        alignment_length    AS  alignmentlength,
-        COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}) AS logevalue,
+        ROUND(percent_identity, 4)    AS  percentidentity,
+        ROUND(alignment_length, 4)    AS  alignmentlength,
+        ROUND(COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}), 4) AS logevalue,
         -- First pass of ranking in SQL. Second pass in Ruby.
         #{count_per_million_sql} AS bpm"
     end
@@ -272,13 +272,13 @@ class TopTaxonsSqlService
             ORDER BY
               #{count_type_order_clause}
               #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
-          ) AS rnk,
+          ) AS `rank`,
           x.*
         FROM (
           #{query}
         ) x
       ) y
-      WHERE rnk <= #{num_results}
+      WHERE `rank` <= #{num_results}
     "
   end
 
