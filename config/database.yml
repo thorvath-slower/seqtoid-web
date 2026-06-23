@@ -5,8 +5,8 @@ default: &default
   host: <%= ENV['DB_HOST'] || '127.0.0.1' %>
   port: <%= ENV['DB_PORT'] || 3306 %>
   database: idseq_<%= Rails.env %>
-  encoding: utf8
-  collation: utf8_unicode_ci
+  encoding: utf8mb4
+  collation: utf8mb4_unicode_ci
   pool: <%= ENV['DB_CONNECTION_POOL'] || 5 %>
 
 deployed: &deployed
