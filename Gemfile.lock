@@ -2018,6 +2018,8 @@ GEM
     multipart-post (2.4.1)
     mustermann (3.1.1)
     mutex_m (0.3.0)
+    mysql2 (0.5.7)
+      bigdecimal
     nenv (0.3.0)
     net-imap (0.6.4.1)
       date
@@ -2070,7 +2072,6 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
-    pg (1.6.3)
     pluck_to_hash (1.0.2)
       activerecord (>= 4.0.2)
       activesupport (>= 4.0.2)
@@ -2360,6 +2361,7 @@ DEPENDENCIES
   lograge
   memory_profiler
   multipart-post
+  mysql2 (~> 0.5)
   net-imap
   net-pop
   net-smtp
@@ -2369,7 +2371,6 @@ DEPENDENCIES
   omniauth-rails_csrf_protection (~> 1.0)
   ougai
   parallel (= 1.14.0)
-  pg (~> 1.5)
   pluck_to_hash
   puma (~> 6.4)
   rack-cors

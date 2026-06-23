@@ -55,7 +55,7 @@ class Project < ApplicationRecord
   # IDs, and then a second query to get the full object in sorted order
   scope :sort_by_hosts, lambda { |order_dir|
     host_genome_list_alias = "host_genome_list"
-    sorted_project_ids = select("projects.id, string_agg(DISTINCT host_genomes.name, ',' ORDER BY host_genomes.name ASC) AS #{host_genome_list_alias}")
+    sorted_project_ids = select("projects.id, GROUP_CONCAT(DISTINCT host_genomes.name ORDER BY host_genomes.name ASC) AS #{host_genome_list_alias}")
                          .left_joins(samples: [:host_genome])
                          .group(:id)
                          .order(Arel.sql("#{host_genome_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, projects.#{TIEBREAKER_SORT_KEY} #{order_dir}"))
@@ -67,7 +67,7 @@ class Project < ApplicationRecord
   scope :sort_by_sample_types, lambda { |order_dir|
     sample_type_list_alias = "sample_types_list"
     metadata_sample_type_key = "sample_type"
-    sorted_project_ids = select("projects.id, string_agg(DISTINCT metadata.string_validated_value, ',' ORDER BY metadata.string_validated_value ASC) AS #{sample_type_list_alias}")
+    sorted_project_ids = select("projects.id, GROUP_CONCAT(DISTINCT metadata.string_validated_value ORDER BY metadata.string_validated_value ASC) AS #{sample_type_list_alias}")
                          .left_joins(:samples)
                          .joins("LEFT OUTER JOIN metadata ON (metadata.sample_id=samples.id) AND metadata.key='#{metadata_sample_type_key}'")
                          .group(:id)

@@ -46,7 +46,7 @@ class Visualization < ApplicationRecord
     project_list_alias = "project_list"
 
     sorted_visualization_ids =
-      select("visualizations.id, string_agg(DISTINCT projects.name, ',' ORDER BY projects.name ASC) AS #{project_list_alias}")
+      select("visualizations.id, GROUP_CONCAT(DISTINCT projects.name ORDER BY projects.name ASC) AS #{project_list_alias}")
       .left_joins(samples: [:project])
       .group(:id)
       .order(Arel.sql("#{project_list_alias} #{order_dir} #{mysql_nulls(order_dir)}, visualizations.#{TIEBREAKER_SORT_KEY} #{order_dir}"))

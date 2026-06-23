@@ -1,18 +1,20 @@
 # Local CI harness (CZID-109): runs the same checks as GitHub Actions, locally.
 #   make ci-local   (or)   ./bin/ci-local
 # Get this green BEFORE pushing — CI is the final gate, not the dev loop.
+# Version 2 (MySQL): db reverted to MySQL 5.7 (jsims-faithful).
 services:
-  postgres:
-    image: postgres:16
+  db:
+    image: mysql:5.7
+    platform: linux/amd64
     environment:
-      POSTGRES_USER: test_user
-      POSTGRES_PASSWORD: test_password
-      POSTGRES_DB: idseq_test
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      MYSQL_DATABASE: idseq_test
+    command: ['--character-set-server=utf8', '--collation-server=utf8_unicode_ci', '--group_concat_max_len=1073741824', '--show_compatibility_56=ON']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test_user -d idseq_test"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
       interval: 5s
       timeout: 5s
-      retries: 12
+      retries: 20
 
   redis:
     image: redis
@@ -24,15 +26,16 @@ services:
     # amd64 to mirror CI faithfully. Slower under qemu, but it's the final check.
     platform: linux/amd64
     depends_on:
-      postgres:
+      db:
         condition: service_healthy
       redis:
         condition: service_started
     environment:
       AUTH_TOKEN_SECRET: 'GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ='  # dummy, test-only
-      DB_USERNAME: test_user
-      DB_PASSWORD: test_password
-      DB_HOST: postgres
+      DB_USERNAME: root
+      DB_PASSWORD: ''
+      DB_HOST: db
+      DB_PORT: '3306'
       REDIS_URL: redis://redis:6379
       RAILS_ENV: test
       AWS_REGION: us-west-2

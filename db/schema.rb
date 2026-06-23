@@ -11,8 +11,7 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
-  enable_extension "citext"
-  create_table "accession_coverage_stats", force: :cascade do |t|
+  create_table "accession_coverage_stats", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The id of the pipeline run the coverage stats were generated from"
     t.string "accession_id", null: false, comment: "The NCBI GenBank id of the accession the coverage stats were created for"
     t.text "accession_name", null: false, comment: "The NCBI GenBank name of the accession the coverage stats were created for"
@@ -20,14 +19,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.integer "num_contigs", null: false, comment: "Number of contigs for which this accession was the best match"
     t.integer "num_reads", null: false, comment: "Number of reads for which this accession was the best match"
     t.integer "score", null: false, comment: "max_contig_length + total_contig_length + num_reads, used to score top accessions"
-    t.float "coverage_breadth", limit: 24, null: false, comment: "The percentage of the accession that is covered by at least one read or contig"
-    t.float "coverage_depth", limit: 24, null: false, comment: "The average read depth of aligned contigs and reads over the length of the accession"
+    t.float "coverage_breadth", null: false, comment: "The percentage of the accession that is covered by at least one read or contig"
+    t.float "coverage_depth", null: false, comment: "The average read depth of aligned contigs and reads over the length of the accession"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["pipeline_run_id", "accession_id"], name: "index_accession_coverage_stats_on_pr_id_and_accession_id"
   end
 
-  create_table "alignment_configs", force: :cascade do |t|
+  create_table "alignment_configs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "name"
     t.string "index_dir_suffix"
     t.text "s3_nt_db_path"
@@ -48,11 +47,11 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.string "diamond_db_path", comment: "The S3 path prefix to the diamond index"
   end
 
-  create_table "amr_counts", force: :cascade do |t|
+  create_table "amr_counts", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "gene"
     t.string "allele"
-    t.float "coverage", limit: 24
-    t.float "depth", limit: 24
+    t.float "coverage"
+    t.float "depth"
     t.bigint "pipeline_run_id"
     t.string "drug_family"
     t.datetime "created_at", precision: nil, null: false
@@ -60,12 +59,12 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.string "annotation_gene"
     t.string "genbank_accession"
     t.integer "total_reads"
-    t.float "rpm", limit: 24
-    t.float "dpm", limit: 24
+    t.float "rpm"
+    t.float "dpm"
     t.index ["pipeline_run_id", "allele"], name: "index_amr_counts_on_pipeline_run_id_and_allele", unique: true
   end
 
-  create_table "annotations", force: :cascade do |t|
+  create_table "annotations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The pipeline run id associated with the annotated sample report."
     t.integer "tax_id", null: false, comment: "The id of the annotated taxon."
     t.integer "content", comment: "An enum describing the annotation content. Will be set to null if an existing annotation is cleared."
@@ -75,13 +74,13 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id", "tax_id"], name: "index_annotations_on_pipeline_run_id_and_tax_id"
   end
 
-  create_table "app_configs", force: :cascade do |t|
+  create_table "app_configs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "key"
     t.text "value"
     t.index ["key"], name: "index_app_configs_on_key", unique: true
   end
 
-  create_table "backgrounds", force: :cascade do |t|
+  create_table "backgrounds", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
@@ -93,14 +92,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["name"], name: "index_backgrounds_on_name", unique: true
   end
 
-  create_table "backgrounds_pipeline_runs", force: :cascade do |t|
+  create_table "backgrounds_pipeline_runs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "background_id"
     t.bigint "pipeline_run_id"
     t.index ["background_id", "pipeline_run_id"], name: "index_bg_pr_id", unique: true
     t.index ["pipeline_run_id"], name: "backgrounds_pipeline_runs_pipeline_run_id_fk"
   end
 
-  create_table "bulk_downloads", force: :cascade do |t|
+  create_table "bulk_downloads", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.text "params_json", comment: "JSON of the params for this bulk download"
     t.string "download_type", null: false, comment: "The type of bulk download"
     t.string "status", null: false, comment: "The current status of the download, e.g. waiting, running, error, success"
@@ -109,7 +108,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.string "access_token"
-    t.float "progress", limit: 24
+    t.float "progress"
     t.string "ecs_task_arn", comment: "The ecs task arn for this bulk download if applicable"
     t.bigint "output_file_size", comment: "The file size of the generated output file. Can be nil while the file is being generated."
     t.text "description"
@@ -117,21 +116,21 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id"], name: "index_bulk_downloads_on_user_id"
   end
 
-  create_table "bulk_downloads_pipeline_runs", id: false, force: :cascade do |t|
+  create_table "bulk_downloads_pipeline_runs", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false
     t.bigint "bulk_download_id", null: false
     t.index ["bulk_download_id"], name: "index_bulk_downloads_pipeline_runs_on_bulk_download_id"
     t.index ["pipeline_run_id"], name: "index_bulk_downloads_pipeline_runs_on_pipeline_run_id"
   end
 
-  create_table "bulk_downloads_workflow_runs", id: false, force: :cascade do |t|
+  create_table "bulk_downloads_workflow_runs", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "bulk_download_id", null: false
     t.bigint "workflow_run_id", null: false
     t.index ["bulk_download_id"], name: "index_bulk_downloads_workflow_runs_on_bulk_download_id"
     t.index ["workflow_run_id"], name: "index_bulk_downloads_workflow_runs_on_workflow_run_id"
   end
 
-  create_table "citations", force: :cascade do |t|
+  create_table "citations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "key", null: false, comment: "Key used to identify the citation (ie. niaid_2020)."
     t.text "footnote", null: false, comment: "Use MLA footnote citation style."
     t.datetime "created_at", null: false
@@ -139,14 +138,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["key"], name: "index_citations_on_key", unique: true
   end
 
-  create_table "citations_pathogen_list_versions", id: false, force: :cascade do |t|
+  create_table "citations_pathogen_list_versions", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "citation_id", null: false
     t.bigint "pathogen_list_version_id", null: false
     t.index ["citation_id"], name: "index_citation_pathogen_list_version_on_citation_id"
-    t.index ["pathogen_list_version_id"], name: "index_citation_plv_on_pathogen_list_version_id"
+    t.index ["pathogen_list_version_id"], name: "index_citation_pathogen_list_version_on_pathogen_list_version_id"
   end
 
-  create_table "contigs", force: :cascade do |t|
+  create_table "contigs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id"
     t.string "name"
     t.text "sequence", size: :long
@@ -172,10 +171,10 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id", "species_taxid_nt"], name: "index_contigs_on_pipeline_run_id_and_species_taxid_nt"
   end
 
-  create_table "data_migrations", primary_key: "version", id: :string, force: :cascade do |t|
+  create_table "data_migrations", primary_key: "version", id: :string, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
   end
 
-  create_table "deletion_logs", force: :cascade do |t|
+  create_table "deletion_logs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "object_id", null: false, comment: "The id of the object that was deleted"
     t.bigint "user_id", null: false, comment: "The user id of the user who deleted the object"
     t.string "user_email", comment: "The email of the user who deleted the object"
@@ -187,7 +186,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "updated_at", null: false
   end
 
-  create_table "ercc_counts", force: :cascade do |t|
+  create_table "ercc_counts", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id"
     t.string "name"
     t.integer "count"
@@ -196,8 +195,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id", "name"], name: "index_ercc_counts_on_pipeline_run_id_and_name", unique: true
   end
 
-  create_table "host_genomes", force: :cascade do |t|
-    t.citext "name", null: false, comment: "Friendly name of host genome. May be common name or scientific name of species. Must be unique and start with a capital letter."
+  create_table "host_genomes", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "name", null: false, comment: "Friendly name of host genome. May be common name or scientific name of species. Must be unique and start with a capital letter."
     t.string "s3_star_index_path", default: "s3://#{S3_DATABASE_BUCKET}/host_filter/ercc/2017-09-01-utc-1504224000-unixtime__2017-09-01-utc-1504224000-unixtime/STAR_genome.tar", null: false, comment: "The path to the index file to be used in the pipeline by star for host filtering."
     t.string "s3_bowtie2_index_path", default: "s3://#{S3_DATABASE_BUCKET}/host_filter/ercc/2017-09-01-utc-1504224000-unixtime__2017-09-01-utc-1504224000-unixtime/bowtie2_genome.tar", null: false, comment: "The path to the index file to be used in the pipeline by bowtie for host filtering."
     t.bigint "default_background_id"
@@ -219,14 +218,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id"], name: "index_host_genomes_on_user_id"
   end
 
-  create_table "host_genomes_metadata_fields", id: false, force: :cascade do |t|
+  create_table "host_genomes_metadata_fields", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "host_genome_id", null: false
     t.bigint "metadata_field_id", null: false
     t.index ["host_genome_id", "metadata_field_id"], name: "index_host_genomes_metadata_fields", unique: true
     t.index ["metadata_field_id", "host_genome_id"], name: "index_metadata_fields_host_genomes", unique: true
   end
 
-  create_table "input_files", force: :cascade do |t|
+  create_table "input_files", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "name"
     t.text "presigned_url"
     t.bigint "sample_id"
@@ -240,15 +239,15 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["sample_id"], name: "index_input_files_on_sample_id"
   end
 
-  create_table "insert_size_metric_sets", force: :cascade do |t|
+  create_table "insert_size_metric_sets", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false
     t.integer "median", null: false
     t.integer "mode", null: false
     t.integer "median_absolute_deviation", null: false
     t.integer "min", null: false
     t.integer "max", null: false
-    t.float "mean", limit: 24, null: false
-    t.float "standard_deviation", limit: 24, null: false
+    t.float "mean", null: false
+    t.float "standard_deviation", null: false
     t.integer "read_pairs", null: false
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
@@ -256,7 +255,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id"], name: "index_insert_size_metric_sets_on_pipeline_run_id"
   end
 
-  create_table "job_stats", force: :cascade do |t|
+  create_table "job_stats", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "task"
     t.integer "reads_after"
     t.datetime "created_at", precision: nil, null: false
@@ -267,8 +266,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["task"], name: "index_job_stats_on_task"
   end
 
-  create_table "locations", force: :cascade do |t|
-    t.citext "name", default: "", null: false, comment: "Full display name, such as a complete address"
+  create_table "locations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "name", default: "", null: false, comment: "Full display name, such as a complete address"
     t.string "geo_level", limit: 20, default: "", null: false, comment: "Level of specificity (country, state, subdivision, or city)"
     t.string "country_name", limit: 100, default: "", null: false, comment: "Country (or equivalent) of this location if available"
     t.string "country_code", limit: 5, default: "", null: false, comment: "ISO 3166 alpha-2 country codes. Can be used to resolve country_name if data sources ever change."
@@ -293,10 +292,10 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["osm_type", "osm_id"], name: "index_locations_on_osm_type_and_osm_id"
   end
 
-  create_table "metadata", force: :cascade do |t|
-    t.string "key", null: false
-    t.citext "raw_value"
-    t.citext "string_validated_value"
+  create_table "metadata", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "key", null: false, collation: "latin1_swedish_ci"
+    t.string "raw_value"
+    t.string "string_validated_value"
     t.decimal "number_validated_value", precision: 36, scale: 9
     t.bigint "sample_id"
     t.datetime "created_at", precision: nil, null: false
@@ -310,7 +309,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["string_validated_value"], name: "index_metadata_on_string_validated_value"
   end
 
-  create_table "metadata_fields", force: :cascade do |t|
+  create_table "metadata_fields", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "name", null: false
     t.string "display_name"
     t.string "description"
@@ -328,14 +327,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["group"], name: "index_metadata_fields_on_group"
   end
 
-  create_table "metadata_fields_projects", id: false, force: :cascade do |t|
+  create_table "metadata_fields_projects", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "project_id", null: false
     t.bigint "metadata_field_id", null: false
     t.index ["metadata_field_id"], name: "metadata_fields_projects_metadata_field_id_fk"
     t.index ["project_id", "metadata_field_id"], name: "index_projects_metadata_fields", unique: true
   end
 
-  create_table "nextgen_deletion_logs", force: :cascade do |t|
+  create_table "nextgen_deletion_logs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "user_id", null: false, comment: "The user id of the user who deleted the object"
     t.string "user_email", comment: "The email of the user who deleted the object"
     t.bigint "rails_object_id", comment: "The id of the object that was deleted (Rails ID)"
@@ -348,7 +347,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "updated_at", null: false
   end
 
-  create_table "output_states", force: :cascade do |t|
+  create_table "output_states", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "output"
     t.string "state"
     t.bigint "pipeline_run_id"
@@ -357,7 +356,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id", "output"], name: "index_output_states_on_pipeline_run_id_and_output", unique: true
   end
 
-  create_table "pathogen_list_versions", force: :cascade do |t|
+  create_table "pathogen_list_versions", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pathogen_list_id"
     t.string "version", null: false, comment: "Use semantic versioning numbers."
     t.datetime "created_at", null: false
@@ -365,21 +364,21 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pathogen_list_id"], name: "index_pathogen_list_versions_on_pathogen_list_id"
   end
 
-  create_table "pathogen_list_versions_pathogens", id: false, force: :cascade do |t|
+  create_table "pathogen_list_versions_pathogens", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pathogen_id", null: false
     t.bigint "pathogen_list_version_id", null: false
     t.index ["pathogen_id"], name: "index_pathogen_pathogen_list_version_on_pathogen_id"
-    t.index ["pathogen_list_version_id"], name: "index_pathogen_plv_on_pathogen_list_version_id"
+    t.index ["pathogen_list_version_id"], name: "index_pathogen_pathogen_list_version_on_pathogen_list_version_id"
   end
 
-  create_table "pathogen_lists", force: :cascade do |t|
+  create_table "pathogen_lists", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "creator_id", comment: "The user_id that created the pathogen list. Null if the list is admin-managed."
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.boolean "is_global", default: false, null: false
   end
 
-  create_table "pathogens", force: :cascade do |t|
+  create_table "pathogens", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "tax_id", null: false, comment: "The taxon id of the pathogen."
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -387,7 +386,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["citation_id"], name: "index_pathogens_on_citation_id"
   end
 
-  create_table "persisted_backgrounds", force: :cascade do |t|
+  create_table "persisted_backgrounds", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "user_id", null: false, comment: "The id of the user that has the persisted_background"
     t.bigint "project_id", null: false, comment: "The id of the project that the persisted background is persisted for"
     t.bigint "background_id", comment: "The id of the background that is being persisted. Will be set to null if the user selects a background with an incompatible sample."
@@ -396,8 +395,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id", "project_id"], name: "index_user_id_project_id", unique: true
   end
 
-  create_table "phylo_tree_ngs", force: :cascade do |t|
-    t.jsonb "inputs_json", comment: "Generic JSON field for recording execution inputs."
+  create_table "phylo_tree_ngs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.json "inputs_json", comment: "Generic JSON field for recording execution inputs."
     t.string "status", default: "CREATED", null: false, comment: "A soft enum (string) describing the execution status."
     t.string "wdl_version", comment: "Version of the WDL used in execution."
     t.string "sfn_execution_arn", comment: "Step Function execution ARN."
@@ -406,7 +405,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.boolean "deprecated", default: false, null: false, comment: "If true, don't surface the run to the user."
     t.bigint "rerun_from", comment: "Id of the phylo tree this was rerun from, if applicable"
     t.string "name", null: false, comment: "Name of the NG phylo tree"
-    t.virtual "tax_id", type: :integer, comment: "Taxon id of interest", as: "((inputs_json ->> 'tax_id'))::integer", stored: true
+    t.virtual "tax_id", type: :integer, comment: "Taxon id of interest", as: "json_unquote(json_extract(`inputs_json`,'$.tax_id'))"
     t.bigint "user_id", null: false
     t.bigint "project_id", null: false
     t.datetime "created_at", precision: nil, null: false
@@ -417,7 +416,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id"], name: "index_phylo_tree_ngs_on_user_id"
   end
 
-  create_table "phylo_tree_ngs_pipeline_runs", force: :cascade do |t|
+  create_table "phylo_tree_ngs_pipeline_runs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "phylo_tree_ng_id"
     t.bigint "pipeline_run_id"
     t.datetime "created_at", precision: nil, null: false
@@ -425,7 +424,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["phylo_tree_ng_id", "pipeline_run_id"], name: "index_ptng_pr_id", unique: true
   end
 
-  create_table "phylo_trees", force: :cascade do |t|
+  create_table "phylo_trees", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "taxid"
     t.integer "tax_level"
     t.string "tax_name"
@@ -455,14 +454,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id"], name: "index_phylo_trees_on_user_id"
   end
 
-  create_table "phylo_trees_pipeline_runs", force: :cascade do |t|
+  create_table "phylo_trees_pipeline_runs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "phylo_tree_id"
     t.bigint "pipeline_run_id"
     t.index ["phylo_tree_id", "pipeline_run_id"], name: "index_pt_pr_id", unique: true
     t.index ["pipeline_run_id"], name: "phylo_trees_pipeline_runs_pipeline_run_id_fk"
   end
 
-  create_table "pipeline_run_stages", force: :cascade do |t|
+  create_table "pipeline_run_stages", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id"
     t.integer "step_number"
     t.integer "job_type"
@@ -474,7 +473,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.string "command_status"
     t.text "job_description"
     t.string "job_log_id"
-    t.float "job_progress_pct", limit: 24
+    t.float "job_progress_pct"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.string "job_command_func"
@@ -489,7 +488,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id", "step_number"], name: "index_pipeline_run_stages_on_pipeline_run_id_and_step_number"
   end
 
-  create_table "pipeline_runs", force: :cascade do |t|
+  create_table "pipeline_runs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "sample_id"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
@@ -501,7 +500,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.integer "subsample"
     t.string "pipeline_branch"
     t.integer "total_ercc_reads"
-    t.float "fraction_subsampled", limit: 24
+    t.float "fraction_subsampled"
     t.string "pipeline_version"
     t.string "pipeline_commit"
     t.bigint "truncated"
@@ -521,14 +520,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "executed_at", precision: nil, comment: "When the pipeline run was actually dispatched for processing."
     t.integer "time_to_finalized", comment: "Seconds from executed_at to marked as finished with processing, not including results loading."
     t.integer "time_to_results_finalized", comment: "Seconds from executed_at to marked as finished with processing and results loading."
-    t.float "qc_percent", limit: 24
-    t.float "compression_ratio", limit: 24
+    t.float "qc_percent"
+    t.float "compression_ratio"
     t.boolean "deprecated", default: false, comment: "True/false if the pipeline run has been deprecated or not. Non deprecated pipeline runs are used in the normal flow of the web app."
     t.string "technology", default: "Illumina", null: false, comment: "Name of the technology used, e.g. illumina or ont."
     t.string "guppy_basecaller_setting", comment: "User-specified input used by ont pipeline runs. Null for illumina pipeline runs."
     t.bigint "total_bases"
     t.bigint "unmapped_bases"
-    t.float "fraction_subsampled_bases", limit: 24
+    t.float "fraction_subsampled_bases"
     t.bigint "truncated_bases"
     t.datetime "deleted_at", precision: nil, comment: "When the user triggered deletion of the pipeline run"
     t.bigint "mapped_reads"
@@ -548,15 +547,15 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["total_reads"], name: "index_pipeline_runs_on_total_reads"
   end
 
-  create_table "project_workflow_versions", force: :cascade do |t|
+  create_table "project_workflow_versions", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "project_id", null: false, comment: "The project to which this workflow version applies"
     t.string "workflow", null: false, comment: "The workflow to which this version applies"
     t.string "version_prefix", null: false, comment: "The version prefix that will be used to run the workflow - can be major, patch, or minor"
     t.index ["project_id", "workflow"], name: "index_project_workflow_versions_on_project_id_and_workflow", unique: true
   end
 
-  create_table "projects", force: :cascade do |t|
-    t.citext "name"
+  create_table "projects", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.integer "public_access", limit: 1, default: 0
@@ -570,14 +569,14 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["name"], name: "index_projects_on_name", unique: true
   end
 
-  create_table "projects_users", id: false, force: :cascade do |t|
+  create_table "projects_users", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "project_id", null: false
     t.bigint "user_id", null: false
     t.index ["project_id"], name: "index_projects_users_on_project_id"
     t.index ["user_id"], name: "index_projects_users_on_user_id"
   end
 
-  create_table "sample_types", force: :cascade do |t|
+  create_table "sample_types", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "name", null: false, comment: "Canonical name of the sample type. This should be immutable after creation. It is used as a key to join with MetadataField sample_type values."
     t.string "group", null: false, comment: "Mutually exclusive grouping of names. Example: \"Organs\"."
     t.boolean "insect_only", default: false, null: false, comment: "Whether a sample type should only be for insects."
@@ -587,8 +586,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["name"], name: "index_sample_types_on_name", unique: true
   end
 
-  create_table "samples", force: :cascade do |t|
-    t.citext "name"
+  create_table "samples", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.bigint "project_id"
@@ -622,20 +621,20 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id"], name: "index_samples_on_user_id"
   end
 
-  create_table "samples_visualizations", id: false, force: :cascade do |t|
+  create_table "samples_visualizations", id: false, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "visualization_id", null: false
     t.bigint "sample_id", null: false
     t.index ["sample_id"], name: "index_samples_visualizations_on_sample_id"
     t.index ["visualization_id"], name: "index_samples_visualizations_on_visualization_id"
   end
 
-  create_table "seed_migrations", id: :integer, force: :cascade do |t|
+  create_table "seed_migrations", id: :integer, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "version"
     t.integer "runtime"
     t.datetime "migrated_on", precision: nil
   end
 
-  create_table "shortened_urls", id: :integer, force: :cascade do |t|
+  create_table "shortened_urls", id: :integer, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "owner_id"
     t.string "owner_type", limit: 20
     t.text "url", null: false
@@ -651,7 +650,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["url"], name: "index_shortened_urls_on_url", length: 254
   end
 
-  create_table "snapshot_links", force: :cascade do |t|
+  create_table "snapshot_links", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "project_id"
     t.text "content", null: false, comment: "Content stored as {samples: [<sample_id>: {pipeline_run_id: <pipeline_run_id>}]}"
     t.string "share_id", limit: 20, null: false, comment: "Used for accessing the SnapshotLink URL"
@@ -662,7 +661,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["share_id"], name: "index_snapshot_links_on_share_id", unique: true
   end
 
-  create_table "taxon_byteranges", force: :cascade do |t|
+  create_table "taxon_byteranges", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "taxid"
     t.bigint "first_byte"
     t.bigint "last_byte"
@@ -674,7 +673,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["taxid"], name: "index_taxon_byteranges_on_taxid"
   end
 
-  create_table "taxon_counts", force: :cascade do |t|
+  create_table "taxon_counts", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "tax_id"
     t.integer "tax_level"
     t.integer "count"
@@ -682,9 +681,9 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "updated_at", precision: nil, null: false
     t.string "name"
     t.string "count_type"
-    t.float "percent_identity", limit: 24
-    t.float "alignment_length", limit: 24
-    t.float "e_value", limit: 24
+    t.float "percent_identity"
+    t.float "alignment_length"
+    t.float "e_value"
     t.integer "genus_taxid", default: -200, null: false
     t.integer "superkingdom_taxid", default: -700, null: false
     t.bigint "pipeline_run_id"
@@ -692,17 +691,17 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.integer "family_taxid", default: -300, null: false
     t.integer "is_phage", limit: 1, default: 0, null: false
     t.string "source_count_type", comment: "The count type which the merged_nt_nr value is derived from"
-    t.float "rpm", limit: 24, comment: "Number of reads aligning to the taxon in the NCBI NR/NT database, per million reads sequenced."
+    t.float "rpm", comment: "Number of reads aligning to the taxon in the NCBI NR/NT database, per million reads sequenced."
     t.decimal "percent_identity_decimal", precision: 9, scale: 2
     t.decimal "alignment_length_decimal", precision: 9, scale: 2
     t.decimal "rpm_decimal", precision: 9, scale: 2
     t.bigint "base_count", comment: "Number of bases aligning to the taxon in the NCBI NR/NT database"
-    t.float "bpm", limit: 24, comment: "Number of bases aligning to the taxon in the NCBI NR/NT database, per million bases sequenced"
+    t.float "bpm", comment: "Number of bases aligning to the taxon in the NCBI NR/NT database, per million bases sequenced"
     t.index ["pipeline_run_id", "tax_id", "count_type", "tax_level"], name: "index_pr_tax_hit_level_tc", unique: true
     t.index ["tax_id"], name: "index_taxon_counts_on_tax_id"
   end
 
-  create_table "taxon_descriptions", force: :cascade do |t|
+  create_table "taxon_descriptions", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "taxid", null: false
     t.bigint "wikipedia_id"
     t.string "title"
@@ -713,7 +712,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["taxid"], name: "index_taxon_descriptions_on_taxid", unique: true
   end
 
-  create_table "taxon_lineages", force: :cascade do |t|
+  create_table "taxon_lineages", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.integer "taxid", null: false
     t.integer "superkingdom_taxid", default: -700, null: false
     t.integer "phylum_taxid", default: -600, null: false
@@ -758,23 +757,23 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["taxid", "version_start"], name: "index_taxon_lineages_on_taxid_and_version_start", unique: true
   end
 
-  create_table "taxon_summaries", force: :cascade do |t|
+  create_table "taxon_summaries", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "background_id"
     t.integer "tax_id"
     t.string "count_type"
     t.integer "tax_level"
-    t.float "mean", limit: 24
-    t.float "stdev", limit: 24
+    t.float "mean"
+    t.float "stdev"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.text "rpm_list"
-    t.float "mean_mass_normalized", limit: 24
-    t.float "stdev_mass_normalized", limit: 24
+    t.float "mean_mass_normalized"
+    t.float "stdev_mass_normalized"
     t.text "rel_abundance_list_mass_normalized"
     t.index ["background_id", "tax_id", "count_type", "tax_level"], name: "index_bg_tax_ct_level", unique: true
   end
 
-  create_table "user_profiles", force: :cascade do |t|
+  create_table "user_profiles", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "first_name"
     t.string "last_name"
@@ -791,7 +790,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "updated_at", null: false
   end
 
-  create_table "user_settings", force: :cascade do |t|
+  create_table "user_settings", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "user_id"
     t.string "key", comment: "The name of the user setting, e.g. receives_bulk_download_success_emails"
     t.string "serialized_value", comment: "The serialized value of the user setting. The schema of this value (e.g. boolean, number) is determined by the hard-coded data type associated with the key."
@@ -799,9 +798,9 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["user_id"], name: "index_user_settings_on_user_id"
   end
 
-  create_table "users", force: :cascade do |t|
-    t.citext "email"
-    t.citext "name"
+  create_table "users", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "email"
+    t.string "name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.integer "sign_in_count", default: 0, null: false
@@ -823,21 +822,21 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
-  create_table "visualizations", force: :cascade do |t|
+  create_table "visualizations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "user_id"
     t.string "visualization_type"
     t.text "data"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.integer "public_access", limit: 1
-    t.citext "name"
+    t.string "name"
     t.string "status", comment: "A soft enum (string) describing the execution status. Currently only applicable to phylo trees."
     t.index ["name"], name: "index_visualizations_on_name"
     t.index ["updated_at"], name: "index_visualizations_on_updated_at"
     t.index ["user_id"], name: "index_visualizations_on_user_id"
   end
 
-  create_table "workflow_runs", force: :cascade do |t|
+  create_table "workflow_runs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "sample_id"
     t.string "status", default: "CREATED", null: false, comment: "A soft enum (string) describing the execution status."
     t.string "workflow", null: false, comment: "Name of the workflow to use, e.g. consensus-genome."
@@ -855,12 +854,12 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.text "error_message"
     t.datetime "deleted_at", precision: nil, comment: "When the user triggered deletion of the workflow run"
     t.bigint "user_id", comment: "The ID of the user who kicked off the workflow run"
-    t.jsonb "temp_cg_coverage_viz", comment: "Temporary column to store coverage viz data for consensus-genome workflow runs"
+    t.json "temp_cg_coverage_viz", comment: "Temporary column to store coverage viz data for consensus-genome workflow runs"
     t.index ["created_at"], name: "index_workflow_runs_on_created_at"
     t.index ["sample_id"], name: "index_workflow_runs_on_sample_id"
   end
 
-  create_table "workflow_versions", force: :cascade do |t|
+  create_table "workflow_versions", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "workflow", null: false, comment: "Name of the workflow (e.g. short-read-mngs)"
     t.string "version", null: false, comment: "The specific version of the workflow (e.g. 1.2.3)"
     t.boolean "deprecated", comment: "A workflow version is deprecated if it's no longer receiving patches, but is runnable"

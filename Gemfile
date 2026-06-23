@@ -49,7 +49,7 @@ gem 'silencer'
 gem 'elasticsearch', '7.10.1'
 gem 'elasticsearch-model', '7.1.1'
 # Use PostgreSQL as the database for Active Record (migrated off MySQL).
-gem 'pg', '~> 1.5'
+gem 'mysql2', '~> 0.5'
 gem 'oj'
 gem 'parallel', '1.14.0'
 # Use Puma as the app server

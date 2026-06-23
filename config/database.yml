@@ -1,18 +1,17 @@
 default: &default
-  adapter: postgresql
-  username: <%= ENV['DB_USERNAME'] || 'postgres' %>
+  adapter: mysql2
+  username: <%= ENV['DB_USERNAME'] || 'root' %>
   password: <%= ENV['DB_PASSWORD'] %>
   host: <%= ENV['DB_HOST'] || '127.0.0.1' %>
-  port: <%= ENV['DB_PORT'] || 5432 %>
+  port: <%= ENV['DB_PORT'] || 3306 %>
   database: idseq_<%= Rails.env %>
-  encoding: unicode
+  encoding: utf8
+  collation: utf8_unicode_ci
   pool: <%= ENV['DB_CONNECTION_POOL'] || 5 %>
 
 deployed: &deployed
   <<: *default
   host: <%= ENV['RDS_ADDRESS'] %>
-  # RDS / CloudNativePG require TLS in transit (Constitution Principle VII).
-  sslmode: <%= ENV['DB_SSLMODE'] || 'require' %>
 
 development:
   <<: *default
@@ -20,15 +19,10 @@ development:
 
 prod:
   <<: *deployed
-
 staging:
   <<: *deployed
-
 sandbox:
   <<: *deployed
-
-# TODO: Renamed db to local_db to try and avoid weird "Database 'db' does not exist" errors when running the rails db:create task in a remote/AWS DB
 test:
   <<: *default
-  host: <%= ENV['DB_HOST'] || "local_db" %>
   database: idseq_test

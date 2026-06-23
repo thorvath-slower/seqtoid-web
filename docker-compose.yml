@@ -88,16 +88,16 @@ services:
     depends_on:
       - opensearch
   db:
-    image: postgres:16
-    environment:
-      - POSTGRES_DB=idseq_development
-      - POSTGRES_USER=postgres
-      - POSTGRES_HOST_AUTH_METHOD=trust
-    ports:
-      - 5432:5432
+    image: mysql:5.7
     platform: linux/amd64
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+      - MYSQL_DATABASE=idseq_development
+    command: ['--character-set-server=utf8', '--collation-server=utf8_unicode_ci', '--group_concat_max_len=1073741824', '--show_compatibility_56=ON']
+    ports:
+      - 3306:3306
     volumes:
-      - ./docker_data/pg/data:/var/lib/postgresql/data
+      - ./docker_data/db/data:/var/lib/mysql
   redis:
     image: redis:7.4
     ports:
@@ -146,8 +146,8 @@ services:
       RUBY_DEBUG_SKIP_BP: true
       ALLOW_DIRECT_USER_LOGIN: true
       DB_HOST: db
-      DB_PORT: "5432"
-      DB_USERNAME: postgres
+      DB_PORT: "3306"
+      DB_USERNAME: root
       OFFLINE: "1"
     command: bash -c "rm -f tmp/pids/server.pid && rails server -b 0.0.0.0 -p 3001"
   resque:

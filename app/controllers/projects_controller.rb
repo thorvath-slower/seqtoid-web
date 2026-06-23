@@ -118,13 +118,13 @@ class ProjectsController < ApplicationController
           # (Postgres/MySQL 8+); separator '::', and DISTINCT aggregates order by the
           # aggregated expression itself (Postgres requires the ORDER BY key to be in
           # the argument list). bug-#011.
-          group_concat_host = Arel.sql("string_agg(DISTINCT host_genomes.name, '::' ORDER BY host_genomes.name) AS hosts")
-          group_concat_sample_type = Arel.sql("string_agg(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END, '::' ORDER BY CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END) AS sample_types")
-          group_concat_location = Arel.sql("string_agg(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN COALESCE(locations.name, metadata.string_validated_value) ELSE NULL END, '::') AS locations")
+          group_concat_host = Arel.sql("GROUP_CONCAT(DISTINCT host_genomes.name ORDER BY host_genomes.name SEPARATOR '::') AS hosts")
+          group_concat_sample_type = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END ORDER BY 1 SEPARATOR '::') AS sample_types")
+          group_concat_location = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN IFNULL(locations.name, metadata.string_validated_value) ELSE NULL END SEPARATOR '::') AS locations")
           # Use || (not CONCAT): Postgres CONCAT ignores NULLs and would emit a
           # partial "|email" for null-user rows, whereas MySQL CONCAT returns NULL
           # (skipped by the aggregate). || preserves that NULL-if-any-NULL semantics.
-          group_concat_users = Arel.sql("string_agg(DISTINCT (users.name || '|' || users.email), '::' ORDER BY (users.name || '|' || users.email)) AS users")
+          group_concat_users = Arel.sql("GROUP_CONCAT(DISTINCT CONCAT(users.name,'|',users.email) ORDER BY users.name SEPARATOR '::') AS users")
           editable = Arel.sql("BIT_OR(CASE WHEN users.id=#{current_user.id} OR #{current_user.admin?} THEN 1 ELSE 0 END) AS editable")
           creator = Arel.sql("creators_projects.name AS creator")
           creator_id = Arel.sql("creators_projects.id AS creator_id")
