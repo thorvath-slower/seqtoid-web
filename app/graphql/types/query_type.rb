@@ -10,6 +10,7 @@ module Types
     include Queries::SampleQuery
     include Queries::SampleListQuery
     include Queries::SampleReadsStatsListQuery
+    include Queries::ZipLinkQuery
 
     # Add root-level fields here.
     # They will be entry points for queries on your schema.
