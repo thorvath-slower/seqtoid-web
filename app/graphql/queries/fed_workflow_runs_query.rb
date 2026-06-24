@@ -1,14 +1,17 @@
 module Queries
   # Ported from the GraphQL federation server (resolver-functions/fedWorkflowRuns) as
-  # part of CZID-285 (303b). Serves the DISCOVERY-VIEW mode of `fedWorkflowRuns` natively
-  # from Rails instead of proxying GET /workflow_runs.json. Reuses the shared
-  # WorkflowRunsFetching pipeline (the same code /workflow_runs.json runs) and then
-  # applies the federation resolver's exact mapping over the JSON-serialized output.
+  # part of CZID-285. Serves `fedWorkflowRuns` natively from Rails. Two modes, matching
+  # the federation resolver:
   #
-  # NOT yet ported (separate follow-up): the CG bulk-download-modal mode
-  # (input.where.id._in), which the federation served by POSTing to
-  # /workflow_runs/valid_consensus_genome_workflow_runs — an endpoint that does not exist
-  # in this Rails app. That mode raises a clear error here rather than returning wrong data.
+  #   1. CG bulk-download-modal (input.where.id._in): validate a set of workflow run ids
+  #      down to the viewable, non-deprecated consensus-genome runs and return minimal
+  #      {id, ownerUserId, status}. The federation served this via POST
+  #      /workflow_runs/valid_consensus_genome_workflow_runs, an action removed in CZID-283
+  #      (NextGen cleanup) whose only consumer was the federation — so this resolver is now
+  #      its authoritative home, reproducing the removed action's exact contract
+  #      (WorkflowRunValidationService + by_workflow(CG).non_deprecated). CZID-309.
+  #   2. Discovery view (otherwise): reuses the shared WorkflowRunsFetching pipeline (the
+  #      same code /workflow_runs.json runs), mapped over its JSON-serialized output (303b).
   module FedWorkflowRunsQuery
     extend ActiveSupport::Concern
 
@@ -28,11 +31,7 @@ module Queries
     def resolve_fed_workflow_runs(input: nil)
       raise GraphQL::ExecutionError, "fedWorkflowRuns input is nullish" if input.nil?
 
-      if input.where&.id&._in.present?
-        raise GraphQL::ExecutionError,
-              "fedWorkflowRuns bulk consensus-genome validation (where.id._in) is not yet " \
-              "ported to Rails-native GraphQL (CZID-285 follow-up)."
-      end
+      return valid_consensus_genome_workflow_runs(input.where.id._in) if input.where&.id&._in.present?
 
       td = input.todoRemove
       result = discovery_workflow_runs(
@@ -61,6 +60,22 @@ module Queries
     end
 
     private
+
+    # CG bulk-download-modal validation. Reproduces the removed
+    # WorkflowRunsController#valid_consensus_genome_workflow_runs exactly: access-validate
+    # the ids (WorkflowRunValidationService), keep the non-deprecated consensus-genome
+    # runs, and return {id (stringified), ownerUserId (user_id), status (raw)}. Returns []
+    # on an access-validation error, matching the federation's empty-on-error behavior.
+    def valid_consensus_genome_workflow_runs(workflow_run_ids)
+      validated = WorkflowRunValidationService.call(query_ids: workflow_run_ids, current_user: current_user)
+      return [] unless validated[:error].nil?
+
+      validated[:viewable_workflow_runs]
+        .by_workflow(WorkflowRun::WORKFLOW[:consensus_genome])
+        .non_deprecated
+        .pluck(:id, :user_id, :status)
+        .map { |id, user_id, status| { id: id.to_s, ownerUserId: user_id, status: status } }
+    end
 
     def map_fed_workflow_run(run)
       creation_source = run.dig("inputs", "creation_source")
