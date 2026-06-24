@@ -167,6 +167,7 @@ type MngsRunInfo {
 
 type Mutation {
   DeleteSamples(input: mutationInput_DeleteSamples_input_Input): DeleteSamplesPayload!
+  KickoffWGSWorkflow(input: mutationInput_KickoffWGSWorkflow_input_Input, sampleId: String): [mutation_KickoffWGSWorkflow_items!]
   UpdateMetadata(input: mutationInput_UpdateMetadata_input_Input, sampleId: String): UpdateMetadataPayload!
   UpdateSampleName(input: mutationInput_UpdateSampleNotes_input_Input, sampleId: String): UpdateSampleNamePayload!
   UpdateSampleNotes(input: mutationInput_UpdateSampleNotes_input_Input, sampleId: String): UpdateSampleNotesPayload!
@@ -480,6 +481,21 @@ input mutationInput_DeleteSamples_input_Input {
   workflow: String
 }
 
+input mutationInput_KickoffWGSWorkflow_input_Input {
+  authenticityToken: String
+  inputs_json: mutationInput_KickoffWGSWorkflow_input_inputs_json_Input
+  workflow: String
+}
+
+input mutationInput_KickoffWGSWorkflow_input_inputs_json_Input {
+  accession_id: String
+  accession_name: String
+  alignment_config_name: String
+  taxon_id: String
+  taxon_name: String
+  technology: String
+}
+
 input mutationInput_UpdateMetadata_input_Input {
   authenticityToken: String
   field: String!
@@ -494,6 +510,45 @@ input mutationInput_UpdateMetadata_input_value_Input {
 input mutationInput_UpdateSampleNotes_input_Input {
   authenticityToken: String
   value: String!
+}
+
+type mutation_KickoffWGSWorkflow_items {
+  deprecated: Boolean
+  executed_at: String
+  id: String
+  input_error: JSON
+  inputs: mutation_KickoffWGSWorkflow_items_inputs
+  parsed_cached_results: mutation_KickoffWGSWorkflow_items_parsed_cached_results
+  run_finalized: Boolean
+  status: String
+  wdl_version: String
+  workflow: String
+}
+
+type mutation_KickoffWGSWorkflow_items_inputs {
+  accession_id: JSON
+  accession_name: JSON
+  card_version: String
+  taxon_id: JSON
+  taxon_name: JSON
+  technology: String
+  wildcard_version: String
+}
+
+type mutation_KickoffWGSWorkflow_items_parsed_cached_results {
+  quality_metrics: mutation_KickoffWGSWorkflow_items_parsed_cached_results_quality_metrics
+}
+
+type mutation_KickoffWGSWorkflow_items_parsed_cached_results_quality_metrics {
+  adjusted_remaining_reads: Int
+  compression_ratio: Float
+  fraction_subsampled: Float
+  insert_size_mean: JSON
+  insert_size_standard_deviation: JSON
+  percent_remaining: Float
+  qc_percent: Float
+  total_ercc_reads: Int
+  total_reads: Int
 }
 
 input queryInput_SampleMetadata_input_Input {
