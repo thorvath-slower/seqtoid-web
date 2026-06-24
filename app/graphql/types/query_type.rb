@@ -14,6 +14,7 @@ module Types
     include Queries::ValidateUserCanDeleteObjectsQuery
     include Queries::MetadataFieldsQuery
     include Queries::BulkDownloadCgOverviewQuery
+    include Queries::SampleMetadataQuery
 
     # Add root-level fields here.
     # They will be entry points for queries on your schema.

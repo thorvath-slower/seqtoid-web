@@ -125,6 +125,8 @@ type InputFile {
   uploadClient: String
 }
 
+scalar JSON
+
 type MetadataField {
   dataType: String
   description: String
@@ -230,6 +232,7 @@ type Project {
 type Query {
   BulkDownloadCGOverview(input: BulkDownloadCGOverviewInput!): BulkDownloadCGOverview!
   MetadataFields(input: MetadataFieldsInput, snapshotLinkId: String): [MetadataField!]
+  SampleMetadata(input: queryInput_SampleMetadata_input_Input, sampleId: String, snapshotLinkId: String): SampleMetadata
   ValidateUserCanDeleteObjects(input: ValidateUserCanDeleteObjectsInput!): ValidateUserCanDeleteObjects!
   ZipLink(workflowRunId: String): ZipLink!
   appConfig(id: ID!): AppConfig
@@ -292,6 +295,16 @@ type SampleDetails {
 type SampleList {
   sampleIds: [Int!]
   samples: [Sample!]!
+}
+
+type SampleMetadata {
+  additional_info: query_SampleMetadata_additional_info
+  collectionDate: String
+  collectionLocationV2: String
+  metadata: [query_SampleMetadata_metadata_items!]
+  nucleotideType: String
+  sampleType: String
+  waterControl: String
 }
 
 type SampleReadsStats {
@@ -379,4 +392,146 @@ type WorkflowRun {
 type ZipLink {
   error: String
   url: String
+}
+
+input queryInput_SampleMetadata_input_Input {
+  pipelineVersion: String
+}
+
+type query_SampleMetadata_additional_info {
+  editable: Boolean
+  ercc_comparison: [query_SampleMetadata_additional_info_ercc_comparison_items!]
+  host_genome_name: String
+  host_genome_taxa_category: String
+  name: String
+  notes: String
+  pipeline_run: query_SampleMetadata_additional_info_pipeline_run
+  project_id: Int
+  project_name: String
+  summary_stats: query_SampleMetadata_additional_info_summary_stats
+  upload_date: String
+}
+
+type query_SampleMetadata_additional_info_ercc_comparison_items {
+  actual: Int
+  expected: JSON
+  name: String
+}
+
+type query_SampleMetadata_additional_info_pipeline_run {
+  adjusted_remaining_reads: Int
+  alert_sent: Int
+  alignment_config_id: Int
+  assembled: Int
+  compression_ratio: Float
+  created_at: String
+  dag_vars: JSON
+  deleted_at: JSON
+  deprecated: Boolean
+  error_message: JSON
+  executed_at: String
+  finalized: Int
+  fraction_subsampled: Float
+  fraction_subsampled_bases: JSON
+  guppy_basecaller_setting: JSON
+  host_subtracted: String
+  id: String
+  job_status: String
+  known_user_error: JSON
+  mapped_reads: JSON
+  max_input_fragments: Int
+  pipeline_branch: String
+  pipeline_commit: String
+  pipeline_execution_strategy: String
+  pipeline_version: String
+  qc_percent: Float
+  results_finalized: Int
+  s3_output_prefix: String
+  sample_id: Int
+  sfn_execution_arn: String
+  subsample: Int
+  technology: String
+  time_to_finalized: Int
+  time_to_results_finalized: Int
+  total_bases: JSON
+  total_ercc_reads: Int
+  total_reads: Int
+  truncated: JSON
+  truncated_bases: JSON
+  unmapped_bases: JSON
+  unmapped_reads: Int
+  updated_at: String
+  use_taxon_whitelist: Boolean
+  version: query_SampleMetadata_additional_info_pipeline_run_version
+  wdl_version: String
+}
+
+type query_SampleMetadata_additional_info_pipeline_run_version {
+  alignment_db: String
+  pipeline: String
+}
+
+type query_SampleMetadata_additional_info_summary_stats {
+  adjusted_remaining_reads: Int
+  compression_ratio: Float
+  insert_size_mean: JSON
+  insert_size_standard_deviation: JSON
+  last_processed_at: String
+  percent_remaining: Float
+  qc_percent: Float
+  reads_after_bowtie2_ercc_filtered: JSON
+  reads_after_bowtie2_host_filtered: Int
+  reads_after_czid_dedup: Int
+  reads_after_fastp: Int
+  reads_after_hisat2_host_filtered: Int
+  unmapped_reads: Int
+}
+
+type query_SampleMetadata_metadata_items {
+  base_type: String
+  created_at: String
+  date_validated_value: String
+  id: String
+  key: String
+  location_id: Int
+  location_validated_value: query_SampleMetadata_metadata_items_location_validated_value
+  metadata_field_id: Int
+  number_validated_value: String
+  raw_value: String
+  sample_id: Int
+  string_validated_value: String
+  updated_at: String
+}
+
+union query_SampleMetadata_metadata_items_location_validated_value = query_SampleMetadata_metadata_items_location_validated_value_oneOf_0 | query_SampleMetadata_metadata_items_location_validated_value_oneOf_1
+
+type query_SampleMetadata_metadata_items_location_validated_value_oneOf_0 {
+  name: String
+}
+
+type query_SampleMetadata_metadata_items_location_validated_value_oneOf_1 {
+  city_id: String
+  city_name: String
+  country_code: String
+  country_id: Int
+  country_name: String
+  created_at: String
+  description: String
+  geo_level: String
+  id: String
+  key: String
+  lat: JSON
+  lng: JSON
+  locationiq_id: JSON
+  name: String
+  osm_id: Int
+  osm_type: String
+  raw_value: String
+  refetch_adjusted_location: Boolean
+  state_id: Int
+  state_name: String
+  subdivision_id: Int
+  subdivision_name: String
+  title: String
+  updated_at: String
 }
