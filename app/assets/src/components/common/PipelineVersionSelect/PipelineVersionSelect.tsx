@@ -1,7 +1,5 @@
 import moment from "moment";
 import React from "react";
-import { useAllowedFeatures } from "~/components/common/UserContext";
-import { SHOULD_READ_FROM_NEXTGEN } from "~/components/utils/features";
 import { WorkflowType } from "~/components/utils/workflows";
 import { WorkflowRun } from "~/interface/sample";
 import { PipelineRun } from "~/interface/shared";
@@ -27,8 +25,6 @@ export const PipelineVersionSelect = ({
   workflowType,
   onVersionChange,
 }: PipelineVersionSelectProps) => {
-  const allowedFeatures = useAllowedFeatures();
-
   const { timeKey, versionKey, workflowName, getDatabaseVersionString } =
     PipelineVersionSelectConfig[workflowType];
 
@@ -73,9 +69,7 @@ export const PipelineVersionSelect = ({
   const showSingleVersionTextHeader =
     allPipelineVersions.length === 0 ||
     (allPipelineVersions.length === 1 &&
-      allPipelineVersions[0] === currentPipelineVersion) ||
-    (allowedFeatures.includes(SHOULD_READ_FROM_NEXTGEN) &&
-      workflowType === WorkflowType.CONSENSUS_GENOME);
+      allPipelineVersions[0] === currentPipelineVersion);
 
   return (
     <div className={cs.pipelineVersionSelectContainer}>
