@@ -11,5 +11,7 @@ module Types
     field :UpdateMetadata, mutation: ::Mutations::UpdateMetadata, camelize: false
     field :DeleteSamples, mutation: ::Mutations::DeleteSamples, camelize: false
     field :KickoffWGSWorkflow, mutation: ::Mutations::KickoffWgsWorkflow, camelize: false
+    field :createAsyncBulkDownload, mutation: ::Mutations::CreateAsyncBulkDownload, camelize: false
+    field :CreateBulkDownload, mutation: ::Mutations::CreateBulkDownload, camelize: false
   end
 end

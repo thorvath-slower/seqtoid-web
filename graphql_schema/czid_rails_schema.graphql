@@ -166,11 +166,13 @@ type MngsRunInfo {
 }
 
 type Mutation {
+  CreateBulkDownload(input: mutationInput_CreateBulkDownload_input_Input): JSON
   DeleteSamples(input: mutationInput_DeleteSamples_input_Input): DeleteSamplesPayload!
   KickoffWGSWorkflow(input: mutationInput_KickoffWGSWorkflow_input_Input, sampleId: String): [mutation_KickoffWGSWorkflow_items!]
   UpdateMetadata(input: mutationInput_UpdateMetadata_input_Input, sampleId: String): UpdateMetadataPayload!
   UpdateSampleName(input: mutationInput_UpdateSampleNotes_input_Input, sampleId: String): UpdateSampleNamePayload!
   UpdateSampleNotes(input: mutationInput_UpdateSampleNotes_input_Input, sampleId: String): UpdateSampleNotesPayload!
+  createAsyncBulkDownload(input: mutationInput_CreateBulkDownload_input_Input): fedCreateBulkDownload
   createUser(email: String!): CreateUserPayload!
 }
 
@@ -466,12 +468,25 @@ type ZipLink {
   url: String
 }
 
+type fedCreateBulkDownload {
+  id: String
+}
+
 type fedWorkflowRunsAggregate {
   aggregate: [query_fedWorkflowRunsAggregate_aggregate_items!]
 }
 
 type fedWorkflowRunsAggregateTotalCount {
   aggregate: [query_fedWorkflowRunsAggregateTotalCount_aggregate_items!]
+}
+
+input mutationInput_CreateBulkDownload_input_Input {
+  authenticityToken: String
+  downloadFormat: String
+  downloadType: String
+  workflow: String
+  workflowRunIds: [Int!]
+  workflowRunIdsStrings: [String!]
 }
 
 input mutationInput_DeleteSamples_input_Input {
