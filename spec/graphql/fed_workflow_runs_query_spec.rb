@@ -76,12 +76,41 @@ GQL
       ])
     end
 
-    it "rejects the not-yet-ported bulk consensus-genome validation mode" do
-      post_query(input: { where: { id: { _in: ["1", "2"] } } })
+    it "validates CG workflow run ids for the bulk-download modal (where.id._in)" do
+      project = create(:project, users: [@joe])
+      sample = create(:sample, project: project, user: @joe)
+      valid_cg = create(:workflow_run, sample: sample, user: @joe,
+                                       workflow: WorkflowRun::WORKFLOW[:consensus_genome],
+                                       status: WorkflowRun::STATUS[:succeeded], deprecated: false)
+      deprecated_cg = create(:workflow_run, sample: sample, user: @joe,
+                                            workflow: WorkflowRun::WORKFLOW[:consensus_genome],
+                                            deprecated: true)
+      non_cg = create(:workflow_run, sample: sample, user: @joe,
+                                     workflow: WorkflowRun::WORKFLOW[:amr])
 
+      bulk_query = <<GQL
+      query BulkDownloadModalValidConsensusGenomeWorkflowRunsQuery($input: queryInput_fedWorkflowRuns_input_Input) {
+        fedWorkflowRuns(input: $input) {
+          id
+          ownerUserId
+          status
+        }
+      }
+GQL
+      post "/graphql", headers: { "Content-Type" => "application/json" }, params: {
+        query: bulk_query,
+        variables: { input: { where: { id: { _in: [valid_cg.id.to_s, deprecated_cg.id.to_s, non_cg.id.to_s] } } } },
+      }.to_json
+
+      expect(response).to have_http_status(:success)
       parsed = JSON.parse(response.body)
-      expect(parsed.dig("data", "fedWorkflowRuns")).to be_nil
-      expect(parsed["errors"].first["message"]).to match(/not yet ported/)
+      expect(parsed["errors"]).to(be_nil, "GraphQL errors: #{parsed['errors']}")
+
+      data = parsed.dig("data", "fedWorkflowRuns")
+      # only the viewable, non-deprecated consensus-genome run is valid
+      expect(data).to eq([
+        { "id" => valid_cg.id.to_s, "ownerUserId" => @joe.id, "status" => valid_cg.status },
+      ])
     end
   end
 end
