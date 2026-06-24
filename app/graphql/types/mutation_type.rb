@@ -8,5 +8,6 @@ module Types
     # exact federation field names (UpdateSampleName, not updateSampleName).
     field :UpdateSampleName, mutation: ::Mutations::UpdateSampleName, camelize: false
     field :UpdateSampleNotes, mutation: ::Mutations::UpdateSampleNotes, camelize: false
+    field :UpdateMetadata, mutation: ::Mutations::UpdateMetadata, camelize: false
   end
 end
