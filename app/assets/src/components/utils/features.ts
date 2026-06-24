@@ -18,7 +18,3 @@ export const EDIT_SNAPSHOT_LINKS_FEATURE = "edit_snapshot_links";
 
 // (2024-05-20) BENCHMARKING_FEATURE is an internal tool
 export const BENCHMARKING_FEATURE = "benchmarking";
-
-// WGS to NextGen pipeline migration
-export const CREATE_NEXT_GEN_ENTITIES = "create_next_gen_entities";
-export const SHOULD_READ_FROM_NEXTGEN = "should_read_from_nextgen";
