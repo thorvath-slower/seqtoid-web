@@ -244,6 +244,7 @@ type Query {
   ValidateUserCanDeleteObjects(input: ValidateUserCanDeleteObjectsInput!): ValidateUserCanDeleteObjects!
   ZipLink(workflowRunId: String): ZipLink!
   appConfig(id: ID!): AppConfig
+  fedBulkDownloads(input: queryInput_fedBulkDownloads_input_Input): [query_fedBulkDownloads_items!]
   fedConsensusGenomes(input: queryInput_fedConsensusGenomes_input_Input): [query_fedConsensusGenomes_items!]
   fedSequencingReads(input: queryInput_fedSequencingReads_input_Input): [query_fedSequencingReads_items!]
   fedWorkflowRuns(input: queryInput_fedWorkflowRuns_input_Input): [query_fedWorkflowRuns_items!]
@@ -433,6 +434,11 @@ type fedWorkflowRunsAggregateTotalCount {
 
 input queryInput_SampleMetadata_input_Input {
   pipelineVersion: String
+}
+
+input queryInput_fedBulkDownloads_input_Input {
+  limit: Int
+  searchBy: String
 }
 
 input queryInput_fedConsensusGenomes_input_Input {
@@ -802,6 +808,34 @@ type query_SampleMetadata_metadata_items_location_validated_value_oneOf_1 {
   subdivision_name: String
   title: String
   updated_at: String
+}
+
+type query_fedBulkDownloads_items {
+  analysisCount: Int
+  downloadType: String
+  entityInputFileType: String
+  entityInputs: [query_fedBulkDownloads_items_entityInputs_items!]
+  errorMessage: String
+  fileFormat: String
+  fileSize: Float
+  id: String
+  logUrl: String
+  ownerUserId: Int
+  params: [query_fedBulkDownloads_items_params_items!]
+  startedAt: String
+  status: String
+  url: String
+}
+
+type query_fedBulkDownloads_items_entityInputs_items {
+  id: String
+  name: String
+}
+
+type query_fedBulkDownloads_items_params_items {
+  displayName: String
+  paramType: String
+  value: String
 }
 
 type query_fedConsensusGenomes_items {
