@@ -19,6 +19,7 @@ module Types
     # discovery resolvers; it relies on current_user/current_power/SamplesHelper.
     include WorkflowRunsFetching
     include Queries::FedWorkflowRunsQuery
+    include Queries::FedConsensusGenomesQuery
 
     # Add root-level fields here.
     # They will be entry points for queries on your schema.

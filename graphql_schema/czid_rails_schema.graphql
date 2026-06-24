@@ -244,6 +244,7 @@ type Query {
   ValidateUserCanDeleteObjects(input: ValidateUserCanDeleteObjectsInput!): ValidateUserCanDeleteObjects!
   ZipLink(workflowRunId: String): ZipLink!
   appConfig(id: ID!): AppConfig
+  fedConsensusGenomes(input: queryInput_fedConsensusGenomes_input_Input): [query_fedConsensusGenomes_items!]
   fedWorkflowRuns(input: queryInput_fedWorkflowRuns_input_Input): [query_fedWorkflowRuns_items!]
   pathogenList(version: String): PathogenList!
   project(id: Int!): Project!
@@ -362,6 +363,11 @@ input StringGteFilter {
   _gte: String
 }
 
+input StringInEqFilter {
+  _eq: String
+  _in: [String!]
+}
+
 input StringListInFilter {
   _in: [String!]
 }
@@ -417,6 +423,59 @@ type ZipLink {
 
 input queryInput_SampleMetadata_input_Input {
   pipelineVersion: String
+}
+
+input queryInput_fedConsensusGenomes_input_Input {
+  limit: Int
+  offset: Int
+  orderBy: [queryInput_fedConsensusGenomes_input_orderBy_items_Input!]
+  todoRemove: queryInput_fedConsensusGenomes_input_todoRemove_Input
+  where: queryInput_fedConsensusGenomes_input_where_Input
+}
+
+input queryInput_fedConsensusGenomes_input_orderBy_items_Input {
+  accession: queryInput_fedConsensusGenomes_input_orderBy_items_accession_Input
+  metrics: queryInput_fedConsensusGenomes_input_orderBy_items_metrics_Input
+}
+
+input queryInput_fedConsensusGenomes_input_orderBy_items_accession_Input {
+  accessionId: String
+}
+
+input queryInput_fedConsensusGenomes_input_orderBy_items_metrics_Input {
+  coverageDepth: String
+  gcPercent: String
+  nActg: String
+  nAmbiguous: String
+  nMissing: String
+  percentGenomeCalled: String
+  percentIdentity: String
+  refSnps: String
+  referenceGenomeLength: String
+  totalReads: String
+}
+
+input queryInput_fedConsensusGenomes_input_todoRemove_Input {
+  domain: String
+  host: [Int!]
+  locationV2: [String!]
+  orderBy: String
+  orderDir: String
+  projectId: String
+  sampleIds: [Int!]
+  search: String
+  taxaLevels: [String!]
+  taxons: [Int!]
+  time: [String!]
+  tissue: [String!]
+  visibility: String
+  workflow: String
+  workflowRunIds: [Int!]
+}
+
+input queryInput_fedConsensusGenomes_input_where_Input {
+  collectionId: IntListInFilter
+  producingRunId: StringInEqFilter
 }
 
 input queryInput_fedWorkflowRuns_input_Input {
@@ -609,6 +668,60 @@ type query_SampleMetadata_metadata_items_location_validated_value_oneOf_1 {
   subdivision_name: String
   title: String
   updated_at: String
+}
+
+type query_fedConsensusGenomes_items {
+  accession: query_fedConsensusGenomes_items_accession
+  metrics: query_fedConsensusGenomes_items_metrics
+  producingRunId: String
+  referenceGenome: query_fedConsensusGenomes_items_referenceGenome
+  sequencingRead: query_fedConsensusGenomes_items_sequencingRead
+  taxon: query_fedConsensusGenomes_items_taxon
+}
+
+type query_fedConsensusGenomes_items_accession {
+  accessionId: String
+  accessionName: String
+}
+
+type query_fedConsensusGenomes_items_metrics {
+  coverageBinSize: Float
+  coverageBreadth: Float
+  coverageDepth: Float
+  coverageTotalLength: Float
+  coverageViz: [[Float]]
+  gcPercent: Float
+  mappedReads: Int
+  nActg: Int
+  nAmbiguous: Int
+  nMissing: Int
+  percentGenomeCalled: Float
+  percentIdentity: Float
+  refSnps: Int
+  referenceGenomeLength: Float
+  totalReads: Int
+}
+
+type query_fedConsensusGenomes_items_referenceGenome {
+  file: query_fedConsensusGenomes_items_referenceGenome_file
+}
+
+type query_fedConsensusGenomes_items_referenceGenome_file {
+  downloadLink: query_fedConsensusGenomes_items_referenceGenome_file_downloadLink
+}
+
+type query_fedConsensusGenomes_items_referenceGenome_file_downloadLink {
+  url: String
+}
+
+type query_fedConsensusGenomes_items_sequencingRead {
+  id: String
+}
+
+type query_fedConsensusGenomes_items_taxon {
+  commonName: String
+  id: String
+  name: String
 }
 
 type query_fedWorkflowRuns_items {
