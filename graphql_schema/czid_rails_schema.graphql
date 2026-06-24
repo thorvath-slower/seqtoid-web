@@ -247,6 +247,7 @@ type Query {
   fedConsensusGenomes(input: queryInput_fedConsensusGenomes_input_Input): [query_fedConsensusGenomes_items!]
   fedSequencingReads(input: queryInput_fedSequencingReads_input_Input): [query_fedSequencingReads_items!]
   fedWorkflowRuns(input: queryInput_fedWorkflowRuns_input_Input): [query_fedWorkflowRuns_items!]
+  fedWorkflowRunsAggregateTotalCount(input: queryInput_fedWorkflowRunsAggregateTotalCount_input_Input): fedWorkflowRunsAggregateTotalCount
   pathogenList(version: String): PathogenList!
   project(id: Int!): Project!
   sample(sampleId: Int!): Sample!
@@ -426,6 +427,10 @@ type ZipLink {
   url: String
 }
 
+type fedWorkflowRunsAggregateTotalCount {
+  aggregate: [query_fedWorkflowRunsAggregateTotalCount_aggregate_items!]
+}
+
 input queryInput_SampleMetadata_input_Input {
   pipelineVersion: String
 }
@@ -580,6 +585,30 @@ input queryInput_fedSequencingReads_input_where_sample_hostOrganism_Input {
 }
 
 input queryInput_fedSequencingReads_input_where_taxon_Input {
+  name: StringListInFilter
+}
+
+input queryInput_fedWorkflowRunsAggregateTotalCount_input_Input {
+  todoRemove: queryInput_fedWorkflowRunsAggregateTotalCount_input_todoRemove_Input
+  where: queryInput_fedWorkflowRunsAggregateTotalCount_input_where_Input
+}
+
+input queryInput_fedWorkflowRunsAggregateTotalCount_input_todoRemove_Input {
+  domain: String
+  projectId: String
+}
+
+input queryInput_fedWorkflowRunsAggregateTotalCount_input_where_Input {
+  collectionId: IntListInFilter
+  deprecatedById: NullCheckFilter
+  workflowVersion: queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_Input
+}
+
+input queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_Input {
+  workflow: queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_workflow_Input
+}
+
+input queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_workflow_Input {
   name: StringListInFilter
 }
 
@@ -923,6 +952,23 @@ type query_fedSequencingReads_items_sample_metadatas_edges_items_node {
 
 type query_fedSequencingReads_items_taxon {
   level: String
+  name: String
+}
+
+type query_fedWorkflowRunsAggregateTotalCount_aggregate_items {
+  count: Int
+  groupBy: query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy
+}
+
+type query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy {
+  workflowVersion: query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion
+}
+
+type query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion {
+  workflow: query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion_workflow
+}
+
+type query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion_workflow {
   name: String
 }
 

@@ -3183,6 +3183,31 @@
               "deprecationReason": null
             },
             {
+              "name": "fedWorkflowRunsAggregateTotalCount",
+              "description": null,
+              "args": [
+                {
+                  "name": "input",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_Input",
+                    "ofType": null
+                  },
+                  "defaultValue": null,
+                  "isDeprecated": false,
+                  "deprecationReason": null
+                }
+              ],
+              "type": {
+                "kind": "OBJECT",
+                "name": "fedWorkflowRunsAggregateTotalCount",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "pathogenList",
               "description": null,
               "args": [
@@ -6881,6 +6906,41 @@
           "possibleTypes": null
         },
         {
+          "kind": "OBJECT",
+          "name": "fedWorkflowRunsAggregateTotalCount",
+          "description": null,
+          "fields": [
+            {
+              "name": "aggregate",
+              "description": null,
+              "args": [
+
+              ],
+              "type": {
+                "kind": "LIST",
+                "name": null,
+                "ofType": {
+                  "kind": "NON_NULL",
+                  "name": null,
+                  "ofType": {
+                    "kind": "OBJECT",
+                    "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items",
+                    "ofType": null
+                  }
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [
+
+          ],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
           "kind": "INPUT_OBJECT",
           "name": "queryInput_SampleMetadata_input_Input",
           "description": null,
@@ -8338,6 +8398,169 @@
         {
           "kind": "INPUT_OBJECT",
           "name": "queryInput_fedSequencingReads_input_where_taxon_Input",
+          "description": null,
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "name",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "StringListInFilter",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_Input",
+          "description": null,
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "where",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_where_Input",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "todoRemove",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_todoRemove_Input",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_todoRemove_Input",
+          "description": null,
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "domain",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "projectId",
+              "description": null,
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_where_Input",
+          "description": null,
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "collectionId",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "IntListInFilter",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "deprecatedById",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "NullCheckFilter",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "workflowVersion",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_Input",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_Input",
+          "description": null,
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "workflow",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_workflow_Input",
+                "ofType": null
+              },
+              "defaultValue": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_workflow_Input",
           "description": null,
           "fields": null,
           "inputFields": [
@@ -12048,6 +12271,128 @@
               "isDeprecated": false,
               "deprecationReason": null
             },
+            {
+              "name": "name",
+              "description": null,
+              "args": [
+
+              ],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [
+
+          ],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items",
+          "description": null,
+          "fields": [
+            {
+              "name": "count",
+              "description": null,
+              "args": [
+
+              ],
+              "type": {
+                "kind": "SCALAR",
+                "name": "Int",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "groupBy",
+              "description": null,
+              "args": [
+
+              ],
+              "type": {
+                "kind": "OBJECT",
+                "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [
+
+          ],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy",
+          "description": null,
+          "fields": [
+            {
+              "name": "workflowVersion",
+              "description": null,
+              "args": [
+
+              ],
+              "type": {
+                "kind": "OBJECT",
+                "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [
+
+          ],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion",
+          "description": null,
+          "fields": [
+            {
+              "name": "workflow",
+              "description": null,
+              "args": [
+
+              ],
+              "type": {
+                "kind": "OBJECT",
+                "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion_workflow",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [
+
+          ],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion_workflow",
+          "description": null,
+          "fields": [
             {
               "name": "name",
               "description": null,
