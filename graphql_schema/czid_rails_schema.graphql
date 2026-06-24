@@ -248,6 +248,7 @@ type Query {
   fedConsensusGenomes(input: queryInput_fedConsensusGenomes_input_Input): [query_fedConsensusGenomes_items!]
   fedSequencingReads(input: queryInput_fedSequencingReads_input_Input): [query_fedSequencingReads_items!]
   fedWorkflowRuns(input: queryInput_fedWorkflowRuns_input_Input): [query_fedWorkflowRuns_items!]
+  fedWorkflowRunsAggregate(input: queryInput_fedWorkflowRunsAggregate_input_Input): fedWorkflowRunsAggregate
   fedWorkflowRunsAggregateTotalCount(input: queryInput_fedWorkflowRunsAggregateTotalCount_input_Input): fedWorkflowRunsAggregateTotalCount
   pathogenList(version: String): PathogenList!
   project(id: Int!): Project!
@@ -426,6 +427,10 @@ type WorkflowRun {
 type ZipLink {
   error: String
   url: String
+}
+
+type fedWorkflowRunsAggregate {
+  aggregate: [query_fedWorkflowRunsAggregate_aggregate_items!]
 }
 
 type fedWorkflowRunsAggregateTotalCount {
@@ -615,6 +620,52 @@ input queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_
 }
 
 input queryInput_fedWorkflowRunsAggregateTotalCount_input_where_workflowVersion_workflow_Input {
+  name: StringListInFilter
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_Input {
+  todoRemove: queryInput_fedWorkflowRunsAggregate_input_todoRemove_Input
+  where: queryInput_fedWorkflowRunsAggregate_input_where_Input
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_todoRemove_Input {
+  annotations: [queryInput_fedWorkflowRunsAggregate_input_todoRemove_annotations_items_Input!]
+  domain: String
+  host: [Int!]
+  locationV2: [String!]
+  projectId: String
+  search: String
+  taxaLevels: [String!]
+  taxon: [Int!]
+  taxonThresholds: [queryInput_fedWorkflowRunsAggregate_input_todoRemove_taxonThresholds_items_Input!]
+  time: [String!]
+  tissue: [String!]
+  visibility: String
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_todoRemove_annotations_items_Input {
+  name: String
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_todoRemove_taxonThresholds_items_Input {
+  count_type: String
+  metric: String
+  operator: String
+  value: String
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_where_Input {
+  collectionId: IntListInFilter
+  deprecatedById: NullCheckFilter
+  id: StringListInFilter
+  workflowVersion: queryInput_fedWorkflowRunsAggregate_input_where_workflowVersion_Input
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_where_workflowVersion_Input {
+  workflow: queryInput_fedWorkflowRunsAggregate_input_where_workflowVersion_workflow_Input
+}
+
+input queryInput_fedWorkflowRunsAggregate_input_where_workflowVersion_workflow_Input {
   name: StringListInFilter
 }
 
@@ -1003,6 +1054,24 @@ type query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVe
 }
 
 type query_fedWorkflowRunsAggregateTotalCount_aggregate_items_groupBy_workflowVersion_workflow {
+  name: String
+}
+
+type query_fedWorkflowRunsAggregate_aggregate_items {
+  count: Int
+  groupBy: query_fedWorkflowRunsAggregate_aggregate_items_groupBy
+}
+
+type query_fedWorkflowRunsAggregate_aggregate_items_groupBy {
+  collectionId: Int
+  workflowVersion: query_fedWorkflowRunsAggregate_aggregate_items_groupBy_workflowVersion
+}
+
+type query_fedWorkflowRunsAggregate_aggregate_items_groupBy_workflowVersion {
+  workflow: query_fedWorkflowRunsAggregate_aggregate_items_groupBy_workflowVersion_workflow
+}
+
+type query_fedWorkflowRunsAggregate_aggregate_items_groupBy_workflowVersion_workflow {
   name: String
 }
 

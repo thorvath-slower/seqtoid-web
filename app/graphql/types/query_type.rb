@@ -18,11 +18,13 @@ module Types
     # WorkflowRunsFetching supplies the shared discovery pipeline used by the fed*
     # discovery resolvers; it relies on current_user/current_power/SamplesHelper.
     include WorkflowRunsFetching
+    include ProjectsDiscovery
     include Queries::FedWorkflowRunsQuery
     include Queries::FedConsensusGenomesQuery
     include Queries::FedSequencingReadsQuery
     include Queries::FedWorkflowRunsAggregateTotalCountQuery
     include Queries::FedBulkDownloadsQuery
+    include Queries::FedWorkflowRunsAggregateQuery
 
     # Add root-level fields here.
     # They will be entry points for queries on your schema.
