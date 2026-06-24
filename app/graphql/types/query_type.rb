@@ -15,6 +15,10 @@ module Types
     include Queries::MetadataFieldsQuery
     include Queries::BulkDownloadCgOverviewQuery
     include Queries::SampleMetadataQuery
+    # WorkflowRunsFetching supplies the shared discovery pipeline used by the fed*
+    # discovery resolvers; it relies on current_user/current_power/SamplesHelper.
+    include WorkflowRunsFetching
+    include Queries::FedWorkflowRunsQuery
 
     # Add root-level fields here.
     # They will be entry points for queries on your schema.
@@ -33,6 +37,19 @@ module Types
 
     def app_config(id:)
       AppConfig.find(id)
+    end
+
+    private
+
+    # The fed* discovery resolvers and the shared WorkflowRunsFetching concern run in
+    # this QueryType instance; expose the request's user/power the way controllers do
+    # (GraphqlController seeds them into the GraphQL context).
+    def current_user
+      context[:current_user]
+    end
+
+    def current_power
+      context[:current_power]
     end
   end
 end

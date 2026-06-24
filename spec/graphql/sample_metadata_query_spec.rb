@@ -7,7 +7,7 @@ require "rails_helper"
 RSpec.describe GraphqlController, type: :request do
   create_users
 
-  QUERY = <<GQL
+  SAMPLE_METADATA_QUERY = <<GQL
   query SampleDetailsModeSampleMetadataQuery($sampleId: String!, $snapshotLinkId: String) {
     SampleMetadata(sampleId: $sampleId, snapshotLinkId: $snapshotLinkId) {
       metadata {
@@ -64,7 +64,7 @@ GQL
 
   def post_query(sample_id)
     post "/graphql", headers: { "Content-Type" => "application/json" }, params: {
-      query: QUERY,
+      query: SAMPLE_METADATA_QUERY,
       variables: { sampleId: sample_id.to_s, snapshotLinkId: nil },
     }.to_json
   end
