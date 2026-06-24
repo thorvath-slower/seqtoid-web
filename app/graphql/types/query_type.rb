@@ -13,6 +13,7 @@ module Types
     include Queries::ZipLinkQuery
     include Queries::ValidateUserCanDeleteObjectsQuery
     include Queries::MetadataFieldsQuery
+    include Queries::BulkDownloadCgOverviewQuery
 
     # Add root-level fields here.
     # They will be entry points for queries on your schema.
