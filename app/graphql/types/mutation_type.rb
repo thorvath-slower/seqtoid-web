@@ -10,5 +10,6 @@ module Types
     field :UpdateSampleNotes, mutation: ::Mutations::UpdateSampleNotes, camelize: false
     field :UpdateMetadata, mutation: ::Mutations::UpdateMetadata, camelize: false
     field :DeleteSamples, mutation: ::Mutations::DeleteSamples, camelize: false
+    field :KickoffWGSWorkflow, mutation: ::Mutations::KickoffWgsWorkflow, camelize: false
   end
 end
