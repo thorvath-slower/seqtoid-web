@@ -58,9 +58,12 @@ const LiveSearchPopBox = ({
 
   // If the value has changed, reset the input value.
   // Store the prevValue to detect whether the value has changed.
+  // CZID-314: coerce undefined/null to "" so an empty field always has a *string* inputValue.
+  // Otherwise hasEnoughChars() below evaluates `undefined >= minChars` — which is false even for
+  // minChars=0 — so the shouldSearchOnFocus search never fires and the dropdown never opens on click
+  // (it only worked once a keystroke made inputValue a string). See SampleTypeSearchBox (minChars=0).
   useEffect(() => {
-    // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2345
-    setInputValue(value);
+    setInputValue(value ?? "");
   }, [value]);
 
   const handleKeyDown = keyEvent => {
@@ -196,7 +199,8 @@ const LiveSearchPopBox = ({
     return sumBy(cat => cat?.results?.length, values(results));
   };
 
-  const hasEnoughChars = () => inputValue?.trim()?.length >= minChars;
+  // Null-safe: an undefined inputValue must not make this `undefined >= minChars` (always false).
+  const hasEnoughChars = () => (inputValue?.trim()?.length ?? 0) >= minChars;
   const shouldOpen = getResultsLength() && isFocused && hasEnoughChars();
 
   return (
