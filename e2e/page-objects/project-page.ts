@@ -858,14 +858,16 @@ export class ProjectPage extends PageObject {
         response =>
           (response.url().includes("bulk_downloads") &&
             response.request().method() === "POST") ||
-          (response.url().includes("graphqlfed") &&
+          // CZID-305/306: createAsyncBulkDownload moved from the federation (/graphqlfed) to
+          // Rails-native /graphql.
+          (response.url().includes("/graphql") &&
             response.request().method() === "POST"),
       ),
       this.page.locator(START_GENERATING_DOWNLOAD_BUTTON).click(),
     ]);
     const responseJson = await response.json();
     if (responseJson.data && responseJson.data.createAsyncBulkDownload) {
-      // graphqlfed
+      // Rails /graphql
       return responseJson.data.createAsyncBulkDownload.id;
     } else {
       // bulk_downloads
