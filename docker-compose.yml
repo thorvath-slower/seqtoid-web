@@ -88,14 +88,14 @@ services:
     depends_on:
       - opensearch
   db:
-    image: mysql:5.7
+    image: mysql:8.0
+    platform: linux/amd64
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD=1
       - MYSQL_DATABASE=idseq_development
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--group_concat_max_len=1073741824', '--default-authentication-plugin=mysql_native_password']
     ports:
       - 3306:3306
-    command: ['--character-set-server=utf8', '--collation-server=utf8_unicode_ci', '--group_concat_max_len=1073741824', '--show_compatibility_56=ON']
-    platform: linux/amd64
     volumes:
       - ./docker_data/db/data:/var/lib/mysql
   redis:
@@ -129,8 +129,6 @@ services:
       - ./tmp:/app/tmp
       - ./db:/app/db
       - ./coverage:/app/coverage
-      - ~/.aws:/root/.aws:ro
-      - ~/.aws/cli/cache:/root/.aws/cli/cache
       - ./graphql_schema:/app/graphql_schema
       - ./test/fixtures/czid-private-key.pem:/tmp/czid-private-key.pem
     ports:
@@ -140,7 +138,6 @@ services:
       - db
       - redis
       - opensearch
-      - shoryuken
     env_file:
       - web.env
     environment:
@@ -148,6 +145,10 @@ services:
       GRAPHQL_FEDERATION_SERVICE_URL: http://web-proxy:3000/graphqlfed
       RUBY_DEBUG_SKIP_BP: true
       ALLOW_DIRECT_USER_LOGIN: true
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USERNAME: root
+      OFFLINE: "1"
     command: bash -c "rm -f tmp/pids/server.pid && rails server -b 0.0.0.0 -p 3001"
   resque:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
@@ -300,5 +301,5 @@ services:
 networks:
   default:
     name: czidnet
-    driver: overlay
+    driver: bridge
     attachable: true
