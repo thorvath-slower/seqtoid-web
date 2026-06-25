@@ -37,13 +37,6 @@ class Auth0Controller < ApplicationController
     )
   end
 
-  def direct_user_login
-    user_id = params[:user_id]
-    direct_login(user_id)
-    @token_based_login_request = true
-    redirect_to home_path
-  end
-
   def logout
     auth0_invalidate_application_session
     redirect_to auth0_signout_url
