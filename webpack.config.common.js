@@ -49,7 +49,7 @@ const config = {
       },
       {
         // Use CSS modules for new files.
-        test: /\.(sa|sc|c)ss$/,
+        test: /\.(sa|sc)ss$/,
         exclude: [
           path.resolve(__dirname, "node_modules/"),
           path.resolve(__dirname, STYLES_PATH),
@@ -87,7 +87,7 @@ const config = {
       },
       {
         // Sass / Scss loader for legacy files in assets/src/styles.
-        test: /\.(sa|sc|c)ss$/,
+        test: /\.(sa|sc)ss$/,
         include: [
           path.resolve(__dirname, "node_modules/"),
           path.resolve(__dirname, STYLES_PATH),
@@ -118,6 +118,31 @@ const config = {
             options: {
               sourceMap: true,
               implementation: require("sass"),
+            },
+          },
+        ],
+      },
+      {
+        // Plain .css (e.g. vendored semantic-ui-css/semantic.min.css) is already
+        // CSS and must NOT pass through sass-loader (Dart Sass rejects minified
+        // CSS). css-loader + postcss only. (webpack 4 -> 5 build modernization.)
+        test: /\.css$/,
+        use: [
+          MiniCssExtractPlugin.loader,
+          {
+            loader: "css-loader",
+            options: {
+              sourceMap: true,
+              importLoaders: 1,
+              modules: { mode: "global" },
+            },
+          },
+          {
+            loader: "postcss-loader",
+            options: {
+              ident: "postcss",
+              sourceMap: true,
+              plugins: loader => [require("cssnano")({ preset: "default" })],
             },
           },
         ],
@@ -168,7 +193,6 @@ const config = {
           keep_fnames: true,
         },
         parallel: true,
-        sourceMap: true,
       }),
     ],
   },
