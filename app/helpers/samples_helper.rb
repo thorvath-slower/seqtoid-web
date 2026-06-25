@@ -578,7 +578,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < '#{Time.current.strftime('%Y-%m-%d')}' THEN 1 ELSE 0 END AS public"))]
+           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%Y-%m-%d')}' THEN 1 ELSE 0 END AS public"))]
   end
 
   def get_visibility_by_sample_id_and_current_power(sample_ids, current_power)
@@ -589,7 +589,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR samples.created_at + (projects.days_to_keep_sample_private || ' days')::interval < '#{Time.current.strftime('%Y-%m-%d')}' THEN 1 ELSE 0 END AS public"))]
+           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%Y-%m-%d')}' THEN 1 ELSE 0 END AS public"))]
   end
 
   # Takes an array of samples and uploads metadata for those samples.
@@ -639,7 +639,7 @@ module SamplesHelper
     # Rails model validations are also checked.
     update_keys = [:raw_value, :string_validated_value, :number_validated_value, :date_validated_value, :location_id]
     # bug-#011: Hash form (conflict_target + columns) is portable to PostgreSQL.
-    results = Metadatum.bulk_import metadata_to_save, validate: true, on_duplicate_key_update: { conflict_target: [:sample_id, :key], columns: update_keys }
+    results = Metadatum.bulk_import metadata_to_save, validate: true, on_duplicate_key_update: update_keys
     results.failed_instances.each do |model|
       errors.push(MetadataUploadErrors.save_error(model.key, model.raw_value))
     end

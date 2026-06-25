@@ -25,9 +25,9 @@ RSpec.describe ApplicationRecord, type: :model do
   end
 
   describe ".mysql_nulls" do
-    it "places NULLs first on asc and last on desc (MySQL parity)" do
-      expect(ApplicationRecord.mysql_nulls("asc")).to eq("NULLS FIRST")
-      expect(ApplicationRecord.mysql_nulls("desc")).to eq("NULLS LAST")
+    it "returns no NULLS clause (MySQL orders NULLs natively)" do
+      expect(ApplicationRecord.mysql_nulls("asc")).to eq("")
+      expect(ApplicationRecord.mysql_nulls("desc")).to eq("")
     end
   end
 end
