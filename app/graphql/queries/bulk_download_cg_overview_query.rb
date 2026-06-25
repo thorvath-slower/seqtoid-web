@@ -1,8 +1,10 @@
 module Queries
   # Ported from the GraphQL federation server (resolver-functions/BulkDownloadsCGOverview)
-  # as part of CZID-285. Mirrors BulkDownloadsController#consensus_genome_overview_data:
-  # validate viewable objects (the same create-validation chain), then build the CG
-  # overview CSV rows. Includes BulkDownloadsHelper for validate_bulk_download_create_params.
+  # as part of CZID-285. Reproduces the *federation resolver's* param shape (it passed the
+  # workflow_run_ids in as `sample_ids`, parity-confirmed byte-for-byte by CZID-307) and then runs
+  # the same path as BulkDownloadsController#consensus_genome_overview_data: validate viewable
+  # objects via the create-validation chain, then build the CG overview CSV rows. Includes
+  # BulkDownloadsHelper for validate_bulk_download_create_params.
   module BulkDownloadCgOverviewQuery
     extend ActiveSupport::Concern
     include BulkDownloadsHelper

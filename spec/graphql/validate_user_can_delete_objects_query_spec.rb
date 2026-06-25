@@ -44,6 +44,36 @@ GQL
       expect(data["error"]).to be_nil
     end
 
+    it "does not leak the name of an invalid sample the user cannot access (CZID-285 review)" do
+      # The resolver scopes invalidSampleNames through current_power.samples, so a sample owned by
+      # another user must NOT have its name returned even when the validation service reports its id
+      # as invalid. This locks the authorization-scoping of the invalid-name lookup.
+      other_user = create(:user)
+      other_project = create(:project, users: [other_user])
+      foreign_sample = create(:sample, project: other_project, user: other_user, name: "Foreign Sample")
+      allow(DeletionValidationService).to receive(:call).and_return(
+        valid_ids: [101],
+        invalid_sample_ids: [foreign_sample.id],
+        error: nil
+      )
+
+      post "/graphql", headers: { "Content-Type" => "application/json" }, params: {
+        query: query,
+        variables: {
+          selectedIds: [101, foreign_sample.id],
+          selectedIdsStrings: ["101", foreign_sample.id.to_s],
+          workflow: "short-read-mngs",
+          authenticityToken: "token",
+        },
+      }.to_json
+
+      expect(response).to have_http_status(:success)
+      parsed = JSON.parse(response.body)
+      expect(parsed["errors"]).to(be_nil, "GraphQL errors: #{parsed['errors']}")
+      data = parsed.dig("data", "ValidateUserCanDeleteObjects")
+      expect(data["invalidSampleNames"]).to eq([])
+    end
+
     it "surfaces a validation error" do
       allow(DeletionValidationService).to receive(:call).and_return(
         valid_ids: [],
