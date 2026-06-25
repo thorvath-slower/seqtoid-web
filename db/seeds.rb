@@ -512,7 +512,10 @@ ActiveRecord::Base.transaction do
 
   SampleType.create({"group"=>"Other", "human_only"=>false, "insect_only"=>false, "name"=>"Environmental"})
 
-  User.create({"allowed_features"=>nil, "archetypes"=>nil, "created_by_user_id"=>nil, "current_sign_in_at"=>nil, "current_sign_in_ip"=>nil, "email"=>"czid-e2e@chanzuckerberg.com", "institution"=>nil, "last_sign_in_at"=>nil, "last_sign_in_ip"=>nil, "name"=>"CZ ID Test Account", "phylo_trees_count"=>0, "profile_form_version"=>1, "role"=>1, "salt"=>"9qdDdrs65nkJocGvtoeMc74P", "samples_count"=>0, "segments"=>nil, "sign_in_count"=>0, "visualizations_count"=>0})
+  # CZID-319: the "CZ ID Test Account" (czid-e2e@chanzuckerberg.com, role=1) is removed from the
+  # production seed — it is a test/demo account and must not exist on a real deployment. It is
+  # retained only on the demo branch (mysql8-demo). NOTE for seed regeneration: regenerate from a
+  # database that does NOT contain this account, or re-apply this removal.
 
   WorkflowVersion.create({"deprecated"=>false, "runnable"=>true, "version"=>"3.4.18", "workflow"=>"consensus-genome"})
 
