@@ -41,11 +41,17 @@ const MetadataInput = ({
     setPrevWarning(warning);
   }
 
-  if (metadataType.key === "sample_type" && typeof value === "string") {
+  // CZID-314: render the SampleTypeSearchBox for sample_type even when there is no value yet.
+  // Previously this branch was gated on `typeof value === "string"`, so an EMPTY sample_type
+  // (value === undefined) failed the guard and fell through to a plain text <Input> — the dropdown
+  // only appeared once you typed a character (which made value a string). Drop the type gate and
+  // coerce the value to a string for the component (it expects `value: string`). Other option-based
+  // fields (Host Organism, Nucleotide Type) already render unconditionally, which is why they work.
+  if (metadataType.key === "sample_type") {
     return (
       <SampleTypeSearchBox
         className={className}
-        value={value}
+        value={typeof value === "string" ? value : ""}
         onResultSelect={({ result }) => {
           // Result can be plain text or a match. We treat them the same.
           onChange(metadataType.key, result.name || result, true);
