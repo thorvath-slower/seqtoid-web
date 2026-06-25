@@ -57,17 +57,19 @@ module ProjectsDiscovery
                      .includes(:creator, samples: [:host_genome, :user, { metadata: [:metadata_field, :location] }, :pipeline_runs, :workflow_runs])
                      .group("projects.id", "creators_projects.id", "creators_projects.name")
                      .references(:pipeline_runs, :samples, :workflow_runs)
-    # aggregated lists of association values as strings. Portable string_agg
-    # (Postgres/MySQL 8+); separator '::', and DISTINCT aggregates order by the
-    # aggregated expression itself (Postgres requires the ORDER BY key to be in
-    # the argument list). bug-#011.
+    # Aggregated lists of association values as strings via MySQL GROUP_CONCAT (the MySQL-8 target;
+    # CZID-281). Separator '::'; DISTINCT aggregates ORDER BY the aggregated expression itself.
+    # (Scope: mysql — a Postgres build would use string_agg here. bug-#011.)
     group_concat_host = Arel.sql("GROUP_CONCAT(DISTINCT host_genomes.name ORDER BY host_genomes.name SEPARATOR '::') AS hosts")
     group_concat_sample_type = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END ORDER BY 1 SEPARATOR '::') AS sample_types")
     group_concat_location = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN IFNULL(locations.name, metadata.string_validated_value) ELSE NULL END SEPARATOR '::') AS locations")
-    # Use || (not CONCAT): Postgres CONCAT ignores NULLs and would emit a
-    # partial "|email" for null-user rows, whereas MySQL CONCAT returns NULL
-    # (skipped by the aggregate). || preserves that NULL-if-any-NULL semantics.
+    # MySQL CONCAT returns NULL when any argument is NULL, so a null-user row is skipped by the
+    # aggregate (rather than emitting a partial "|email") — the intended NULL-if-any-NULL semantics.
+    # (Scope: mysql — a Postgres build would use || here, since Postgres CONCAT ignores NULLs.)
     group_concat_users = Arel.sql("GROUP_CONCAT(DISTINCT CONCAT(users.name,'|',users.email) ORDER BY users.name SEPARATOR '::') AS users")
+    # Interpolated values are trusted server-side, NOT user input: current_user.id is an integer and
+    # current_user.admin? is a boolean -> no SQL-injection surface. The admin? term marks admins
+    # editable on every project (it also drives the member-list visibility below).
     editable = Arel.sql("BIT_OR(CASE WHEN users.id=#{current_user.id} OR #{current_user.admin?} THEN 1 ELSE 0 END) AS editable")
     creator = Arel.sql("creators_projects.name AS creator")
     creator_id = Arel.sql("creators_projects.id AS creator_id")
