@@ -33,6 +33,11 @@ require 'shellwords'
 REPO_ROOT     = File.expand_path('..', __dir__)
 SCRIPTS_DIR   = File.join(__dir__, 'manual_deploy_scripts') # where the parameterizable czecs task files live
 PROD_ENVS     = %w[prod production].freeze
+# ECS cluster name per env. staging keeps its legacy name "staging" (never renamed —
+# IDSEQ-2155); every other env follows the idseq-<env>-ecs convention. Mirrors bin/deploy
+# and the ucsf-signin tooling so the cluster name can't drift across them (CZID #303).
+# Override for a one-off with ECS_CLUSTER=<name>.
+ECS_CLUSTER_OVERRIDES = { 'staging' => 'staging' }.freeze
 # Default taxon-descriptions dataset; override via TAXON_DESCRIPTIONS_S3_URI (don't hand-edit this file).
 DEFAULT_TAXON_DESCRIPTIONS_S3 =
   's3://seqtoid-public-references/phase1/taxonomy/' \
@@ -82,7 +87,7 @@ abort("Image tag must look like 'sha-<hex>' (got '#{image}').") unless image =~ 
 confirm_or_abort!(env)
 
 taxon_descriptions_s3 = ENV['TAXON_DESCRIPTIONS_S3_URI'] || DEFAULT_TAXON_DESCRIPTIONS_S3
-cluster = "idseq-#{env}-ecs"
+cluster = ENV['ECS_CLUSTER'] || ECS_CLUSTER_OVERRIDES.fetch(env, "idseq-#{env}-ecs")
 balances = "balances-#{env}.json"
 
 # czecs runs the one-off ECS tasks. Everything below operates from SCRIPTS_DIR so the task files resolve.
