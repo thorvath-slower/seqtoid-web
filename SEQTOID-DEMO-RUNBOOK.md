@@ -35,6 +35,34 @@ The demo branch differs from `main` by exactly 5 files (the demo affordances); t
   platform). It works, but the **image build (~10 min) and the frontend asset build (~7 min) are slow** the first
   time. Intel/amd64 hosts are faster.
 
+### Ubuntu 24.04 (x86_64) — Docker install + platform notes
+
+On Ubuntu 24.04 the images run **natively** (`linux/amd64`), so there is **no emulation** — builds are noticeably
+faster than the Apple-Silicon figures above. The launch steps in section 4 apply unchanged.
+
+Install Docker Engine + Compose v2 from Docker's official apt repository:
+
+```bash
+sudo apt-get update && sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# run docker without sudo (then log out/in, or run `newgrp docker`)
+sudo usermod -aG docker "$USER" && newgrp docker
+
+docker --version && docker compose version   # verify
+```
+
+- **OpenSearch:** this compose runs it `discovery.type=single-node` with bootstrap checks skipped and `memlock`
+  ulimits set, so the usual Linux `vm.max_map_count` tuning is **not** required.
+- Everything else (the `.env`, the `node_modules` override, and the build/seed/asset/restart flow) is identical to
+  section 4.
+
 ## 4. Launch steps
 
 ```bash
