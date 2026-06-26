@@ -51,6 +51,13 @@ module Auth0Helper
     end
   end
 
+  def direct_login(user_id)
+    auth_user = User.find(user_id)
+    Rails.logger.info("direct_login: user_id: #{user_id}, auth_user: #{auth_user}")
+    warden.logout(:user)
+    warden.set_user(auth_user, scope: :auth0_user)
+  end
+
   def auth0_decode_auth_token
     auth_payload, auth_header = auth_token
     if auth_payload.present?

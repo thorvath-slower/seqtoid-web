@@ -30,6 +30,14 @@ class Auth0Controller < ApplicationController
   end
 
   def login
+    # CZID-317 (localdev): Auth0 is unreachable offline, so the silent-login flow can't complete and
+    # the "Sign In" button is a dead end. When direct login is enabled (dev/sandbox +
+    # ALLOW_DIRECT_USER_LOGIN), route Sign In straight to the direct backdoor instead, defaulting to
+    # the seeded admin. Same gate as direct_user_login itself; no effect in production.
+    if (Rails.env.development? || Rails.env.sandbox?) && ENV["ALLOW_DIRECT_USER_LOGIN"] == "true"
+      return redirect_to(direct_user_login_path(user_id: params[:user_id] || 1))
+    end
+
     # Redirecting to the refresh token forcing a login operation
     redirect_to url_for(
       action: :refresh_token,
@@ -37,8 +45,22 @@ class Auth0Controller < ApplicationController
     )
   end
 
+  def direct_user_login
+    user_id = params[:user_id]
+    direct_login(user_id)
+    @token_based_login_request = true
+    redirect_to home_path
+  end
+
   def logout
     auth0_invalidate_application_session
+    # CZID-317 (localdev): Auth0's signout URL is unreachable offline, so the normal logout dead-ends
+    # and you can't get back to the logged-out landing page. When direct login is enabled (dev/sandbox
+    # + ALLOW_DIRECT_USER_LOGIN), drop the session and return to the landing page instead. Same gate as
+    # the login override; no effect in production.
+    if (Rails.env.development? || Rails.env.sandbox?) && ENV["ALLOW_DIRECT_USER_LOGIN"] == "true"
+      return redirect_to(root_path)
+    end
     redirect_to auth0_signout_url
   end
 
