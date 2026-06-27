@@ -1,0 +1,44 @@
+name: Refresh Reference Data
+run-name: Refresh taxon-lineage reference data in ${{ inputs.environment }} (v${{ inputs.version }})
+
+# On-demand, parametrized refresh of taxon-lineage reference data + its Elasticsearch index, DECOUPLED
+# from a web deploy (#334 / feature 20029). Runs against the currently-deployed task definition — no
+# image build, no service upgrade. See bin/manual_deploy_scripts/refresh-reference-data.sh.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [dev, staging, prod, sandbox]
+        default: 'dev'
+      version:
+        description: 'Taxon lineage version (e.g. 2024-02-06)'
+        required: true
+        type: string
+        default: '2024-02-06'
+      file_key:
+        description: 'S3 key under S3_DATABASE_BUCKET for the lineage slice CSV'
+        required: true
+        type: string
+        default: 'ncbi-indexes-prod/2024-02-06/index-generation-2/taxon_lineages_2024_slice.csv'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-west-2
+          role-to-assume: ${{ inputs.environment == 'prod' && secrets.PROD_AWS_ROLE || secrets.DEV_AWS_ROLE }}
+      - name: Refresh reference data
+        run: bin/manual_deploy_scripts/refresh-reference-data.sh "${{ inputs.environment }}" "${{ inputs.version }}" "${{ inputs.file_key }}"
