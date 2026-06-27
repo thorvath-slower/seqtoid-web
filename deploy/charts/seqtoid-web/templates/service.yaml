@@ -1,0 +1,19 @@
+{{- range $svc := list "active" "preview" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "seqtoid-web.fullname" $ }}-{{ $svc }}
+  labels:
+    {{- include "seqtoid-web.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "seqtoid-web.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+{{- end }}

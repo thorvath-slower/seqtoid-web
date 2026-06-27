@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "seqtoid-web.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  strategy:
+    blueGreen:
+      activeService: {{ include "seqtoid-web.fullname" . }}-active
+      previewService: {{ include "seqtoid-web.fullname" . }}-preview
+      autoPromotionEnabled: {{ .Values.blueGreen.autoPromotionEnabled }}
+      scaleDownDelaySeconds: {{ .Values.blueGreen.scaleDownDelaySeconds }}
+      {{- if .Values.blueGreen.analysis.enabled }}
+      prePromotionAnalysis:
+        templates:
+          - templateName: {{ include "seqtoid-web.fullname" . }}-smoke
+      {{- if .Values.blueGreen.analysis.postPromotion }}
+      postPromotionAnalysis:
+        templates:
+          - templateName: {{ include "seqtoid-web.fullname" . }}-smoke
+      {{- end }}
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "seqtoid-web.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" . }}
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # image ENTRYPOINT = bin/entrypoint.sh (chamber exec ... -- bundle exec "$@"); args = the wrapped cmd
+          args: {{ .Values.command | toJson }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          env:
+            {{- include "seqtoid-web.commonEnv" . | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health_check
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health_check
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

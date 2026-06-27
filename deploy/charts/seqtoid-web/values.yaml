@@ -1,0 +1,67 @@
+# seqtoid-web chart defaults. Per-env overrides live in
+# cypherid-web-infra/deploy/argocd/values/seqtoid-web/{dev,staging,prod}.yaml (Argo multi-source).
+environment: dev
+awsRegion: us-west-2
+
+image:
+  repository: ""        # set per env (ECR), e.g. <acct>.dkr.ecr.us-west-2.amazonaws.com/czid-<env>/seqtoid-web
+  tag: latest           # CI advances this to the immutable git-sha tag on deploy
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  name: ""
+  roleArn: ""           # IRSA: eks.amazonaws.com/role-arn — gives pods Secrets Manager (Chamber) + S3 access
+
+# Web container. The image ENTRYPOINT is bin/entrypoint.sh (chamber exec idseq-<env>-web -- bundle exec "$@"),
+# so `command` here is the args the entrypoint wraps. Chamber stays for the first cut; ESO is CZID-325.
+containerPort: 3000
+command: ["rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+
+extraEnv: {}            # any additional plain env (non-secret); secrets come via Chamber/IRSA
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+blueGreen:
+  autoPromotionEnabled: true     # dev/staging true; prod false (manual gate)
+  scaleDownDelaySeconds: 30
+  analysis:
+    enabled: true                # pre-promotion smoke gate
+    postPromotion: false
+
+ingress:
+  enabled: true
+  host: ""
+  certificateArn: ""
+  annotations: {}
+
+# Background workers (resque variants + shoryuken) — each a Deployment. Commands mirror the czecs-* task defs.
+workers:
+  - name: resque
+    command: ["rake", "resque:work"]
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,q04_es_loader"
+    replicas: 1
+  - name: resque-scheduler
+    command: ["rake", "resque:scheduler"]
+    replicas: 1
+  - name: pipeline-monitor
+    command: ["rake", "pipeline_monitor"]
+    replicas: 1
+  - name: result-monitor
+    command: ["rake", "result_monitor"]
+    replicas: 1
+  - name: shoryuken
+    command: ["shoryuken", "-R", "-C", "config/shoryuken.yml"]
+    replicas: 1
+
+# DB migrations run as a pre-sync Job (replaces the czecs run-task migrate). MySQL 8 target (CZID-320).
+migrate:
+  enabled: true
+  command: ["rails", "db:migrate:with_data"]

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: seqtoid-web
+description: seqtoid-web (Rails) — blue/green delivery on EKS via Argo Rollouts (CZID-323)
+type: application
+version: 0.1.0
+appVersion: "1.0"

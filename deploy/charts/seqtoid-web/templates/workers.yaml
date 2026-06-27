@@ -1,0 +1,38 @@
+{{- range .Values.workers }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "seqtoid-web.fullname" $ }}-{{ .name }}
+  labels:
+    {{- include "seqtoid-web.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  replicas: {{ .replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "seqtoid-web.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ .name }}
+  template:
+    metadata:
+      labels:
+        {{- include "seqtoid-web.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ .name }}
+    spec:
+      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" $ }}
+      containers:
+        - name: {{ .name }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: {{ .command | toJson }}
+          env:
+            {{- include "seqtoid-web.commonEnv" $ | nindent 12 }}
+            {{- if .queue }}
+            - name: QUEUE
+              value: {{ .queue | quote }}
+            - name: COUNT
+              value: "1"
+            {{- end }}
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+---
+{{- end }}
