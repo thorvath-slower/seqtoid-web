@@ -40,10 +40,10 @@ jobs:
       - name: helm lint
         run: |
           helm lint deploy/charts/seqtoid-web \
-            --set image.repository=ci/seqtoid-web --set ingress.host=ci.example.org
+            --set image.repository=ci/seqtoid-web --set ingress.host=ci.example.org --set secrets.externalSecrets.enabled=true
       - name: helm template + kubeconform (incl. Argo Rollouts CRDs)
         run: |
           helm template seqtoid-web deploy/charts/seqtoid-web \
-            --set image.repository=ci/seqtoid-web --set ingress.host=ci.example.org \
+            --set image.repository=ci/seqtoid-web --set ingress.host=ci.example.org --set secrets.externalSecrets.enabled=true \
           | kubeconform -strict -summary -ignore-missing-schemas \
               -schema-location default -schema-location "$CRD_SCHEMAS"

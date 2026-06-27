@@ -65,3 +65,13 @@ workers:
 migrate:
   enabled: true
   command: ["rails", "db:migrate:with_data"]
+
+# External Secrets Operator (CZID-325) — opt-in. When enabled, a SecretStore + ExternalSecret sync the
+# Chamber SSM Parameter Store params under /idseq-<env>-web/ into a K8s Secret (<fullname>-env), reusing the
+# pod's existing IRSA role (the same SSM access Chamber uses). FIRST CUT: this only provisions the synced
+# Secret; flipping the workloads to consume it (envFrom + SKIP_CHAMBER) is the reviewable next step.
+secrets:
+  externalSecrets:
+    enabled: false
+    refreshInterval: 1h
+  parameterPath: ""   # default /idseq-<environment>-web/
