@@ -1,0 +1,49 @@
+name: helm-chart
+
+# Chart-verification gate (CZID-327) for the seqtoid-web Helm chart (CZID-323). On any change under
+# deploy/charts/**: helm lint, render, and kubeconform-validate every resource — including the Argo
+# Rollouts CRDs (Rollout, AnalysisTemplate) via the datreeio CRD-schema catalog.
+on:
+  push:
+    paths:
+      - 'deploy/charts/**'
+      - '.github/workflows/helm-chart.yml'
+  pull_request:
+    paths:
+      - 'deploy/charts/**'
+      - '.github/workflows/helm-chart.yml'
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: helm-chart-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CRD_SCHEMAS: 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+      - name: Install kubeconform
+        run: |
+          KV=0.6.7
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${KV}/kubeconform-linux-amd64.tar.gz" | tar -xz kubeconform
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+      - name: helm lint
+        run: |
+          helm lint deploy/charts/seqtoid-web \
+            --set image.repository=ci/seqtoid-web --set ingress.host=ci.example.org
+      - name: helm template + kubeconform (incl. Argo Rollouts CRDs)
+        run: |
+          helm template seqtoid-web deploy/charts/seqtoid-web \
+            --set image.repository=ci/seqtoid-web --set ingress.host=ci.example.org \
+          | kubeconform -strict -summary -ignore-missing-schemas \
+              -schema-location default -schema-location "$CRD_SCHEMAS"
