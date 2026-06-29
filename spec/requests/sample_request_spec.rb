@@ -696,9 +696,14 @@ RSpec.describe "Sample request", type: :request do
           @samples501, @metadata501 = create_n_short_read_mngs_samples(@number_of_samples)
         end
 
-        it "returns an error", skip: "CZID-185: Rails 7.1 param-count limit (4096) trips on the 501-sample request before the app's SAMPLE_UPLOAD_LIMIT check (CZID-118 NameError is fixed; specs :329/:348 pass)" do
+        it "returns an error" do
+          # CZID-185: post as JSON, exactly as the real client does (app/assets/src/api/upload.ts
+          # sends an axios application/json body). Form-encoding 501 samples trips Rack 3's
+          # param-count limit (4096) in the query parser BEFORE the controller's SAMPLE_UPLOAD_LIMIT
+          # check can return the graceful error; a JSON body is parsed by ActionDispatch (not Rack's
+          # form QueryParser), so it reaches the controller — matching production behaviour.
           expect do
-            post "/samples/bulk_upload_with_metadata", params: { samples: @samples501, metadata: @metadata501, client: @client_params, format: :json }
+            post "/samples/bulk_upload_with_metadata", params: { samples: @samples501, metadata: @metadata501, client: @client_params }, as: :json
           end.to raise_error(ErrorHelper::SampleUploadErrors.exceeded_sample_upload_limit(@number_of_samples, SamplesController::SAMPLE_UPLOAD_LIMIT, @client_params))
         end
       end
