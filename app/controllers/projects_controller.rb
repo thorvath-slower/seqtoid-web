@@ -259,9 +259,7 @@ class ProjectsController < ApplicationController
         bins_map = projects.group(
           ActiveRecord::Base.send(
             :sanitize_sql_array,
-            # Postgres has no TIMESTAMPDIFF; date subtraction yields integer days.
-            # Cast to int so the GROUP BY key is an Integer matching bins_map[bucket].
-            ["FLOOR((projects.created_at::date - :min_date)::numeric / :step)::int", { min_date: min_date, step: step }]
+            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `projects`.`created_at`)/:step)", { min_date: min_date, step: step }]
           )
         ).count
         time_bins = (0...MAX_BINS).map do |bucket|

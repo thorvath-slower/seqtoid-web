@@ -227,19 +227,17 @@ class WorkflowRun < ApplicationRecord
   }
 
   scope :sort_by_input, lambda { |sort_key, order_dir|
-    # bug-#011: JSON_EXTRACT -> jsonb access. Order by the extracted jsonb value
-    # bug-#011: inputs_json is a TEXT column holding a JSON string, so cast ::jsonb
-    # to navigate it (this is what MySQL's JSON_EXTRACT on a text column did). The
-    # input sort keys are strings, so use ->> (text) for plain lexical ordering;
-    # jsonb -> would compare strings by length-then-bytes, which is not what we want.
+    # bug-#011: inputs_json is a TEXT column holding a JSON string. Use MySQL
+    # JSON_EXTRACT to navigate it and JSON_UNQUOTE to get the raw text value, so the
+    # input sort keys (strings) order lexically rather than as quoted JSON literals.
     order_statement = "JSON_UNQUOTE(JSON_EXTRACT(inputs_json, '$.#{sort_key}')) #{order_dir} #{mysql_nulls(order_dir)}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
     order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :sort_by_cached_result, lambda { |sort_key, order_dir|
     cached_result_key = sort_key == "coverage_depth" ? CACHED_RESULT_COVERAGE_VIZ_KEY : CACHED_RESULT_QUALITY_METRICS_KEY
-    # cached_results is a TEXT column holding a JSON string; cast ::jsonb to navigate.
-    # The cached keys are numbers, so #> (jsonb) gives correct numeric ordering.
+    # cached_results is a TEXT column holding a JSON string; use MySQL JSON_EXTRACT
+    # to navigate it. The cached keys are numbers, so the extracted value orders numerically.
     order_statement = "JSON_EXTRACT(cached_results, '$.#{cached_result_key}.#{sort_key}') #{order_dir} #{mysql_nulls(order_dir)}, #{TIEBREAKER_SORT_KEY} #{order_dir}"
     order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }

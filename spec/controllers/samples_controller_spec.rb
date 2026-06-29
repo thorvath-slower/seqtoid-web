@@ -13,6 +13,21 @@ RSpec.describe SamplesController, type: :controller do
       sign_in @joe
     end
 
+    describe "GET dimensions" do
+      # Regression for CZID-372: the date-histogram "binned" branch (samples spanning
+      # more than MAX_BINS days) must use MySQL TIMESTAMPDIFF, not Postgres `::` casts,
+      # or the query raises a SQL error at runtime on MySQL. A ~90-day span forces the
+      # binned path; the endpoint must return successfully (not a 500 from a SQL error).
+      it "computes the binned time histogram without a SQL error (MySQL parity)" do
+        project = create(:project, users: [@joe])
+        create(:sample, project: project, user: @joe, created_at: 90.days.ago)
+        create(:sample, project: project, user: @joe, created_at: 1.day.ago)
+        get :dimensions, format: :json, params: { domain: "my_data" }
+        expect(response).to have_http_status :success
+        expect { JSON.parse(response.body) }.not_to raise_error
+      end
+    end
+
     describe "GET index_v2" do
       it "loads list of samples with correct visibility" do
         project = create(:project, users: [@joe], days_to_keep_sample_private: 365)
