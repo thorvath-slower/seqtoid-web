@@ -1,0 +1,39 @@
+# CZID-13 — the single appliance config the installer feeds to all Helm releases (self-hosted/k3s).
+# This is the "local-state backend" for the self-hosted profile: one values file + the cluster's
+# Secrets, mirroring the foundation's single-source-of-config principle without S3/EKS.
+# Edit per deployment; secret values go in k8s Secrets, NOT here.
+
+# --- app (seqtoid-web, layered on top of values-k3s.yaml) -----------------------------------------
+environment: self-hosted
+image:
+  repository: registry.local/seqtoid-web
+  tag: latest
+ingress:
+  enabled: true
+  className: traefik
+  host: seqtoid.example.internal      # the appliance's hostname
+
+# --- pipeline runner (seqtoid-pipeline-runner, miniwdl-on-k8s) ------------------------------------
+# (consumed when the runner chart is in the bundle; keys mirror that chart's values)
+image_runner:
+  repository: registry.local/seqtoid-pipeline-runner
+  tag: latest
+storage:
+  endpoint: "http://minio.seqtoid.svc.cluster.local:9000"
+  bucket: "seqtoid-workflows"
+  credentialsSecret: "seqtoid-pipeline-runner-storage"   # create with the MinIO creds
+
+# --- data tier (in-cluster, not RDS/S3) ----------------------------------------------------------
+# MySQL 8 + MinIO are installed as bundled subcharts OR point these at customer-supplied endpoints.
+mysql:
+  inCluster: true        # false => set an external host/secret
+  # host: ""             # when inCluster=false
+minio:
+  inCluster: true
+
+# --- auth (offline; no Auth0 reachability required) ----------------------------------------------
+auth:
+  allowDirectUserLogin: true   # the #280 offline-login path; or wire a bundled OIDC
+
+# --- sizing (the heavy WDL pipelines need real resources; see #72/#13) ---------------------------
+# minimums enforced by install.sh: MIN_MEM_GB / MIN_DISK_GB.
