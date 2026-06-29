@@ -1,8 +1,9 @@
-{{- /* CZID-12: the Argo Rollouts blue/green workload — managed-SaaS/EKS only. k3s sets
-       blueGreen.enabled=false and gets templates/deployment.yaml instead (no Rollouts CRD). */}}
-{{- if .Values.blueGreen.enabled }}
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
+{{- /* CZID-12: plain Deployment for the self-hosted (k3s) profile, where the Argo Rollouts CRD is
+       absent. Rendered ONLY when blueGreen.enabled=false; managed-SaaS/EKS uses templates/rollout.yaml.
+       The pod spec mirrors rollout.yaml — keep the two in sync (a shared helper is a future refactor). */}}
+{{- if not .Values.blueGreen.enabled }}
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: {{ include "seqtoid-web.fullname" . }}
   labels:
@@ -14,22 +15,6 @@ spec:
     matchLabels:
       {{- include "seqtoid-web.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: web
-  strategy:
-    blueGreen:
-      activeService: {{ include "seqtoid-web.fullname" . }}-active
-      previewService: {{ include "seqtoid-web.fullname" . }}-preview
-      autoPromotionEnabled: {{ .Values.blueGreen.autoPromotionEnabled }}
-      scaleDownDelaySeconds: {{ .Values.blueGreen.scaleDownDelaySeconds }}
-      {{- if .Values.blueGreen.analysis.enabled }}
-      prePromotionAnalysis:
-        templates:
-          - templateName: {{ include "seqtoid-web.fullname" . }}-smoke
-      {{- if .Values.blueGreen.analysis.postPromotion }}
-      postPromotionAnalysis:
-        templates:
-          - templateName: {{ include "seqtoid-web.fullname" . }}-smoke
-      {{- end }}
-      {{- end }}
   template:
     metadata:
       labels:
@@ -41,7 +26,6 @@ spec:
         - name: web
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # image ENTRYPOINT = bin/entrypoint.sh (chamber exec ... -- bundle exec "$@"); args = the wrapped cmd
           args: {{ .Values.command | toJson }}
           ports:
             - name: http

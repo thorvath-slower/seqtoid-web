@@ -1,3 +1,5 @@
+{{- if .Values.blueGreen.enabled }}
+{{- /* CZID-12: blue/green needs the active + preview pair (managed-SaaS/EKS). */}}
 {{- range $svc := list "active" "preview" }}
 apiVersion: v1
 kind: Service
@@ -16,4 +18,23 @@ spec:
       port: 80
       targetPort: http
 ---
+{{- end }}
+{{- else }}
+{{- /* CZID-12: a single Service for the plain Deployment (self-hosted k3s). */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "seqtoid-web.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
 {{- end }}

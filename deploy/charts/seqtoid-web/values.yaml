@@ -30,14 +30,20 @@ resources:
     memory: 1Gi
 
 blueGreen:
+  # CZID-12 deployment profiles: true = Argo Rollouts blue/green (managed EKS); false = a plain
+  # apps/v1 Deployment (self-hosted k3s, where the Argo Rollouts CRD is absent). SaaS default = true.
+  enabled: true
   autoPromotionEnabled: true     # dev/staging true; prod false (manual gate)
   scaleDownDelaySeconds: 30
   analysis:
-    enabled: true                # pre-promotion smoke gate
+    enabled: true                # pre-promotion smoke gate (only when blueGreen.enabled)
     postPromotion: false
 
 ingress:
   enabled: true
+  # CZID-12: SaaS = "alb" (emits the ALB-controller annotation block); k3s = "traefik"/"nginx"
+  # (no ALB annotations; use ingress.annotations for the in-cluster controller).
+  className: alb
   host: ""
   certificateArn: ""
   annotations: {}

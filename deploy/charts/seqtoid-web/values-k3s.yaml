@@ -1,0 +1,40 @@
+# CZID-12 — self-hosted (k3s) deployment profile.
+# Overlay: `helm template seqtoid-web . -f values-k3s.yaml`.
+# No AWS dependencies on the critical path: plain Deployment (no Argo Rollouts CRD), in-cluster
+# ingress (Traefik, k3s default), no IRSA, image from the offline mirror (#10/#205).
+#
+# KNOWN CAVEAT (image, not chart): the web image ENTRYPOINT runs `chamber exec` (SSM). For a true
+# air-gapped k3s run the image must be built/run with chamber bypassed and config supplied via a k8s
+# Secret (secrets.provider work + an image entrypoint flag) — tracked with #13 / the secrets decision.
+
+environment: self-hosted
+awsRegion: ""
+
+image:
+  repository: registry.local/seqtoid-web   # the offline mirror / customer registry (#10/#205)
+  tag: latest
+
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  roleArn: ""        # no IRSA on k3s → serviceaccount.yaml emits no eks role-arn annotation
+
+blueGreen:
+  enabled: false     # plain apps/v1 Deployment; no Argo Rollouts / AnalysisTemplate
+
+ingress:
+  enabled: true
+  className: traefik # k3s default ingress controller (no ALB)
+  host: seqtoid.local
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+migrate:
+  enabled: true

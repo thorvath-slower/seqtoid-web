@@ -6,6 +6,8 @@ metadata:
   labels:
     {{- include "seqtoid-web.labels" . | nindent 4 }}
   annotations:
+    {{- /* CZID-12: ALB-controller annotations only for the SaaS/EKS profile (className=alb). */}}
+    {{- if eq .Values.ingress.className "alb" }}
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
@@ -13,11 +15,12 @@ metadata:
     {{- if .Values.ingress.certificateArn }}
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn }}
     {{- end }}
+    {{- end }}
     {{- range $k, $v := .Values.ingress.annotations }}
     {{ $k }}: {{ $v | quote }}
     {{- end }}
 spec:
-  ingressClassName: alb
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
     - host: {{ required "ingress.host is required when ingress.enabled" .Values.ingress.host | quote }}
       http:
@@ -26,7 +29,8 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "seqtoid-web.fullname" . }}-active
+                {{- /* CZID-12: blue/green routes to the active Service; k3s to the single Service. */}}
+                name: {{ include "seqtoid-web.fullname" . }}{{ if .Values.blueGreen.enabled }}-active{{ end }}
                 port:
                   number: 80
 {{- end }}

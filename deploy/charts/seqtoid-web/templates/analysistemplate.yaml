@@ -1,4 +1,5 @@
-{{- if .Values.blueGreen.analysis.enabled }}
+{{- /* CZID-12: an Argo AnalysisTemplate — only with blue/green (managed-SaaS/EKS). */}}
+{{- if and .Values.blueGreen.enabled .Values.blueGreen.analysis.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:

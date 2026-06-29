@@ -1,0 +1,26 @@
+# CZID-12 — managed single-tenant deployment profile.
+# Overlay: `helm template seqtoid-web . -f values-single-tenant.yaml`.
+# Same managed-SaaS substrate (EKS + ALB + IRSA + Argo Rollouts), but one tenant per release
+# (isolated namespace/release per customer), with single-tenant sizing. Tenancy is enforced
+# app-level (one DB/schema per release). Set image.repository / ingress.host / serviceAccount.roleArn
+# / ingress.certificateArn per customer (as the SaaS per-env values do).
+
+environment: prod          # a dedicated single-tenant environment
+replicaCount: 2            # smaller than multi-tenant SaaS
+
+# Managed substrate kept (same as SaaS defaults): blueGreen.enabled=true, ingress.className=alb,
+# IRSA via serviceAccount.roleArn (set per tenant), Chamber secrets.
+blueGreen:
+  enabled: true
+  autoPromotionEnabled: false   # single-tenant prod → manual promotion gate
+
+ingress:
+  enabled: true
+  className: alb
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
