@@ -20,6 +20,11 @@ env:
   AWS_DEFAULT_OUTPUT: json
   AWS_REGION: us-west-2
   DEBIAN_FRONTEND: noninteractive
+  # CZID-40 (CICD-6): drive the CI identity from repo/org Actions variables so it is rotatable and
+  # not tied to a hardcoded account. Falls back to the current values if the vars are unset, so this
+  # is safe to merge before the Actions variables are configured.
+  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '941377154785' }}
+  GHA_ROLE: ${{ vars.GHA_ROLE || 'gha-seqtoid' }}
   LC_ALL: C.UTF-8
   LANG: C.UTF-8
   #GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
@@ -55,13 +60,13 @@ jobs:
         id: configure_aws_credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::941377154785:role/gha-seqtoid
+          role-to-assume: arn:aws:iam::${{ env.CI_ACCOUNT_ID }}:role/${{ env.GHA_ROLE }}
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
           aws-region: ${{ env.AWS_REGION }}
       - name: Login to ECR
         uses: docker/login-action@v4
         with:
-          registry: 941377154785.dkr.ecr.us-west-2.amazonaws.com/idseq-web
+          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/idseq-web
       - name: Export variables
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
