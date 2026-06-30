@@ -1,13 +1,13 @@
 name: Build and Push Docker Images
 
-#TODO - This should not push images to ECR on every branch push. Only main should be automatically pushed to ECR.
-# If feature branches need to be tested in a deployed environment, a separate workflow_dispatch should be run for those.
+# CZID #304 — auto-build + push to ECR on merges to `main` ONLY. Feature branches are
+# intentionally NOT auto-pushed; build one on demand via the workflow_dispatch below (e.g.
+# to test it in a deployed environment). This is a build, not a deploy — deploys stay
+# button-driven (deploy.yml / deploy-promote.yml).
 on:
-#  push:
-#    branches:
-#      - "**"
-#    tags-ignore:
-#      - "**"
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       environment:
