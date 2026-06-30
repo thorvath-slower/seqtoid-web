@@ -1,12 +1,20 @@
 name: idseq-web check
 
+# CZID #305 — the JS/TS + Python jobs below gate every PR (and main post-merge). The two
+# Ruby jobs are gated to manual `workflow_dispatch` only: on PRs they would duplicate the
+# dedicated gates (ci-test-mysql8.yml runs the Ruby suite; pull-request-only.yml runs
+# rubocop via reviewdog), so we don't run them twice. Trigger this workflow by hand to get
+# the full multi-language check (Ruby + JS + Python) in one place.
 on:
-#  push
+  pull_request:
+  push:
+    branches: [main]   # post-merge gate; PR branches use pull_request (no duplicate run)
   workflow_dispatch:
 
 jobs:
   ruby_test:
     name: Ruby Test
+    if: ${{ github.event_name == 'workflow_dispatch' }}   # covered on PRs by ci-test-mysql8.yml
     runs-on: ubuntu-latest
     container: ruby:3.3.6
     env:
@@ -99,6 +107,7 @@ jobs:
 
   ruby_code_analysis:
     name: Ruby Code Analysis
+    if: ${{ github.event_name == 'workflow_dispatch' }}   # covered on PRs by pull-request-only.yml (rubocop)
     runs-on: ubuntu-latest
     steps:
     - name: Check out code
