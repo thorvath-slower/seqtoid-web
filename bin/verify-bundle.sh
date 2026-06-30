@@ -73,7 +73,9 @@ assert() {
 # ===================== ASSERTIONS (the bundle contract) =====================
 # Upload fix — stock AWS SDK + app-owned resumable uploader, no ES5 fork.
 assert app     MUST     'expiration:[A-Za-z0-9_$]+\?new Date\(' "STS credential expiration converted to Date (AWS SDK v3 requires it)"
-assert app     MUST     'new Uint8Array\(await'                 "upload parts sent as in-memory bytes (avoids aws-chunked .getReader() on a Blob)"
+# NOTE: `toBytes` is async, so babel transpiles `new Uint8Array(await blob.arrayBuffer())` into a
+# regenerator state machine (`X=Uint8Array, ...next..., Y.arrayBuffer()`) — match THAT, not source.
+assert app     MUST     'Uint8Array,[A-Za-z0-9_$]+\.next'       "upload parts read into memory bytes (avoids aws-chunked .getReader() on a Blob)"
 assert app     MUST     'ResumableUpload'                       "app-owned ResumableUpload present (replaces the vendored lib-storage fork)"
 assert app     MUST     'onCreatedMultipartUpload'              "resumable-upload resume hook present"
 assert vendors MUST     'class S3Client extends'                "native ES6 S3Client from stock @aws-sdk/client-s3"
