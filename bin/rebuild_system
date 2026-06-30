@@ -1,0 +1,152 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# rebuild_system — Path B of the two-path deploy model (CZID #299).
+#
+# DANGEROUS BY DESIGN: this DESTROYS and REBUILDS an environment from scratch —
+# it drops the database, recreates + migrates + seeds it, reloads taxon data,
+# (re)creates the OpenSearch indexes, optionally creates an admin, and rolls the
+# services. Use this ONLY for "rebuild the entire system from scratch".
+#
+# For the everyday "I just want to deploy my web app changes", use ./bin/deploy
+# (migrate-only, non-destructive) — NOT this.
+#
+# Safety guards (accidental rebuild is intentionally near-impossible):
+#   * interactive runs must TYPE the exact environment name to confirm;
+#   * non-interactive (CI) runs must set REBUILD_CONFIRM=<env>;
+#   * production environments additionally require REBUILD_PROD_APPROVED=yes.
+#
+# Taxon data is reloaded AUTOMATICALLY here (previously a manual step). The
+# taxon-descriptions S3 URI is config, not hard-coded — override with
+# TAXON_DESCRIPTIONS_S3_URI=... ; the lineage-slice import source is configured
+# in the rake task itself.
+#
+# Usage:
+#   ./bin/rebuild_system ENV IMAGE_TAG YOUR_NAME
+#   (CI) REBUILD_CONFIRM=dev ./bin/rebuild_system dev sha-abc1234 ci
+#   (prod) REBUILD_CONFIRM=prod REBUILD_PROD_APPROVED=yes ./bin/rebuild_system prod sha-… name
+
+require 'rbconfig'
+require 'json'
+require 'shellwords'
+
+REPO_ROOT     = File.expand_path('..', __dir__)
+SCRIPTS_DIR   = File.join(__dir__, 'manual_deploy_scripts') # where the parameterizable czecs task files live
+PROD_ENVS     = %w[prod production].freeze
+# ECS cluster name per env. staging keeps its legacy name "staging" (never renamed —
+# IDSEQ-2155); every other env follows the idseq-<env>-ecs convention. Mirrors bin/deploy
+# and the ucsf-signin tooling so the cluster name can't drift across them (CZID #303).
+# Override for a one-off with ECS_CLUSTER=<name>.
+ECS_CLUSTER_OVERRIDES = { 'staging' => 'staging' }.freeze
+# Default taxon-descriptions dataset; override via TAXON_DESCRIPTIONS_S3_URI (don't hand-edit this file).
+DEFAULT_TAXON_DESCRIPTIONS_S3 =
+  's3://seqtoid-public-references/phase1/taxonomy/' \
+  '2018-04-01-utc-1522569777-unixtime__2018-04-04-utc-1522862260-unixtime/2.9/taxid2description.json'
+
+def system!(cmd, err = nil)
+  puts "+ #{cmd}"
+  system(cmd) || abort("\n== Command failed ==\n#{cmd}\n#{err}\n")
+end
+
+# Run a one-off ECS task via czecs (file is a czecs task-json resolved from the cwd).
+def run_task(file, balances, task_arn, cluster, sets)
+  set_args = sets.map { |k, v| "--set #{k}=#{v.to_s.shellescape}" }.join(' ')
+  system!("/tmp/czecs task -f #{balances} --timeout 0 --set taskDefinitionArn=#{task_arn} " \
+          "--set cluster=#{cluster} #{set_args} #{file}")
+end
+
+def confirm_or_abort!(env)
+  warn "\n⚠️  REBUILD: this will DROP AND REBUILD the '#{env}' database — ALL DATA IN '#{env}' WILL BE LOST —"
+  warn "    then re-create, migrate, seed, reload taxon data, and rebuild OpenSearch indexes.\n\n"
+
+  if PROD_ENVS.include?(env) && ENV['REBUILD_PROD_APPROVED'] != 'yes'
+    abort("REFUSING to rebuild a PRODUCTION environment ('#{env}') — this destroys production data.\n" \
+          "If you truly intend this, set REBUILD_PROD_APPROVED=yes and provide the typed confirmation.\n" \
+          "Aborting — nothing was changed.")
+  end
+
+  if $stdin.tty?
+    warn "Type the environment name '#{env}' to confirm the destroy + rebuild:"
+    typed = $stdin.gets&.strip
+    abort("Confirmation '#{typed}' did not match '#{env}'. Aborting — nothing was changed.") unless typed == env
+  elsif ENV['REBUILD_CONFIRM'] != env
+    abort("Non-interactive run requires REBUILD_CONFIRM='#{env}'. Aborting — nothing was changed.")
+  end
+end
+
+env   = ARGV.shift
+image = ARGV.shift
+who   = ARGV.shift || ENV['USER'] || 'unknown'
+
+if env.nil? || image.nil?
+  abort('Usage: ./bin/rebuild_system ENV IMAGE_TAG YOUR_NAME   (see header for guards)')
+end
+abort("Refusing to rebuild with image 'latest' — pass an explicit sha-… tag.") if image == 'latest'
+abort("Image tag must look like 'sha-<hex>' (got '#{image}').") unless image =~ /\Asha-[0-9a-f]{7,}\z/
+
+confirm_or_abort!(env)
+
+taxon_descriptions_s3 = ENV['TAXON_DESCRIPTIONS_S3_URI'] || DEFAULT_TAXON_DESCRIPTIONS_S3
+cluster = ENV['ECS_CLUSTER'] || ECS_CLUSTER_OVERRIDES.fetch(env, "idseq-#{env}-ecs")
+balances = "balances-#{env}.json"
+
+# czecs runs the one-off ECS tasks. Everything below operates from SCRIPTS_DIR so the task files resolve.
+Dir.chdir(SCRIPTS_DIR) do
+  os = RbConfig::CONFIG['host_os'] =~ /darwin/ ? 'darwin' : 'linux'
+  system!("curl -sS -L https://github.com/chanzuckerberg/czecs/releases/download/v0.1.2/czecs_0.1.2_#{os}_amd64.tar.gz | tar xz -C /tmp czecs")
+  account_id = `aws sts get-caller-identity --query=Account --output text`.strip
+  abort('Could not resolve AWS account id (are credentials set?).') if account_id.empty?
+
+  task_arn = `/tmp/czecs register -f #{balances} --set tag=#{image} --set account_id=#{account_id} --strict czecs.json`.strip
+  abort("== Could not register task ==") unless $?.exitstatus.zero? && !task_arn.empty?
+
+  # 1. DESTRUCTIVE DB rebuild (the part that makes this Path B, not Path A).
+  puts "\n== [1/5] rebuild database (drop → create → migrate → seed) =="
+  ['db:drop', 'db:create', 'db:migrate:with_data', 'seed:migrate'].each do |cmd|
+    run_task('czecs-task-rails.json', balances, task_arn, cluster, rails_command: cmd)
+  end
+
+  # 2. Reload taxon data — AUTOMATED (was a manual step). Source S3 paths are config.
+  puts "\n== [2/5] reload taxon data (automated) =="
+  [
+    'taxon_lineage_slice:remove_slice',
+    'taxon_lineage_slice:import_data_from_s3',
+    'taxon_lineage_slice:remove_taxon_lineage_slice_es_index',
+    'taxon_lineage_slice:create_taxon_lineage_slice_es_index',
+    "load_taxon_descriptions[#{taxon_descriptions_s3}]"
+  ].each do |cmd|
+    run_task('czecs-task-rake.json', balances, task_arn, cluster, name: 'rake-task', rake_command: cmd)
+  end
+
+  # 3. (Re)create OpenSearch indexes + aliases.
+  puts "\n== [3/5] create OpenSearch indexes + aliases =="
+  es_endpoint = `aws es describe-elasticsearch-domain --domain-name czid-#{env}-heatmap-es --query DomainStatus.Endpoints --output text`.strip
+  if es_endpoint.empty?
+    warn "  ! Could not resolve OpenSearch endpoint for czid-#{env}-heatmap-es — skipping index creation."
+  else
+    [%w[pipeline_runs pipeline_runs_template.json], %w[scored_taxon_counts scored_taxon_counts_template.json]].each do |idx, template|
+      run_task('czecs-task-curl-data.json', balances, task_arn, cluster,
+               curl_http_method: 'POST', curl_content_type: 'application/x-ndjson',
+               curl_url: "#{es_endpoint}/_index_template/#{idx}", curl_data: "@./docker/open_distro/#{template}")
+      run_task('czecs-task-curl.json', balances, task_arn, cluster,
+               curl_http_method: 'PUT', curl_url: "#{es_endpoint}/#{idx}-v1")
+    end
+    run_task('czecs-task-curl-data.json', balances, task_arn, cluster,
+             curl_http_method: 'POST', curl_content_type: 'application/x-ndjson',
+             curl_url: "#{es_endpoint}/_aliases", curl_data: '@./docker/open_distro/alias_update.json')
+  end
+
+  # 4. Optional admin user (non-prod only; explicit opt-in).
+  if ENV['REBUILD_CREATE_ADMIN'] && !PROD_ENVS.include?(env)
+    puts "\n== [4/5] create admin user =="
+    run_task('czecs-task-create-admin.json', balances, task_arn, cluster, admin_args: ENV['REBUILD_CREATE_ADMIN'])
+  else
+    puts "\n== [4/5] skip admin creation (set REBUILD_CREATE_ADMIN='email,password' for non-prod) =="
+  end
+end
+
+# 5. Roll the services — delegate to bin/deploy so there is ONE service-roll implementation (no drift).
+puts "\n== [5/5] roll services via ./bin/deploy (single canonical roll) =="
+system!("#{File.join(REPO_ROOT, 'bin', 'deploy')} #{env} #{image} #{who.shellescape} 'system rebuild'")
+
+puts "\n✅ rebuild_system complete for '#{env}' (image #{image})."
