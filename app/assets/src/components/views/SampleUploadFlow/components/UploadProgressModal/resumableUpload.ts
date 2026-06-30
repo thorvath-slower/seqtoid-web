@@ -74,6 +74,14 @@ async function sha256Base64(data: ArrayBuffer): Promise<string> {
   return toBase64(new Uint8Array(digest));
 }
 
+// Read a part fully into memory before sending. With ChecksumAlgorithm:SHA256, the AWS SDK v3
+// checksums an in-memory body up front (as an x-amz-checksum-sha256 header), but for a Blob it
+// takes the aws-chunked streaming path and calls .getReader() on the Blob — which throws in the
+// browser. A Uint8Array avoids that path entirely.
+async function toBytes(blob: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 // Lazily slice a Blob into ordered parts. Empty files yield a single empty part (PutObject path).
 async function* chunkBlob(
   body: Blob,
@@ -222,7 +230,10 @@ export class ResumableUpload {
   private async uploadUsingPut(dataPart: DataPart): Promise<void> {
     this.isMultiPart = false;
     this.putResponse = await this.client.send(
-      new PutObjectCommand({ ...this.params, Body: dataPart.data }),
+      new PutObjectCommand({
+        ...this.params,
+        Body: await toBytes(dataPart.data),
+      }),
     );
     const totalSize = dataPart.data.size;
     this.notifyProgress({
@@ -313,7 +324,7 @@ export class ResumableUpload {
             new UploadPartCommand({
               ...this.params,
               UploadId: this.uploadId,
-              Body: dataPart.data,
+              Body: await toBytes(dataPart.data),
               PartNumber: dataPart.partNumber,
             }),
           );
