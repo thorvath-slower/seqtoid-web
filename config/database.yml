@@ -15,7 +15,7 @@ deployed: &deployed
 
 development:
   <<: *default
-  database: idseq_development
+  database: idseq_dev
 
 prod:
   <<: *deployed
