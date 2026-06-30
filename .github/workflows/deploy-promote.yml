@@ -2,10 +2,10 @@ name: deploy — promote (dev -> staging -> prod)
 run-name: Promote ${{ inputs.source }} dev -> staging -> prod by ${{ github.actor }}
 
 # Promotion-gated deploy for seqtoid-web (CZID-101): a change can only reach the
-# prod cluster after it deploys successfully to dev AND staging. Each tier
-# `needs:` the previous, so prod is unreachable unless dev and staging both went
-# green — no direct-to-prod deploy. The app-side mirror of the IaC promote.yml
-# (CZID-96).
+# prod cluster after it deploys successfully to dev AND staging AND the staging
+# smoke tests pass. Each tier `needs:` the previous, so prod is unreachable unless
+# dev + staging deployed green and staging smoke passed — no direct-to-prod deploy.
+# The app-side mirror of the IaC promote.yml (CZID-96).
 #
 # PROD APPROVAL GATE: the second, human gate (required-reviewer approval) is added
 # by giving reusable-deploy-workflow.yml's prod job `environment: prod` once the
@@ -72,9 +72,23 @@ jobs:
       deployment_reason: ${{ inputs.deployment_reason }}
     secrets: inherit
 
-  deploy-prod:
-    name: Deploy prod (gated on staging)
+  verify-staging:
+    name: Verify staging (smoke) — gates prod
     needs: deploy-staging
+    # Mirror deploy.yml's post-staging verification: run the Playwright smoke suite
+    # against staging before prod is reachable. Smoke (not full e2e) is the prod gate
+    # here — it's the fast, stable signal; gating prod on flakier e2e would block
+    # legitimate promotions. (Run full e2e via deploy.yml against staging if needed.)
+    uses: ./.github/workflows/e2e-automation.yml
+    with:
+      node-environment: "staging"
+      test-category: "smoke"
+      should-run-with-feature-flags: "false"
+    secrets: inherit
+
+  deploy-prod:
+    name: Deploy prod (gated on staging + smoke)
+    needs: verify-staging
     uses: ./.github/workflows/reusable-deploy-workflow.yml
     with:
       source: ${{ inputs.source }}
