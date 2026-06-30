@@ -6,14 +6,20 @@ title = "seqtoid-web gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Known dev/test fixtures (not real secrets)"
+description = "Known dev/test fixtures + verified FPs (not real secrets)"
+regexTarget = "line"
 paths = [
   # Dev/test secret_key_base fixtures. Prod/staging read SECRET_KEY_BASE from
   # the environment; migrating the real key off this file is tracked in CZID-128.
   '''config/secrets\.yml''',
+  # Test fixture signing key (deliberate, used by specs — not a prod secret). CZID-318.
+  '''test/fixtures/.*\.pem''',
 ]
 regexes = [
   # Dummy, test-only AUTH_TOKEN_SECRET used in CI configs (ci-test-postgres.yml,
   # docker-compose.ci.yml) — clearly marked as a throwaway test value.
   '''GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ=''',
+  # MIN_TOKEN_REFRESH_IN_SECONDS = 60.seconds.to_i — a duration constant; the generic-api-key
+  # rule misfires on the "TOKEN" in the name. Not a secret. CZID-318.
+  '''MIN_TOKEN_REFRESH_IN_SECONDS''',
 ]
