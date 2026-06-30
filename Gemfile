@@ -48,7 +48,7 @@ gem 'silencer'
 # these are the latest versions that work with opensearch https://opensearch.org/docs/1.0/clients/index/#legacy-clients
 gem 'elasticsearch', '7.10.1'
 gem 'elasticsearch-model', '7.1.1'
-# Use PostgreSQL as the database for Active Record (migrated off MySQL).
+# MySQL 8 is the database for Active Record (native MySQL — CZID-331).
 gem 'mysql2', '~> 0.5'
 gem 'oj'
 gem 'parallel', '1.14.0'
