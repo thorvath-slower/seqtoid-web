@@ -836,6 +836,19 @@ RSpec.describe WorkflowRunsController, type: :controller do
           expect(JSON.parse(response.body, symbolize_names: true)[:status]).to eq("Workflow Run action not supported")
         end
       end
+
+      context "when the SFN execution description is missing" do
+        it "returns a graceful results-not-available response instead of a 500" do
+          workflow_run = create(:workflow_run, sample: @sample, workflow: WorkflowRun::WORKFLOW[:consensus_genome])
+          allow_any_instance_of(ConsensusGenomeWorkflowRun).to receive(:results)
+            .and_raise(SfnExecution::SfnDescriptionNotFoundError.new("s3://fake/sfn-desc/path"))
+
+          get :results, params: { id: workflow_run.id }
+
+          expect(response).to have_http_status :not_found
+          expect(JSON.parse(response.body, symbolize_names: true)[:status]).to eq("Results not available")
+        end
+      end
     end
 
     describe "GET /zip_link" do
