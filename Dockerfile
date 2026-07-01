@@ -27,8 +27,8 @@ RUN NODE_VERSION="$(cat /tmp/.node-version)" \
   && rm "node-v${NODE_VERSION}-linux-x64.tar.gz" \
   && node --version && npm --version
 
-# Node 20 ships npm 10; pin to a known-good npm 10 line for reproducibility.
-RUN npm i -g npm@10.9.0
+# Node 24 ships npm 11; pin to a known-good npm 11 line for reproducibility.
+RUN npm i -g npm@11.16.0
 
 RUN pip3 config set global.break-system-packages true
 RUN pip3 install --upgrade pip
