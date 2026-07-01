@@ -113,9 +113,9 @@ const BulkDeleteModalComponent = ({
     return null;
   }
 
-  // Data from query:
-  const validIds = data.validIdsStrings.filter(isNotNullish);
-  const invalidSampleNames = data.invalidSampleNames.filter(
+  // Data from query (both fields are nullable in the schema):
+  const validIds = (data.validIdsStrings ?? []).filter(isNotNullish);
+  const invalidSampleNames = (data.invalidSampleNames ?? []).filter(
     (invalidSampleName): invalidSampleName is string =>
       invalidSampleName != null,
   );
