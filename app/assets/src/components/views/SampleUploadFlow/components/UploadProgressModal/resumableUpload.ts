@@ -169,7 +169,8 @@ export class ResumableUpload {
   }
 
   private abortPromise(): Promise<never> {
-    return new Promise((resolve, reject) => {
+    // eslint-disable-next-line promise/param-names -- this promise only rejects (on abort); resolve is intentionally unused
+    return new Promise((_resolve, reject) => {
       this.abortController.signal.addEventListener("abort", () => {
         const abortError = new Error("Upload aborted.");
         abortError.name = "AbortError";
