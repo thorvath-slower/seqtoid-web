@@ -7,7 +7,7 @@ module Queries
   #      down to the viewable, non-deprecated consensus-genome runs and return minimal
   #      {id, ownerUserId, status}. The federation served this via POST
   #      /workflow_runs/valid_consensus_genome_workflow_runs, an action removed in CZID-283
-  #      (NextGen cleanup) whose only consumer was the federation — so this resolver is now
+  #      (NextGen cleanup) whose only consumer was the federation -- so this resolver is now
   #      its authoritative home, reproducing the removed action's exact contract
   #      (WorkflowRunValidationService + by_workflow(CG).non_deprecated). CZID-309.
   #   2. Discovery view (otherwise): reuses the shared WorkflowRunsFetching pipeline (the
