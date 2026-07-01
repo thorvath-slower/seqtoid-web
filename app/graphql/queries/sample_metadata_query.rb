@@ -6,7 +6,7 @@ module Queries
   # payload, then apply the federation's post-processing (stringify ids; resolve the
   # location_validated_value union).
   #
-  # snapshotLinkId is accepted for query parity but unused — the federation resolver
+  # snapshotLinkId is accepted for query parity but unused -- the federation resolver
   # likewise built the non-snapshot /samples/:id/metadata URL and ignored it.
   module SampleMetadataQuery
     extend ActiveSupport::Concern

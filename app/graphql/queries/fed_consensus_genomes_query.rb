@@ -6,7 +6,7 @@ module Queries
   #      /workflow_runs/:id/results + the ref_fasta branch of
   #      WorkflowRunsController#cg_report_downloads, mapped to the CG report shape.
   #   2. Discovery (otherwise): runs the shared WorkflowRunsFetching pipeline
-  #      (mode: basic) and maps each run to { sequencingRead: { id } } — exactly what
+  #      (mode: basic) and maps each run to { sequencingRead: { id } } -- exactly what
   #      the federation discovery branch returned (producingRunId stays null).
   module FedConsensusGenomesQuery
     extend ActiveSupport::Concern

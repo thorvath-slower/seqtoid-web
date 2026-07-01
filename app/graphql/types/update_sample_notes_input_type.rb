@@ -1,7 +1,7 @@
 module Types
   # Federation mesh input `mutationInput_UpdateSampleNotes_input_Input` (CZID-304),
   # shared by the UpdateSampleName and UpdateSampleNotes mutations. authenticityToken is
-  # accepted for input parity but unused (CSRF is moot in-process — GraphqlController
+  # accepted for input parity but unused (CSRF is moot in-process -- GraphqlController
   # uses a null session).
   class UpdateSampleNotesInputType < Types::BaseInputObject
     graphql_name "mutationInput_UpdateSampleNotes_input_Input"

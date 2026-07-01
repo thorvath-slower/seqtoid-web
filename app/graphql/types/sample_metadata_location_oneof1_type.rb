@@ -1,7 +1,7 @@
 module Types
   # Federation mesh type
   # `query_SampleMetadata_metadata_items_location_validated_value_oneOf_1` (CZID-285):
-  # the resolved-Location branch of the location_validated_value union — the full
+  # the resolved-Location branch of the location_validated_value union -- the full
   # Location record (its `id` is stringified to match the federation contract).
   class SampleMetadataLocationOneof1Type < Types::BaseObject
     graphql_name "query_SampleMetadata_metadata_items_location_validated_value_oneOf_1"
@@ -25,7 +25,7 @@ module Types
     field :state_id, Int, null: true, camelize: false
     field :subdivision_id, Int, null: true, camelize: false
     field :city_id, String, null: true, camelize: false
-    # `raw_value` shadows GraphQL::Schema::Object#raw_value — resolve it off the
+    # `raw_value` shadows GraphQL::Schema::Object#raw_value -- resolve it off the
     # backing hash so graphql-ruby doesn't call the inherited method.
     field :raw_value, String, null: true, camelize: false, resolver_method: :resolve_raw_value
     field :title, String, null: true, camelize: false
