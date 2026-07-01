@@ -28,7 +28,7 @@ it dispatches the actual science to the workflow layer and reads results back.
 | **cypherid-web-infra** | App-tier Terraform (CloudFront, Aurora MySQL 8, app S3, ECS, networking) |
 | **cypherid-workflow-infra** | Workflow-tier Terraform (AWS Batch / SWIPE, WDL dispatch, taxon/WDL buckets) |
 | **seqtoid-ssot-infra** | Single-source-of-truth foundation IaC — shared Terraform modules + remote state others consume |
-| **ci-workflows** | Reusable GitHub Actions / security-CI consumed by all repos |
+| **seqtoid-ci-workflows** | Reusable GitHub Actions / security-CI + the in-house `flake8-action` (the CI SSOT; formerly `ci-workflows`) |
 | **cztack** | In-house private fork of shared Terraform modules (pinned by SHA) |
 
 > IaC across the platform is **native Terraform** (an earlier OpenTofu migration was reverted). See the
