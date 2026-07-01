@@ -217,11 +217,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements-dev.txt
     - name: Flake8
-      # Our modernized flake8-action (upstream julianwachholz is node16/EOL).
-      # SSOT: the `v2` moving tag in thorvath-slower/flake8-action is the single
-      # source of truth for the version — move that tag to roll out a new version
-      # to every consumer at once. See CZID-204.
-      uses: thorvath-slower/flake8-action@v2
+      # Our modernized flake8-action (upstream julianwachholz is node16/EOL), now living in
+      # thorvath-slower/seqtoid-ci-workflows (collapsed in from the standalone flake8-action repo).
+      # Pinned to the immutable seqtoid-ci-workflows v1.1 tag. See CZID-204 / #405 / #406.
+      uses: thorvath-slower/seqtoid-ci-workflows/flake8-action@v1.1
       with:
         checkName: "Python Lint"
       env:
