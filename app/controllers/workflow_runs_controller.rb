@@ -51,6 +51,19 @@ class WorkflowRunsController < ApplicationController
       json: { status: "Workflow Run action not supported" },
       status: :not_found
     )
+  rescue SfnExecution::SfnDescriptionNotFoundError => e
+    # The run's Step Functions execution description isn't available (e.g. the run never finalized, or
+    # its SFN history/output is missing in S3). Surface a graceful "results not available" state rather
+    # than raising a 500 on the report/pipeline_viz view. (#385)
+    LogUtil.log_error(
+      "Workflow run results unavailable: SFN execution description not found",
+      exception: e,
+      workflow_run_id: @workflow_run&.id
+    )
+    render(
+      json: { status: "Results not available" },
+      status: :not_found
+    )
   end
 
   def rerun
