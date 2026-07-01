@@ -33,6 +33,21 @@ if !env || !image
   abort
 end
 
+# RAILS_ENV per deploy env. MUST match the config/environments/*.rb file names
+# (development / staging / sandbox / prod — there is NO production.rb). czecs.json,
+# czecs-resque.json and czecs-shoryuken.json all render RAILS_ENV from {{ .Values.env_full }};
+# without --set env_full the workers/web boot with RAILS_ENV="" → Rails silently falls back to
+# development. Harmless on dev, but WRONG (dev DB/creds/config) on staging/prod. (#379)
+RAILS_ENV_BY_ENV = {
+  'dev' => 'development',
+  'development' => 'development',
+  'staging' => 'staging',
+  'sandbox' => 'sandbox',
+  'prod' => 'prod',
+}.freeze
+env_full = RAILS_ENV_BY_ENV[env] ||
+           abort("\n== Unknown env '#{env}' — expected one of: #{RAILS_ENV_BY_ENV.keys.join(', ')} ==\n")
+
 if image == 'latest'
   puts "you should not deploy latest (it doesn't mean what you think it does)"
   abort
@@ -170,7 +185,7 @@ begin
   os = RbConfig::CONFIG['host_os'] =~ /darwin/ ? 'darwin' : 'linux'
   system!("curl -sS -L https://github.com/chanzuckerberg/czecs/releases/download/v0.1.2/czecs_0.1.2_#{os}_amd64.tar.gz | tar xz -C /tmp czecs")
   aws_account_id = `aws sts get-caller-identity --query="Account" | tr -d '\"'`.strip
-  task_definition_arn = `/tmp/czecs register -f balances.json --set tag=#{image} --set env=#{env} --set account_id=#{aws_account_id} czecs.json`.strip
+  task_definition_arn = `/tmp/czecs register -f balances.json --set tag=#{image} --set env=#{env} --set env_full=#{env_full} --set account_id=#{aws_account_id} czecs.json`.strip
   $?.exitstatus == 0 || abort("\n== Could not register task ==\n")
 
   puts 'running migrations'
@@ -181,17 +196,17 @@ begin
 
   puts "image: #{image}, env: #{env}, aws_account_id: #{aws_account_id}, cluster: #{cluster}"
   # Resque workers
-  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set name=resque --set rake_command=resque:workers --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque czecs-resque.json")
+  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set env_full=#{env_full} --set name=resque --set rake_command=resque:workers --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque czecs-resque.json")
   # Resque scheduler
-  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set name=resque-scheduler --set rake_command=resque:scheduler --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque-scheduler czecs-resque.json")
+  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set env_full=#{env_full} --set name=resque-scheduler --set rake_command=resque:scheduler --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque-scheduler czecs-resque.json")
 
   # Pipeline monitor
-  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set name=resque-pipeline-monitor --set rake_command=pipeline_monitor --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque-pipeline-monitor czecs-resque.json")
+  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set env_full=#{env_full} --set name=resque-pipeline-monitor --set rake_command=pipeline_monitor --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque-pipeline-monitor czecs-resque.json")
   # Result monitor
-  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set name=resque-result-monitor --set rake_command=result_monitor --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque-result-monitor czecs-resque.json")
+  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set env_full=#{env_full} --set name=resque-result-monitor --set rake_command=result_monitor --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-resque-result-monitor czecs-resque.json")
 
   # Shoryuken
-  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set name=shoryuken --set entry_command='-R -C config/shoryuken.yml' --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-shoryuken czecs-shoryuken.json")
+  system!("/tmp/czecs upgrade -f balances.json --set tag=#{image} --set env=#{env} --set env_full=#{env_full} --set name=shoryuken --set entry_command='-R -C config/shoryuken.yml' --set account_id=#{aws_account_id} #{cluster} idseq-#{env}-shoryuken czecs-shoryuken.json")
 
   puts "load release tag into param store"
   `aws ssm put-parameter --name /idseq-#{env}-web/GIT_RELEASE_SHA --value #{image.match(/^sha-([0-9a-f]{7,})$/)[1]} --type String --overwrite`
