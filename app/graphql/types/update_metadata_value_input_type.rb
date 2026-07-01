@@ -1,6 +1,6 @@
 module Types
   # Federation mesh input `mutationInput_UpdateMetadata_input_value_Input` (CZID-304): the
-  # @oneOf metadata value — either a plain `String` or a location object. The frontend
+  # @oneOf metadata value -- either a plain `String` or a location object. The frontend
   # supplies exactly one; the resolver prefers the String branch (matching the federation).
   # Modeled as a plain input (both nullable) rather than graphql-ruby `one_of` to avoid a
   # hard dependency on that feature.

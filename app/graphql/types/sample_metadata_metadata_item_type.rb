@@ -8,7 +8,7 @@ module Types
     field :id, String, null: true, camelize: false
     field :key, String, null: true, camelize: false
     # `raw_value` shadows GraphQL::Schema::Object#raw_value, so graphql-ruby would
-    # call that inherited method instead of reading the backing hash — resolve it
+    # call that inherited method instead of reading the backing hash -- resolve it
     # explicitly off the object.
     field :raw_value, String, null: true, camelize: false, resolver_method: :resolve_raw_value
     field :string_validated_value, String, null: true, camelize: false

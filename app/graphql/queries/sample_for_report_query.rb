@@ -5,7 +5,7 @@ module Queries
   # GET /samples/:id.json. Mirrors SamplesController#show's JSON, then applies the
   # federation's id-stringification (pipeline_runs/workflow_runs/default_pipeline_run/project).
   #
-  # snapshotLinkId is accepted for query parity but unused — the federation resolver read
+  # snapshotLinkId is accepted for query parity but unused -- the federation resolver read
   # the sample via the session and ignored it.
   module SampleForReportQuery
     extend ActiveSupport::Concern

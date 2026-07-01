@@ -2,7 +2,7 @@ module Mutations
   # Shared by CreateBulkDownload / createAsyncBulkDownload (CZID-304). Reproduces
   # BulkDownloadsController#create: build the create params (mirroring the federation body),
   # validate the viewable objects, resolve them to pipeline/workflow run ids, create the
-  # BulkDownload, and kick it off — raising a GraphQL error on save/kickoff failure
+  # BulkDownload, and kick it off -- raising a GraphQL error on save/kickoff failure
   # (matching the federation's throw-on-error behavior). Returns the saved BulkDownload.
   module BulkDownloadCreating
     include BulkDownloadsHelper # validate_bulk_download_create_params, get_valid_pipeline_run_ids_for_samples

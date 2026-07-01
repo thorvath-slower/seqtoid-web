@@ -6,7 +6,7 @@ module Queries
   #   1. ids-only: when the selection set is just `{ id }`. Runs the shared pipeline in
   #      mode: basic and returns the unique sample ids. The federation detected this by
   #      regex on the raw query string; we use the graphql-ruby lookahead instead.
-  #   2. full: mode with_sample_info — builds the sample subtree and aggregates each
+  #   2. full: mode with_sample_info -- builds the sample subtree and aggregates each
   #      sample's consensus-genome workflow runs into consensusGenomes.edges (dedup by
   #      sample id).
   module FedSequencingReadsQuery

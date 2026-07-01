@@ -10,9 +10,6 @@
     "type-check": "tsc -p ./app/assets/tsconfig.json --noemit",
     "relay": "relay-compiler"
   },
-  "jest": {
-    "setupTestFrameworkScriptFile": "./enzyme_config.js"
-  },
   "lint-staged": {
     "*.{js,jsx,css,scss,ts,tsx}": [
       "prettier --write --trailing-comma all"
@@ -70,8 +67,8 @@
     "css-loader": "^3.4.2",
     "cssnano": "^4.1.11",
     "depcheck": "^1.4.3",
-    "enzyme": "^3.10.0",
-    "enzyme-adapter-react-16": "^1.15.6",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.1.0",
     "eslint": "^7.1.0",
     "eslint-config-airbnb": "^18.2.1",
     "eslint-config-prettier": "^6.15.0",
