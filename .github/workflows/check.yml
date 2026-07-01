@@ -171,7 +171,7 @@ jobs:
         git config --global url."https://github.com/".insteadOf
         ssh://git@github.com/
     - name: Pin npm (matches Dockerfile / engines)
-      run: npm install -g npm@10.9.0
+      run: npm install -g npm@11.16.0
     - name: Install Dependencies
       # Verifies that package.json and package-lock.json match.
       # See: https://docs.npmjs.com/cli/v7/commands/npm-ci
