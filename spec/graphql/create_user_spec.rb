@@ -189,6 +189,23 @@ RSpec.describe GraphqlController, type: :request do
             )
           end
         end
+
+        context "and the email exists in Auth0 but not locally (409)" do
+          before do
+            allow(UserFactoryService).to receive(:call)
+              .and_raise(Auth0::Unsupported.new("The user already exists. (409)"))
+          end
+
+          it "surfaces a graceful 'already taken' error instead of a 500" do
+            subject
+            expect(response).to have_http_status :success
+
+            result = JSON.parse response.body
+            expect(result).to include_json(
+              { "errors" => [{ "message" => "Email has already been taken" }] }
+            )
+          end
+        end
       end
     end
   end
