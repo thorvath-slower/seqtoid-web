@@ -55,6 +55,21 @@ function makeClient(overrides: { uploadPart?: () => unknown } = {}) {
   return { client: { send } as never, calls, send };
 }
 
+// jsdom's Blob in this Jest version has no Blob.prototype.arrayBuffer, which the Uint8Array
+// body path (toBytes) relies on. Polyfill it on the prototype so sliced parts inherit it too.
+// Content is irrelevant here (the tests assert on ETags/call counts/progress-by-size, not bytes),
+// so a zeroed buffer of the correct length is sufficient and keeps size accounting honest.
+beforeAll(() => {
+  if (typeof Blob.prototype.arrayBuffer !== "function") {
+    // eslint-disable-next-line no-extend-native, @typescript-eslint/no-explicit-any
+    (Blob.prototype as any).arrayBuffer = function (
+      this: Blob,
+    ): Promise<ArrayBuffer> {
+      return Promise.resolve(new ArrayBuffer(this.size));
+    };
+  }
+});
+
 const blobOf = (bytes: number): Blob => new Blob([new Uint8Array(bytes)]);
 
 const baseParams = (body: Blob) => ({
