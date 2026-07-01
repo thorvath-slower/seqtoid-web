@@ -1,8 +1,8 @@
 # seqtoid-web
 
-**The web application for the seqtoid infectious-disease sequencing platform** — a Ruby on Rails +
-React app where scientists upload metagenomic sequencing data, run it through bioinformatics pipelines,
-and explore the results (which pathogens were found, at what abundance and confidence).
+**The web application for the seqtoid infectious-disease sequencing platform** — where scientists upload
+metagenomic sequencing data, run it through bioinformatics pipelines, and explore the results (which
+pathogens were found, at what abundance and confidence).
 
 > **Naming:** the platform is being renamed to **seqtoid**. This repository uses the seqtoid name in prose;
 > **functional/external** references are intentionally kept — the live product site (`czid.org`), the upstream
