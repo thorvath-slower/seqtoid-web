@@ -6,6 +6,12 @@ module Mutations
   # (matching the federation's throw-on-error behavior). Returns the saved BulkDownload.
   module BulkDownloadCreating
     include BulkDownloadsHelper # validate_bulk_download_create_params, get_valid_pipeline_run_ids_for_samples
+    # validate_bulk_download_create_params -> validate_num_objects calls get_app_config, which lives
+    # in AppConfigHelper. Controllers auto-include all helpers; GraphQL mutations do not, so include
+    # it explicitly or the resolver raises NoMethodError (undefined method `get_app_config`). Mirrors
+    # the same fix already on BulkDownloadCgOverviewQuery (CZID-307). Fixes both CreateBulkDownload
+    # and CreateAsyncBulkDownload, which include this concern.
+    include AppConfigHelper
 
     def create_bulk_download(input)
       run_ids = input.workflow_run_ids_strings&.map { |id| id && id.to_i } || input.workflow_run_ids
