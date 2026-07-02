@@ -6,17 +6,31 @@
 #
 # This is a no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set (mirrors the Sentry
 # initializer's DSN gate), so local dev, tests and CI are unaffected. The endpoint is
-# injected per-env into the ECS task definitions and points at the collector's OTLP
-# HTTP receiver, e.g. http://collector.<env>.otel.internal:4318.
+# injected via chamber (SSM idseq-<env>-web) into every service and points at the
+# collector's OTLP HTTP receiver, e.g. http://collector.<env>.otel.internal:4318.
 if ENV["OTEL_EXPORTER_OTLP_ENDPOINT"].present?
   require "opentelemetry/sdk"
   require "opentelemetry/exporter/otlp"
   require "opentelemetry/instrumentation/all"
 
+  # All services share one chamber namespace (idseq-<env>-web), so OTEL_SERVICE_NAME
+  # can't be injected per process from infra. Self-identify from the running command
+  # instead, so web / Resque / Shoryuken traces are distinguishable. An explicit
+  # OTEL_SERVICE_NAME still wins if ever set on a task definition.
+  otel_cmdline =
+    begin
+      File.read("/proc/self/cmdline").tr("\0", " ") # argv is NUL-separated
+    rescue StandardError
+      "#{$PROGRAM_NAME} #{ARGV.join(' ')}"
+    end
+  otel_service_name = ENV["OTEL_SERVICE_NAME"].presence || case otel_cmdline
+                                                           when /shoryuken/ then "seqtoid-shoryuken"
+                                                           when /resque/ then "seqtoid-resque"
+                                                           else "seqtoid-web"
+                                                           end
+
   OpenTelemetry::SDK.configure do |c|
-    # Override per process via OTEL_SERVICE_NAME (e.g. seqtoid-web / seqtoid-resque /
-    # seqtoid-shoryuken) so web and worker traces are distinguishable.
-    c.service_name = ENV.fetch("OTEL_SERVICE_NAME", "seqtoid-web")
+    c.service_name = otel_service_name
     c.resource = OpenTelemetry::SDK::Resources::Resource.create(
       OpenTelemetry::SemanticConventions::Resource::DEPLOYMENT_ENVIRONMENT => (ENV["RAILS_ENV"] || Rails.env)
     )
