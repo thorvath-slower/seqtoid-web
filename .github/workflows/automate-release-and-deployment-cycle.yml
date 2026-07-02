@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0 # Ensure a full clone with all history and tags
       - name: Install SSH key
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
         with:
           ssh-private-key: |
             ${{ secrets.GH_SSH_KEY }}
@@ -74,7 +74,7 @@ jobs:
           # Number of commits to fetch. 0 indicates all history for all branches and tags.
           fetch-depth: '0'
       - name: Install SSH key
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
         with:
           ssh-private-key: |
             ${{ secrets.GH_SSH_KEY }}
