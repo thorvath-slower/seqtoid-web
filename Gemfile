@@ -72,6 +72,12 @@ gem 'resque-scheduler', '~> 4.6'
 gem 'thread'
 # SentryIO
 gem "sentry-raven"
+# OpenTelemetry — vendor-neutral traces exported via OTLP to the in-cluster ADOT
+# collector (cypherid-web-infra terraform/modules/otel-collector, #426). Inert unless
+# OTEL_EXPORTER_OTLP_ENDPOINT is set (see config/initializers/opentelemetry.rb).
+gem "opentelemetry-sdk", "~> 1.8"
+gem "opentelemetry-exporter-otlp", "~> 0.30"
+gem "opentelemetry-instrumentation-all", "~> 0.76"
 # Use SCSS for stylesheets
 gem 'sprockets-es6'
 gem "strong_migrations"
