@@ -21,9 +21,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: actionlint
         # Enforces workflow STRUCTURE (bad uses:/needs:/outputs, unknown labels,
-        # input typing). Image pinned by digest (supply-chain).
-        #  -shellcheck=  : shellcheck integration off for now — the SC2086/SC2046
-        #    quoting backlog in run: scripts is tracked separately; ratchet on later.
+        # input typing) AND shellcheck on run: scripts. Image pinned by digest
+        # (supply-chain).
+        #  shellcheck    : enabled — the SC2086/SC2046/SC2006/SC2002 quoting
+        #    backlog in run: scripts has been swept clean, so the gate now ratchets
+        #    shellcheck on. A handful of intentional word-splits carry inline
+        #    `# shellcheck disable=...` directives with rationale at the call site.
         #  -ignore ...   : documented false-positive — `should-run-with-feature-flags`
         #    is a `type: string` reusable input, consumed as a string (== 'true'
         #    compare) and passed the quoted string "false"; actionlint over-reads
@@ -31,5 +34,5 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/repo -w /repo \
             rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 \
-            -color -shellcheck= \
+            -color \
             -ignore 'should-run-with-feature-flags.+bool value cannot be assigned'

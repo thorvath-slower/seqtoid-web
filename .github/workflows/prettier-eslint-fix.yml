@@ -35,7 +35,7 @@ jobs:
             ${{ runner.os }}-node-
       - name: Check the Lockfile Version
         run: |
-          VERSION=`cat package-lock.json | jq '.lockfileVersion'`
+          VERSION=$(jq '.lockfileVersion' < package-lock.json)
           if [ "$VERSION" -lt "2"  ]; then
             echo "Check the lockfileVersion in package-lock.json."
             exit 1
