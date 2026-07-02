@@ -1,0 +1,35 @@
+name: actionlint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+  push:
+    branches: [main, integration]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        # Enforces workflow STRUCTURE (bad uses:/needs:/outputs, unknown labels,
+        # input typing). Image pinned by digest (supply-chain).
+        #  -shellcheck=  : shellcheck integration off for now — the SC2086/SC2046
+        #    quoting backlog in run: scripts is tracked separately; ratchet on later.
+        #  -ignore ...   : documented false-positive — `should-run-with-feature-flags`
+        #    is a `type: string` reusable input, consumed as a string (== 'true'
+        #    compare) and passed the quoted string "false"; actionlint over-reads
+        #    the literal as a bool. Scoped to this one input, not the whole class.
+        run: |
+          docker run --rm -v "$PWD":/repo -w /repo \
+            rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 \
+            -color -shellcheck= \
+            -ignore 'should-run-with-feature-flags.+bool value cannot be assigned'
