@@ -1,0 +1,38 @@
+{{- if .Values.migrate.enabled -}}
+# Pre-sync DB migration — replaces the ECS run-task `rails db:migrate:with_data`.
+# Argo CD runs this as a PreSync hook (before the Rollout syncs), so schema is
+# migrated before the new color comes up. BeforeHookCreation replaces the prior
+# Job on each sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}-migrate
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: {{ .Values.migrate.backoffLimit }}
+  # Reap the completed migration Job after a day.
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "seqtoid-web.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" . }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- toYaml .Values.migrate.command | nindent 12 }}
+          env:
+            {{- include "seqtoid-web.commonEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrate.resources | nindent 12 }}
+{{- end }}
