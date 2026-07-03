@@ -14,7 +14,11 @@ railsEnv: ""
 
 image:
   # Full ECR repository (per-env values override with the account-scoped repo).
-  repository: idseq-web
+  # CZID-76: go-forward name is `seqtoid-web` (the per-env GitOps values reference
+  # `czid-<env>/seqtoid-web`). bin/build-docker + bin/push-docker dual-push both this
+  # name and the legacy `idseq-web` during the transition, so this default resolves to a
+  # real image. The live `idseq-web` repo is kept in place, not renamed.
+  repository: seqtoid-web
   # CI advances this to the immutable sha-<commit> tag on deploy (GitOps, #444).
   tag: latest
   pullPolicy: IfNotPresent
