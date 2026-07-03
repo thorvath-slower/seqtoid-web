@@ -109,6 +109,12 @@ Rails.application.routes.draw do
   get 'all_data', to: 'home#all_data'
   get 'home', to: 'home#index'
   get 'maintenance', to: 'home#maintenance'
+
+  # CZID-330 — export-control / Terms-of-Use attestation click-through + deny UX.
+  # new/create is the click-through gate; denied is the non-bypassable deny page.
+  get  'export_control_attestation',     to: 'export_control_attestations#new',    as: :new_export_control_attestation
+  post 'export_control_attestation',     to: 'export_control_attestations#create', as: :export_control_attestations
+  get  'export_control_denied',          to: 'export_control_attestations#denied', as: :export_control_denied
   get 'my_data', to: 'home#my_data'
   get 'page_not_found', to: 'home#page_not_found'
   get 'public', to: 'home#public'
