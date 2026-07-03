@@ -13,6 +13,12 @@ const config = {
   output: {
     path: path.resolve(__dirname, "app/assets/"),
     filename: "dist/[name].bundle.min.js",
+    // webpack-5 native output cleaning (CZID-380). Wipes the output dir
+    // (app/assets/dist) before each build so a rebuild can never leave a
+    // stale bundle or orphaned old-hash chunk behind — the compiled output
+    // is always fresh from the current source. `clean` scopes deletion to
+    // webpack's own output.path.
+    clean: true,
   },
   resolve: {
     extensions: [".js", ".jsx", ".ts", ".tsx"],
