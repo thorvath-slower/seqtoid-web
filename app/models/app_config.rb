@@ -1,4 +1,9 @@
 class AppConfig < ApplicationRecord
+  # CZID-330 — when this is "1", the export-control / Terms-of-Use click-through attestation gate is
+  # ENFORCED: a logged-in user without a current accepted attestation is redirected to the attestation
+  # page and cannot reach the app until they accept. Defaults OFF ("" / nil) so the mechanism ships
+  # DARK — enforcement go-live is gated on counsel sign-off (CZID-292/335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_ATTESTATION = 'enable_export_control_attestation'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.

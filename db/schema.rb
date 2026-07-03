@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
+ActiveRecord::Schema[7.0].define(version: 2025_07_03_000000) do
   create_table "accession_coverage_stats", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The id of the pipeline run the coverage stats were generated from"
     t.string "accession_id", null: false, comment: "The NCBI GenBank id of the accession the coverage stats were created for"
@@ -193,6 +193,18 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.index ["pipeline_run_id", "name"], name: "index_ercc_counts_on_pipeline_run_id_and_name", unique: true
+  end
+
+  create_table "export_control_attestations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "decision", null: false
+    t.string "attestation_version", null: false
+    t.string "ip_address"
+    t.string "viewer_country"
+    t.string "user_agent", limit: 1024
+    t.datetime "created_at", precision: 6, null: false
+    t.index ["user_id", "attestation_version", "decision"], name: "idx_export_attest_user_version_decision"
+    t.index ["user_id"], name: "index_export_control_attestations_on_user_id"
   end
 
   create_table "host_genomes", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|

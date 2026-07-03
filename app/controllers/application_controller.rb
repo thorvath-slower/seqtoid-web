@@ -1,6 +1,10 @@
 class ApplicationController < ActionController::Base
   before_action :authenticate_user!
   before_action :check_for_maintenance
+  # CZID-330 — export-control / Terms-of-Use attestation gate. Runs AFTER auth (needs current_user) and
+  # after the maintenance check. No-op unless AppConfig::ENABLE_EXPORT_CONTROL_ATTESTATION == "1", so it
+  # ships DARK; go-live is a counsel-gated flag flip (CZID-292/335). See ExportControlAttestationGate.
+  before_action :require_export_control_attestation
   before_action :check_rack_mini_profiler
   before_action :check_browser
   before_action :set_current_context_for_logging!
@@ -11,6 +15,7 @@ class ApplicationController < ActionController::Base
   include AppConfigHelper
   include Auth0Helper
   include ApplicationHelper
+  include ExportControlAttestationGate # CZID-330 — provides require_export_control_attestation
 
   current_power do
     Power.new(current_user)
