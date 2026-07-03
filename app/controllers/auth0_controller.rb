@@ -37,6 +37,42 @@ class Auth0Controller < ApplicationController
     )
   end
 
+  # CZID-280 (#237) -- local-development sign-in that does not require a live
+  # Auth0 tenant. Lets a developer running `Rails.env.development?` sign in with
+  # no Auth0 client_id configured (offline), so the home -> login -> upload flow
+  # is reachable locally.
+  #
+  # SECURITY: This is NOT the removed /direct_user_login backdoor (CZID-319 /
+  # #276). Two independent guarantees keep it inert in every deployed env:
+  #   1. The route is defined ONLY inside `if Rails.env.development?` in
+  #      config/routes.rb, so it is absent from the staging/production route
+  #      table entirely (it cannot be reached there at all).
+  #   2. This action re-checks `Rails.env.development?` at runtime and 404s
+  #      otherwise, as defense-in-depth if the action is ever reached by other
+  #      means. It refuses to run unless the env is truly development.
+  # It also takes NO user_id parameter, so it cannot be used to "become any
+  # user" -- it signs in a single fixed seeded dev user (see dev_login_user).
+  DEV_LOGIN_EMAIL = ENV.fetch("DEV_LOGIN_EMAIL", "dev@czid.local")
+
+  def dev_login
+    # Fail closed: never run outside development, regardless of how we got here.
+    return head(:not_found) unless Rails.env.development?
+
+    user = dev_login_user
+    if user.nil?
+      render(
+        plain: "dev_login: no seeded user found. Seed a user (e.g. #{DEV_LOGIN_EMAIL}) first.",
+        status: :not_found
+      ) and return
+    end
+
+    # Mirror the real Auth0 callback: place the user in the :auth0_user warden
+    # scope (the scope ApplicationController#current_user reads from).
+    warden.logout(:user)
+    warden.set_user(user, scope: :auth0_user)
+    redirect_to home_path
+  end
+
   def logout
     auth0_invalidate_application_session
     redirect_to auth0_signout_url
@@ -138,6 +174,16 @@ class Auth0Controller < ApplicationController
   end
 
   private
+
+  # The single fixed user dev_login signs in. Prefers a conventional seeded dev
+  # account (DEV_LOGIN_EMAIL), then falls back to the first admin, then the first
+  # user -- so a fresh dev DB still works. Deliberately NOT parameterized by
+  # user_id: dev_login cannot be pointed at an arbitrary account.
+  def dev_login_user
+    User.find_by(email: DEV_LOGIN_EMAIL) ||
+      User.where(role: User::ROLE_ADMIN).order(:id).first ||
+      User.order(:id).first
+  end
 
   def filter_value(value, set_of_values)
     value if set_of_values.include?(value)

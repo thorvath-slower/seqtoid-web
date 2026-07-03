@@ -14,6 +14,16 @@
 Rails.application.routes.draw do
   if Rails.env.development?
     mount GraphiQL::Rails::Engine, at: "/graphiql", graphql_path: "/graphql"
+
+    # CZID-280 (#237) -- local-development sign-in without a live Auth0 tenant.
+    # This route is defined ONLY inside this `Rails.env.development?` guard, so it
+    # is entirely absent from the route table in every deployed environment
+    # (staging/production never register it -- it cannot 404-vs-exist ambiguously,
+    # it simply does not exist). The action is additionally guarded at runtime.
+    # This deliberately does NOT reintroduce the removed /direct_user_login
+    # backdoor (CZID-319 / #276): it takes no arbitrary user_id, so it cannot be
+    # used to "become any user" -- it signs in a single fixed seeded dev user.
+    get "auth0/dev_login", to: "auth0#dev_login"
   end
   post "/graphql", to: "graphql#execute"
   # It's unclear what it would mean to update a background, so we disallow.
