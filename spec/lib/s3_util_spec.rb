@@ -45,4 +45,40 @@ RSpec.describe S3Util do
       expect(entry.blank?).to be_truthy
     end
   end
+
+  describe "#abort_multipart_uploads" do
+    let(:bucket) { "fake-samples-bucket" }
+    let(:prefix) { "samples/1/2/" }
+
+    it "aborts every incomplete multipart upload under the prefix" do
+      @mock_aws_clients[:s3].stub_responses(
+        :list_multipart_uploads,
+        {
+          uploads: [
+            { key: "samples/1/2/fastqs/file.1.fastq.gz", upload_id: "upload-a" },
+            { key: "samples/1/2/fastqs/file.2.fastq.gz", upload_id: "upload-b" },
+          ],
+        }
+      )
+
+      aborted_args = []
+      allow(@mock_aws_clients[:s3]).to receive(:abort_multipart_upload) do |args|
+        aborted_args << args
+      end
+
+      count = S3Util.abort_multipart_uploads(bucket, prefix)
+
+      expect(count).to eq(2)
+      expect(aborted_args).to contain_exactly(
+        { bucket: bucket, key: "samples/1/2/fastqs/file.1.fastq.gz", upload_id: "upload-a" },
+        { bucket: bucket, key: "samples/1/2/fastqs/file.2.fastq.gz", upload_id: "upload-b" }
+      )
+    end
+
+    it "does nothing when there are no incomplete multipart uploads" do
+      @mock_aws_clients[:s3].stub_responses(:list_multipart_uploads, { uploads: [] })
+      expect(@mock_aws_clients[:s3]).not_to receive(:abort_multipart_upload)
+      expect(S3Util.abort_multipart_uploads(bucket, prefix)).to eq(0)
+    end
+  end
 end
