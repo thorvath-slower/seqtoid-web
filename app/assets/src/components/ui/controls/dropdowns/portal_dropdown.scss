@@ -46,18 +46,16 @@
   }
 }
 
+// CZID-320: the chevron is now a static SVG (IconArrowDownSmall) instead of a
+// FontAwesome \f107 glyph, so it never flickers through a fallback-font glyph on
+// the heavy open-render of a large option list. Style it via fill/width.
 .arrow {
-  font-style: normal;
-  font-size: 0.85em;
-  -webkit-font-smoothing: antialiased;
-
-  &:before {
-    font-family: FontAwesome;
-    content: "\f107";
-  }
+  fill: currentColor;
+  width: 14px;
+  height: 14px;
 
   &.active {
-    color: $sds-color-primary-400;
+    fill: $sds-color-primary-400;
   }
 }
 
