@@ -33,6 +33,19 @@ RSpec.describe Auth0Controller, type: :request do
       post destroy_user_session_path
       expect("https://#{ENV['AUTH0_DOMAIN']}/v2/logout").to eq(response.redirect_url.split("?").first)
     end
+
+    # CZID-317 (#274): auth0#login (the home-page "Sign In" target) hands off to
+    # the dev-only local sign-in ONLY in development. In every non-development
+    # env (this test env, and deployed staging/production) it must still perform
+    # the unchanged Auth0 refresh_token redirect and never bounce to a dev login.
+    it "does not divert Sign In to the dev login path outside development" do
+      expect(Rails.env.development?).to be(false)
+      get new_user_session_path
+      expect(response).to redirect_to(
+        url_for(controller: :auth0, action: :refresh_token, params: { mode: "login" }, only_path: true)
+      )
+      expect(response.location).not_to include("dev_login")
+    end
   end
 
   context "Using auth0_management_client_double" do

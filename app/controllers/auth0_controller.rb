@@ -30,6 +30,17 @@ class Auth0Controller < ApplicationController
   end
 
   def login
+    # CZID-317 (#274): the home-page "Sign In" button links to /auth0/login. In
+    # local development there is no Auth0 client_id, so the normal Auth0 redirect
+    # below dead-ends offline. When running in development, hand off to the
+    # dev-only local sign-in (CZID-280 / #237) instead. In every deployed env
+    # this branch is never taken and the behavior is UNCHANGED (Auth0 flow), and
+    # the auth0_dev_login route/helper does not even exist there (it is defined
+    # only inside `if Rails.env.development?` in config/routes.rb).
+    if Rails.env.development?
+      redirect_to auth0_dev_login_path and return
+    end
+
     # Redirecting to the refresh token forcing a login operation
     redirect_to url_for(
       action: :refresh_token,
