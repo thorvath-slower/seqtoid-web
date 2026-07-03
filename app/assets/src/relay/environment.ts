@@ -1,7 +1,6 @@
 import type { FetchFunction, IEnvironment } from "relay-runtime";
 import { Environment, Network, RecordSource, Store } from "relay-runtime";
 import { getCsrfToken } from "~/api/utils";
-import { logError } from "~/components/utils/logUtil";
 import { getValidIdentity } from "./identify";
 
 /**
@@ -11,7 +10,9 @@ import { getValidIdentity } from "./identify";
  */
 const QUERY_NAME_REGEX = /(?:query|mutation)\s+(\S+)\s*\(/;
 
-const generateFetchFn = (): FetchFunction => {
+// Exported for unit testing (CZID-391): lets the fetch function be exercised directly
+// without standing up a full Relay Network/Store.
+export const generateFetchFn = (): FetchFunction => {
   return async (params, variables) => {
     await getValidIdentity();
     // CZID-305: cut over from the federation server (/graphqlfed) to the Rails-native
@@ -32,16 +33,22 @@ const generateFetchFn = (): FetchFunction => {
 
     const responseJson = await response.json();
     if (responseJson.errors != null) {
-      logError({
-        message: `[GQL Error] ${params.text?.match(QUERY_NAME_REGEX)?.[1]}`,
-        details: {
+      // CZID-391: GraphQL responses routinely carry non-fatal, field-level `errors`
+      // (partial data, permission-filtered fields, deprecations) alongside valid `data`.
+      // These are NOT application errors, and previously each one was sent to Sentry as an
+      // Info-level `captureMessage`, flooding the dashboard (~74 entries on my_data /
+      // bulk_downloads / samples/*). Keep the diagnostic value for local debugging via the
+      // browser console, but do not emit a Sentry event — genuine transport/runtime failures
+      // are still captured as exceptions by the surrounding error boundary and logError paths.
+      // eslint-disable-next-line no-console
+      console.error(
+        `[GQL Error] ${params.text?.match(QUERY_NAME_REGEX)?.[1]}`,
+        {
           query: params.text,
-          // Stringify because Sentry turns arrays and objects into [Array] and [Object] after a
-          // certain depth.
-          variables: JSON.stringify(variables),
-          errors: JSON.stringify(responseJson.errors),
+          variables,
+          errors: responseJson.errors,
         },
-      });
+      );
     }
 
     return responseJson;
