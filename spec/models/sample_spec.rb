@@ -649,4 +649,20 @@ describe Sample, type: :model do
       expect(response[0].keys).to contain_exactly(*expected_keys)
     end
   end
+
+  context "#cleanup_s3" do
+    before do
+      @project = create(:project, users: [@joe])
+      @sample = create(:sample, project: @project, user: @joe, name: "orphaned sample")
+    end
+
+    it "deletes the sample prefix and aborts incomplete multipart uploads on destroy" do
+      expect(S3Util).to receive(:delete_s3_prefix)
+        .with("s3://#{ENV['SAMPLES_BUCKET_NAME']}/#{@sample.sample_path}/")
+      expect(S3Util).to receive(:abort_multipart_uploads)
+        .with(ENV['SAMPLES_BUCKET_NAME'], "#{@sample.sample_path}/")
+
+      @sample.destroy!
+    end
+  end
 end

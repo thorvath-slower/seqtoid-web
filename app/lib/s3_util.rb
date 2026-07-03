@@ -96,6 +96,31 @@ module S3Util
     resp.uploads.map(&:upload_id).first
   end
 
+  # Abort every incomplete (in-progress) multipart upload under a key prefix.
+  # A failed or orphaned upload leaves partial data behind as an incomplete
+  # multipart upload rather than a completed object, so deleting the object
+  # prefix alone does not reclaim it. This walks the paginated
+  # list_multipart_uploads response and aborts each upload, and returns the
+  # count of uploads aborted.
+  def self.abort_multipart_uploads(bucket, prefix)
+    aborted = 0
+    pages = AwsClient[:s3].list_multipart_uploads(
+      bucket: bucket,
+      prefix: prefix
+    )
+    pages.each do |resp|
+      (resp.uploads || []).each do |upload|
+        AwsClient[:s3].abort_multipart_upload(
+          bucket: bucket,
+          key: upload.key,
+          upload_id: upload.upload_id
+        )
+        aborted += 1
+      end
+    end
+    aborted
+  end
+
   def self.delete_s3_prefix(s3_prefix)
     bucket, prefix = parse_s3_path(s3_prefix)
     pages = AwsClient[:s3].list_objects_v2({

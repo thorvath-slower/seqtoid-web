@@ -65,6 +65,31 @@ RSpec.describe DeletionValidationService, type: :service do
                                             name: "stalled upload Illumina mNGS sample",
                                             upload_error: Sample::UPLOAD_ERROR_LOCAL_UPLOAD_STALLED)
 
+      # Orphaned upload shell owned by joe: still in the created state, upload
+      # never finalized, and aged past the stall finalization delay.
+      @joe_orphaned_created = create(:sample, project: @project,
+                                              user: @joe,
+                                              name: "orphaned created Illumina mNGS sample",
+                                              status: Sample::STATUS_CREATED)
+      # rubocop:disable Rails/SkipsModelValidations
+      @joe_orphaned_created.update_column(:created_at, (Sample::STALLED_UPLOAD_FINALIZATION_DELAY + 1.hour).ago)
+      # rubocop:enable Rails/SkipsModelValidations
+
+      # Freshly created upload shell owned by joe: still expected to finish, so
+      # it must NOT be deletable yet.
+      @joe_fresh_created = create(:sample, project: @project,
+                                           user: @joe,
+                                           name: "fresh created Illumina mNGS sample",
+                                           status: Sample::STATUS_CREATED)
+
+      # Orphaned upload shell owned by another user: joe must not be able to delete it.
+      @admin_orphaned_created = create(:sample, project: @project, user: @admin,
+                                                name: "orphaned created admin Illumina mNGS sample",
+                                                status: Sample::STATUS_CREATED)
+      # rubocop:disable Rails/SkipsModelValidations
+      @admin_orphaned_created.update_column(:created_at, (Sample::STALLED_UPLOAD_FINALIZATION_DELAY + 1.hour).ago)
+      # rubocop:enable Rails/SkipsModelValidations
+
       @admin_complete_sample = create(:sample, project: @project, user: @admin,
                                                name: "completed admin Illumina mNGS sample",
                                                pipeline_runs_data: [{ finalized: 1, technology: illumina }])
@@ -81,6 +106,9 @@ RSpec.describe DeletionValidationService, type: :service do
         @joe_rerun_sample.id,
         @joe_failed_upload.id,
         @joe_stalled_upload.id,
+        @joe_orphaned_created.id,
+        @joe_fresh_created.id,
+        @admin_orphaned_created.id,
       ]
     end
 
@@ -129,6 +157,19 @@ RSpec.describe DeletionValidationService, type: :service do
 
       it "does not allow deletion of samples with upload stalled" do
         expect(@validate_sample_response[:invalid_sample_ids]).to include(@joe_stalled_upload.id)
+      end
+
+      it "allows deletion of own orphaned created upload shells stalled past the finalization delay" do
+        expect(@validate_sample_response[:valid_ids]).to include(@joe_orphaned_created.id)
+      end
+
+      it "does not allow deletion of freshly created upload shells still expected to finish" do
+        expect(@validate_sample_response[:invalid_sample_ids]).to include(@joe_fresh_created.id)
+      end
+
+      it "does not allow deletion of another user's orphaned created upload shell" do
+        expect(@validate_sample_response[:valid_ids]).not_to include(@admin_orphaned_created.id)
+        expect(@validate_sample_response[:invalid_sample_ids]).to include(@admin_orphaned_created.id)
       end
     end
 

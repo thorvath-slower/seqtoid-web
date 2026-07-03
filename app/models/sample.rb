@@ -91,6 +91,11 @@ class Sample < ApplicationRecord
 
   SLEEP_SECONDS_BETWEEN_RETRIES = 10
 
+  # Delay after which a still-created local upload is considered stalled and no
+  # longer expected to finish on its own. Determined from historical upload
+  # times, where 80% of successful uploads completed within 3 hours.
+  STALLED_UPLOAD_FINALIZATION_DELAY = 3.hours
+
   FILTERING_OPERATORS = [">=", "<="].freeze
 
   # Constants related to sorting
@@ -798,12 +803,21 @@ class Sample < ApplicationRecord
 
   # Delay determined based on query of historical upload times, where 80%
   # of successful uploads took less than 3 hours by updated time.
-  def self.current_stalled_local_uploads(delay = 3.hours)
+  def self.current_stalled_local_uploads(delay = STALLED_UPLOAD_FINALIZATION_DELAY)
     where(status: STATUS_CREATED)
       .where("samples.created_at < ?", Time.now.utc - delay)
       .joins(:input_files)
       .where(input_files: { source_type: InputFile::SOURCE_TYPE_LOCAL })
       .distinct
+  end
+
+  # Orphaned upload shells: samples still in the created state whose upload
+  # never finalized and is old enough to be considered stalled (past the
+  # finalization delay). These have no completed pipeline run and no finalized
+  # upload_error, so they are otherwise a dead end the user cannot clear.
+  def self.orphaned_created_uploads(delay = STALLED_UPLOAD_FINALIZATION_DELAY)
+    where(status: STATUS_CREATED)
+      .where("samples.created_at < ?", Time.now.utc - delay)
   end
 
   def cleanup_relations
@@ -813,6 +827,10 @@ class Sample < ApplicationRecord
 
   def cleanup_s3
     S3Util.delete_s3_prefix("s3://#{ENV['SAMPLES_BUCKET_NAME']}/#{sample_path}/")
+    # Failed or orphaned uploads leave partial data behind as incomplete
+    # multipart uploads (not completed objects), so the prefix delete above
+    # does not reclaim them. Abort any that remain under the sample prefix.
+    S3Util.abort_multipart_uploads(ENV['SAMPLES_BUCKET_NAME'], "#{sample_path}/")
   end
 
   def self.viewable(user)
