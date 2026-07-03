@@ -1,4 +1,11 @@
 require "rails_helper"
+# lib/seed_resources is NOT on the Rails autoload path, so SeedResource::AppConfigs
+# is undefined unless explicitly loaded. app_configs.rb self-loads its deps
+# (require_relative 'seed_resource' + require 'factory_bot'), so a single ABSOLUTE
+# require is sufficient and deterministic in the full CI suite. (A relative
+# `require_all "lib/seed_resources"` silently loaded nothing under the full run ->
+# `uninitialized constant SeedResource`, which aborted the entire suite.)
+require Rails.root.join("lib/seed_resources/app_configs").to_s
 
 # Regression coverage for #385: the SFN state-machine ARNs seeded here used to
 # hardcode the "dev" deployment stage, so seeding in the staging account produced
