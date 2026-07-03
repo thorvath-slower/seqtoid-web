@@ -1,0 +1,79 @@
+name: gitops-advance-dev
+
+# CD trigger for the Argo CD blue/green delivery (#444). When a build+push to main
+# succeeds (image idseq-web:<sha8> in ECR, Trivy+Cosign passed), advance image.tag in
+# the DEV env values in cypherid-web-infra. Argo CD (dev, autoPromotionEnabled: true)
+# then syncs and Argo Rollouts promotes on smoke pass. This replaces the czecs deploy
+# for dev — the app never applies to the cluster directly; it just moves a Git pointer.
+#
+# Chained off the build via workflow_run so it only fires on a *successful* build of
+# the exact commit that produced the image.
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Images"]
+    types:
+      - completed
+
+concurrency:
+  group: gitops-advance-dev
+  cancel-in-progress: false
+
+jobs:
+  advance:
+    # Only on a successful build of main.
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infra (the GitOps values repo)
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          # GITOPS_TOKEN (#74): scoped write to the infra repo + PR create.
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Install yq
+        run: |
+          YQ=v4.44.3
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ}/yq_linux_amd64" -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Advance dev image.tag to the built commit
+        id: advance
+        env:
+          BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          TAG="${BUILT_SHA:0:8}"
+          FILE=deploy/argocd/values/seqtoid-web/dev.yaml
+          CURRENT="$(yq '.image.tag' "$FILE")"
+          echo "current=$CURRENT  new=$TAG"
+          if [ "$CURRENT" = "$TAG" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "dev already at $TAG — nothing to advance."
+            exit 0
+          fi
+          yq -i ".image.tag = \"$TAG\"" "$FILE"
+          echo "changed=true"  >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"       >> "$GITHUB_OUTPUT"
+
+      - name: Open the tag-advance PR
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          TAG: ${{ steps.advance.outputs.tag }}
+        run: |
+          set -euo pipefail
+          BRANCH="gitops/advance-dev-${TAG}"
+          git config user.name  "seqtoid-gitops"
+          git config user.email "gitops@seqtoid.local"
+          git checkout -b "$BRANCH"
+          git add deploy/argocd/values/seqtoid-web/dev.yaml
+          git commit -m "gitops(dev): advance seqtoid-web image.tag -> ${TAG}"
+          git push -u origin "$BRANCH" --force-with-lease
+          gh pr create \
+            --title "gitops(dev): advance seqtoid-web -> ${TAG}" \
+            --body "Automated dev tag-advance from a green seqtoid-web build (${TAG}). Merging syncs Argo CD (dev auto-promotes on smoke pass). Source build: ${{ github.event.workflow_run.html_url }}" \
+            --base main --head "$BRANCH" || echo "PR may already exist for $BRANCH"
