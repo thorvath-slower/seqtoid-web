@@ -112,6 +112,7 @@ export class ResumableUpload {
   private readonly abortController = new AbortController();
 
   private uploadId?: string;
+  private paused = false;
   private bytesUploadedSoFar = 0;
   private isMultiPart = true;
   private uploadedParts: CompletedPart[] = [];
@@ -162,19 +163,39 @@ export class ResumableUpload {
     this.abortController.abort();
   }
 
+  // Soft-pause: stop queuing/finishing new parts but leave the multipart upload (and its already
+  // uploaded parts) intact on S3, so a later ResumableUpload constructed with the emitted uploadId
+  // resumes via ListParts. Mechanically this trips the same AbortController as abort(), but done()
+  // rejects with a distinguishable PauseError so the caller can treat it as "paused" not "failed".
+  // The emitted uploadId (see onCreatedMultipartUpload) is what the caller persists to resume.
+  async pause(): Promise<void> {
+    this.paused = true;
+    this.abortController.abort();
+  }
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
   async done(): Promise<
     CompleteMultipartUploadCommandOutput | PutObjectCommandOutput
   > {
     return Promise.race([this.doMultipartUpload(), this.abortPromise()]);
   }
 
+  // AbortError for a hard abort, PauseError for a soft pause — same signal, different intent so the
+  // caller can keep the persisted uploadId on pause and discard it on abort.
+  private interruptError(): Error {
+    const error = new Error(this.paused ? "Upload paused." : "Upload aborted.");
+    error.name = this.paused ? "PauseError" : "AbortError";
+    return error;
+  }
+
   private abortPromise(): Promise<never> {
     // eslint-disable-next-line promise/param-names -- this promise only rejects (on abort); resolve is intentionally unused
     return new Promise((_resolve, reject) => {
       this.abortController.signal.addEventListener("abort", () => {
-        const abortError = new Error("Upload aborted.");
-        abortError.name = "AbortError";
-        reject(abortError);
+        reject(this.interruptError());
       });
     });
   }
@@ -382,9 +403,7 @@ export class ResumableUpload {
     await Promise.all(workers);
 
     if (this.abortController.signal.aborted) {
-      const abortError = new Error("Upload aborted.");
-      abortError.name = "AbortError";
-      throw abortError;
+      throw this.interruptError();
     }
 
     if (!this.isMultiPart) {
