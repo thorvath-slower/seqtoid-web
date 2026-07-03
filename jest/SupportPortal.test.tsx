@@ -53,16 +53,31 @@ describe("SupportPortal", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("opens the panel and shows collected diagnostics", () => {
+  it("opens the panel and shows only the minimal quick report (no raw diagnostics)", () => {
     renderWithContext(signedInContext);
     fireEvent.click(screen.getByTestId("support-portal-button"));
+
+    // The minimal, user-facing summary is shown: account + task label.
+    const quickReport = screen.getByTestId("support-portal-quick-report");
+    expect(quickReport.textContent).toContain("Test User");
+    expect(quickReport.textContent).toContain("Account");
+
+    // The fuller diagnostics table is NOT shown until "More details" is expanded.
+    expect(screen.queryByTestId("support-portal-diagnostics")).toBeNull();
+  });
+
+  it("reveals the fuller diagnostics only behind 'More details'", () => {
+    renderWithContext(signedInContext);
+    fireEvent.click(screen.getByTestId("support-portal-button"));
+
+    fireEvent.click(screen.getByTestId("support-portal-details-toggle"));
 
     const diagnostics = screen.getByTestId("support-portal-diagnostics");
     expect(diagnostics.textContent).toContain("abc1234");
     expect(diagnostics.textContent).toContain("test@example.com");
   });
 
-  it("submits a support request with diagnostics and shows success", async () => {
+  it("submits both the minimal quick report and the full diagnostics", async () => {
     mockedCreate.mockResolvedValueOnce({ status: "ok" });
     renderWithContext(signedInContext);
 
@@ -71,6 +86,10 @@ describe("SupportPortal", () => {
 
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
     const arg = mockedCreate.mock.calls[0][0];
+    // Minimal quick report (user-facing).
+    expect(arg.quickReport.accountName).toBe("Test User");
+    expect(arg.quickReport.task).toBeTruthy();
+    // Full diagnostics (support-side only).
     expect(arg.diagnostics.release).toBe("abc1234");
     expect(arg.diagnostics.userEmail).toBe("test@example.com");
     await screen.findByText(/your report was sent/i);

@@ -7,12 +7,23 @@ import Modal from "~ui/containers/Modal";
 import Textarea from "~ui/controls/Textarea";
 import {
   collectDiagnostics,
+  collectQuickReport,
   Diagnostics,
+  QuickReport,
   recordClientError,
 } from "./collectDiagnostics";
 import cs from "./support_portal.scss";
 
-// Human-friendly labels for the diagnostics shown in the panel.
+// Human-friendly labels for the minimal, user-facing quick report.
+const QUICK_REPORT_LABELS: { [K in keyof QuickReport]: string } = {
+  errorName: "Error",
+  task: "What you were doing",
+  project: "Project",
+  accountName: "Account",
+};
+
+// Human-friendly labels for the fuller diagnostics shown only behind "More
+// details". These are primarily for the support-side payload, not the user.
 const DIAGNOSTIC_LABELS: { [K in keyof Diagnostics]: string } = {
   release: "App release",
   environment: "Environment",
@@ -56,12 +67,18 @@ const installErrorListener = () => {
   );
 };
 
-// Floating in-app self-help portal (#440). Renders an unobtrusive corner button
-// that opens a panel showing session/app diagnostics and lets the user file an
-// issue report packaging those diagnostics plus optional free-text.
+// Floating in-app self-help portal (#440), redesigned as two layers:
+//   (A) A MINIMAL end-user quick-report popup that shows only the error, the
+//       task/page, the project, and the account name -- nothing technical.
+//   (B) A "More details" expand that reveals the fuller diagnostics (also sent,
+//       richer, to the support side and never required of the user).
+// Submitting packages the minimal quick report + the full diagnostics; the Rails
+// controller enriches that into a rich support-side payload (correlation id,
+// runbook match, log deep-links) that the user never sees.
 const SupportPortal = () => {
   const userContext = useContext(UserContext);
   const [open, setOpen] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<SubmitStatus>("idle");
 
@@ -69,8 +86,12 @@ const SupportPortal = () => {
     installErrorListener();
   }, []);
 
-  // Recompute diagnostics each time the panel is opened so route/viewport/errors
-  // reflect the current state at report time.
+  // Recompute both the minimal quick report and the full diagnostics each time
+  // the panel opens so route/project/errors reflect the state at report time.
+  const quickReport = useMemo(
+    () => (open ? collectQuickReport(userContext) : null),
+    [open, userContext],
+  );
   const diagnostics = useMemo(
     () => (open ? collectDiagnostics(userContext) : null),
     [open, userContext],
@@ -78,6 +99,7 @@ const SupportPortal = () => {
 
   const handleOpen = () => {
     setStatus("idle");
+    setShowDetails(false);
     setDescription("");
     setOpen(true);
   };
@@ -85,10 +107,10 @@ const SupportPortal = () => {
   const handleClose = () => setOpen(false);
 
   const handleSubmit = async () => {
-    if (!diagnostics) return;
+    if (!quickReport || !diagnostics) return;
     setStatus("submitting");
     try {
-      await createSupportRequest({ description, diagnostics });
+      await createSupportRequest({ description, quickReport, diagnostics });
       setStatus("success");
     } catch (error) {
       logError({
@@ -121,13 +143,33 @@ const SupportPortal = () => {
       {open && (
         <Modal narrow open onClose={handleClose} xlCloseIcon>
           <div className={cs.panel} data-testid="support-portal-panel">
-            <div className={cs.header}>Help &amp; Diagnostics</div>
+            <div className={cs.header}>Report an issue</div>
             <div className={cs.subheader}>
-              Having trouble? Review the diagnostics we&apos;ll include, add any
-              detail below, and send it to our team.
+              Here&apos;s what we noticed. Add anything else below and send it to
+              our team &mdash; we&apos;ll take it from here.
             </div>
 
-            <div className={cs.sectionLabel}>Describe the issue (optional)</div>
+            {/* (A) MINIMAL user-facing summary: error / task / project / account. */}
+            <div
+              className={cs.quickReport}
+              data-testid="support-portal-quick-report"
+            >
+              {quickReport &&
+                (Object.keys(quickReport) as (keyof QuickReport)[]).map(key => (
+                  <div className={cs.quickRow} key={key}>
+                    <span className={cs.quickKey}>
+                      {QUICK_REPORT_LABELS[key]}
+                    </span>
+                    <span className={cs.quickValue} title={quickReport[key]}>
+                      {quickReport[key]}
+                    </span>
+                  </div>
+                ))}
+            </div>
+
+            <div className={cs.sectionLabel}>
+              Anything else? (optional)
+            </div>
             <Textarea
               className={cs.textarea}
               value={description}
@@ -136,18 +178,34 @@ const SupportPortal = () => {
               data-testid="support-portal-description"
             />
 
-            <div className={cs.sectionLabel}>Diagnostics</div>
-            <div className={cs.diagnostics} data-testid="support-portal-diagnostics">
-              {diagnostics &&
-                (Object.keys(diagnostics) as (keyof Diagnostics)[]).map(key => (
-                  <div className={cs.diagnosticRow} key={key}>
-                    <span className={cs.key}>{DIAGNOSTIC_LABELS[key]}</span>
-                    <span className={cs.value} title={diagnostics[key]}>
-                      {diagnostics[key]}
-                    </span>
-                  </div>
-                ))}
-            </div>
+            {/* "More details" expands the full portal / fuller diagnostics. */}
+            <button
+              className={cs.detailsToggle}
+              onClick={() => setShowDetails(v => !v)}
+              data-testid="support-portal-details-toggle"
+              aria-expanded={showDetails}
+            >
+              {showDetails ? "Hide details" : "More details"}
+            </button>
+
+            {showDetails && (
+              <div
+                className={cs.diagnostics}
+                data-testid="support-portal-diagnostics"
+              >
+                {diagnostics &&
+                  (Object.keys(diagnostics) as (keyof Diagnostics)[]).map(
+                    key => (
+                      <div className={cs.diagnosticRow} key={key}>
+                        <span className={cs.key}>{DIAGNOSTIC_LABELS[key]}</span>
+                        <span className={cs.value} title={diagnostics[key]}>
+                          {diagnostics[key]}
+                        </span>
+                      </div>
+                    ),
+                  )}
+              </div>
+            )}
 
             {status === "success" && (
               <div className={`${cs.statusMessage} ${cs.success}`}>

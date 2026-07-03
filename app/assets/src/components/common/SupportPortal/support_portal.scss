@@ -51,6 +51,52 @@
     margin-top: $sds-spaces-l;
   }
 
+  // (A) Minimal, user-facing quick report: error / task / project / account.
+  .quickReport {
+    background: $sds-color-gray-100;
+    border-radius: $sds-corners-m;
+    margin-top: $sds-spaces-m;
+    padding: $sds-spaces-m;
+
+    .quickRow {
+      align-items: baseline;
+      display: flex;
+      justify-content: space-between;
+      padding: $sds-spaces-xxs 0;
+
+      .quickKey {
+        @include font-header-xs;
+        color: $sds-color-gray-500;
+        margin-right: $sds-spaces-m;
+        white-space: nowrap;
+      }
+
+      .quickValue {
+        @include font-body-xs;
+        color: $sds-color-gray-black;
+        overflow: hidden;
+        text-align: right;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  // "More details" expander that reveals the fuller diagnostics table.
+  .detailsToggle {
+    @include font-header-xs;
+    background: none;
+    border: none;
+    color: $sds-color-primary-400;
+    cursor: pointer;
+    margin-top: $sds-spaces-l;
+    padding: 0;
+
+    &:hover {
+      color: $sds-color-primary-500;
+    }
+  }
+
   .textarea {
     min-height: 90px;
     width: 100%;
