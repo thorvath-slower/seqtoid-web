@@ -1,0 +1,78 @@
+# The API workload as an Argo Rollouts blueGreen Rollout (NOT a Deployment).
+# activeService takes live traffic; previewService fronts the new color for the
+# smoke AnalysisRun before promotion. This is the Node port of the seqtoid-web
+# `rails` Rollout — same blue/green shape, Node runtime (`node dist/main.js`).
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "seqtoid-node-backend.fullname" . }}
+  labels:
+    {{- include "seqtoid-node-backend.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "seqtoid-node-backend.selectorLabels" . | nindent 6 }}
+  strategy:
+    blueGreen:
+      activeService: {{ include "seqtoid-node-backend.fullname" . }}-active
+      previewService: {{ include "seqtoid-node-backend.fullname" . }}-preview
+      autoPromotionEnabled: {{ .Values.blueGreen.autoPromotionEnabled }}
+      scaleDownDelaySeconds: {{ .Values.blueGreen.scaleDownDelaySeconds }}
+      abortScaleDownDelaySeconds: {{ .Values.blueGreen.abortScaleDownDelaySeconds }}
+      {{- if .Values.blueGreen.analysis.enabled }}
+      prePromotionAnalysis:
+        templates:
+          - templateName: {{ include "seqtoid-node-backend.fullname" . }}-smoke
+      {{- if .Values.blueGreen.analysis.postPromotion }}
+      postPromotionAnalysis:
+        templates:
+          - templateName: {{ include "seqtoid-node-backend.fullname" . }}-smoke
+      {{- end }}
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "seqtoid-node-backend.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "seqtoid-node-backend.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.gracefulDrain.terminationGracePeriodSeconds }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The image ENTRYPOINT (bin/entrypoint.sh) runs chamber/OFFLINE wrapping;
+          # the api command mirrors the ECS/compose `web` service.
+          command: ["node", "dist/main.js"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          env:
+            {{- include "seqtoid-node-backend.commonEnv" . | nindent 12 }}
+          {{- include "seqtoid-node-backend.envFrom" . | nindent 10 }}
+          lifecycle:
+            preStop:
+              exec:
+                # Let the Service deregister this pod before it stops accepting conns.
+                command: ["sh", "-c", "sleep {{ .Values.gracefulDrain.preStopSleepSeconds }}"]
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.ingress.healthCheckPath }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.ingress.healthCheckPath }}
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

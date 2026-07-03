@@ -1,0 +1,43 @@
+{{- if .Values.worker.enabled -}}
+# Worker Deployment — `node dist/jobs/worker.js` = the BullMQ workers + the
+# SFN-notifications SQS consumer. This ONE Node process is the port of the Rails
+# resque x4 + shoryuken ECS services collapsed into a single worker. Kept a
+# singleton in dev; SQS is at-least-once, so scale with care. Recreate strategy
+# so an old+new worker don't both consume during a roll.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "seqtoid-node-backend.fullname" . }}-worker
+  labels:
+    {{- include "seqtoid-node-backend.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "seqtoid-node-backend.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "seqtoid-node-backend.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "seqtoid-node-backend.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.gracefulDrain.terminationGracePeriodSeconds }}
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.worker.command | nindent 12 }}
+          env:
+            {{- include "seqtoid-node-backend.commonEnv" . | nindent 12 }}
+          {{- include "seqtoid-node-backend.envFrom" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+{{- end }}
