@@ -12,6 +12,7 @@ import {
   QuickReport,
   recordClientError,
 } from "./collectDiagnostics";
+import { onOpenSupportPortal } from "./openSupportPortal";
 import cs from "./support_portal.scss";
 
 // Human-friendly labels for the minimal, user-facing quick report.
@@ -84,6 +85,18 @@ const SupportPortal = () => {
 
   useEffect(() => {
     installErrorListener();
+  }, []);
+
+  // Allow any part of the app -- notably the error-boundary fallback (#466) --
+  // to open this portal via `openSupportPortal()`. We pre-fill the optional
+  // description with the note the caller passed so the user has context.
+  useEffect(() => {
+    return onOpenSupportPortal(({ note }) => {
+      setStatus("idle");
+      setShowDetails(false);
+      setDescription(note ? `${note}. ` : "");
+      setOpen(true);
+    });
   }, []);
 
   // Recompute both the minimal quick report and the full diagnostics each time

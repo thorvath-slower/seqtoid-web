@@ -39,6 +39,7 @@ import {
   getPersistedBackground,
   updatePersistedBackground,
 } from "~/api/persisted_backgrounds";
+import ErrorBoundary from "~/components/common/ErrorBoundary";
 import CoverageVizBottomSidebar from "~/components/common/CoverageVizBottomSidebar";
 import { CoverageVizParamsRaw } from "~/components/common/CoverageVizBottomSidebar/types";
 import { getCoverageVizParams } from "~/components/common/CoverageVizBottomSidebar/utils";
@@ -1395,20 +1396,27 @@ export const SampleView = ({
   snapshotShareId,
 }: SampleViewWrapperProps) => {
   return (
-    <Suspense
-      fallback={
-        <SampleMessage
-          icon={<IconLoading className={csSampleMessage.icon} />}
-          message={"Loading report data."}
-          status={"Loading"}
-          type={"inProgress"}
+    // Report view (#466): a render error here -- bad report data, a failed
+    // query resolving into a throw, etc. -- shows the friendly, actionable
+    // fallback (retry + contact support) instead of a blank page, while still
+    // reporting to Sentry. Resets automatically when the user opens a different
+    // sample so an error on sample A doesn't stick to sample B.
+    <ErrorBoundary view="report" resetKeys={[sampleId, snapshotShareId]}>
+      <Suspense
+        fallback={
+          <SampleMessage
+            icon={<IconLoading className={csSampleMessage.icon} />}
+            message={"Loading report data."}
+            status={"Loading"}
+            type={"inProgress"}
+          />
+        }
+      >
+        <SampleViewComponent
+          sampleId={sampleId}
+          snapshotShareId={snapshotShareId}
         />
-      }
-    >
-      <SampleViewComponent
-        sampleId={sampleId}
-        snapshotShareId={snapshotShareId}
-      />
-    </Suspense>
+      </Suspense>
+    </ErrorBoundary>
   );
 };

@@ -2176,13 +2176,19 @@ const SamplesHeatmapView = (props: SamplesHeatmapViewProps) => {
   };
 
   return (
-    <SamplesHeatmapViewCC
-      {...props}
-      allowedFeatures={allowedFeatures}
-      trackEvent={trackEvent}
-      withAnalytics={withAnalytics}
-      updateDiscoveryProjectIds={updateDiscoveryProjectId}
-    />
+    // Heatmap view (#466): a top-level boundary around the whole view so a
+    // render failure anywhere (filters, controls, data prep -- not just the vis
+    // canvas, which keeps its own inner boundary) shows the friendly, actionable
+    // fallback rather than a blank page, while still reporting to Sentry.
+    <ErrorBoundary view="heatmap">
+      <SamplesHeatmapViewCC
+        {...props}
+        allowedFeatures={allowedFeatures}
+        trackEvent={trackEvent}
+        withAnalytics={withAnalytics}
+        updateDiscoveryProjectIds={updateDiscoveryProjectId}
+      />
+    </ErrorBoundary>
   );
 };
 
