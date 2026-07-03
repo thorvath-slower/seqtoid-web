@@ -740,7 +740,7 @@ describe BulkDownload, type: :model do
       )
 
       expect(Open3).to receive(:capture3).exactly(1).times.with(mock_aegea_ecs_submit_command).and_return(
-        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0)]
+        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
       )
 
       expect_any_instance_of(Tempfile).to receive(:unlink).exactly(1).times
@@ -752,13 +752,61 @@ describe BulkDownload, type: :model do
     end
 
     it "correctly updates bulk download on aegea ecs failure" do
+      # "An error occurred" is not a transient signal, so no retry (exactly once).
       expect(Open3).to receive(:capture3).exactly(1).times.and_return(
-        ["", "An error occurred", instance_double(Process::Status, exitstatus: 1)]
+        ["", "An error occurred", instance_double(Process::Status, exitstatus: 1, success?: false)]
       )
 
       expect do
         @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
       end.to raise_error(StandardError, 'An error occurred')
+
+      expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
+    end
+
+    it "retries a transient aegea failure then succeeds" do
+      # Don't actually sleep between retries.
+      allow(AegeaRetry).to receive(:sleep)
+
+      # First call: transient throttling failure. Second call: success.
+      expect(Open3).to receive(:capture3).exactly(2).times.and_return(
+        ["", "An error occurred (ThrottlingException): Rate exceeded", instance_double(Process::Status, exitstatus: 1, success?: false)],
+        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
+      )
+
+      @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+
+      expect(@bulk_download.ecs_task_arn).to eq(mock_task_arn)
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_RUNNING)
+    end
+
+    it "does NOT retry a permanent aegea failure" do
+      allow(AegeaRetry).to receive(:sleep)
+
+      # AccessDenied is permanent -- must fail on the first attempt, no retry.
+      expect(Open3).to receive(:capture3).exactly(1).times.and_return(
+        ["", "An error occurred (AccessDenied): not authorized to perform ecs:RunTask", instance_double(Process::Status, exitstatus: 1, success?: false)]
+      )
+
+      expect do
+        @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+      end.to raise_error(StandardError, /AccessDenied/)
+
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
+    end
+
+    it "raises with the last stderr after exhausting retries on persistent transient failures" do
+      allow(AegeaRetry).to receive(:sleep)
+
+      # Every attempt is a (retryable) throttle. Default policy = 4 attempts.
+      expect(Open3).to receive(:capture3).exactly(4).times.and_return(
+        ["", "Rate exceeded (ThrottlingException)", instance_double(Process::Status, exitstatus: 1, success?: false)]
+      )
+
+      expect do
+        @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+      end.to raise_error(StandardError, /Rate exceeded/)
 
       expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
       expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)

@@ -308,7 +308,13 @@ class BulkDownload < ApplicationRecord
     executable_file = create_local_exec_file(shell_command_escaped)
     aegea_command = aegea_ecs_submit_command(executable_file_path: executable_file.path.to_s)
 
-    command_stdout, command_stderr, status = Open3.capture3(*aegea_command)
+    # aegea shells out to AWS (ECS/Batch/ECR/S3) and fails intermittently on
+    # throttling / capacity / transient network / 5xx / timeouts. AegeaRetry
+    # retries only those transient signals with exponential backoff + jitter and
+    # surfaces permanent failures (bad args, unknown cluster, AccessDenied)
+    # immediately with the real stderr. First-try success behaves exactly as
+    # a bare Open3.capture3.
+    command_stdout, command_stderr, status = AegeaRetry.capture3(*aegea_command)
     if status.exitstatus.zero?
       output = JSON.parse(command_stdout)
       # Store the taskArn for debugging purposes.
