@@ -12,6 +12,7 @@ import { useLazyLoadQuery, useRelayEnvironment } from "react-relay";
 import { SortDirection } from "react-virtualized";
 import { fetchQuery, graphql } from "relay-runtime";
 import BlankScreenMessage from "~/components/common/BlankScreenMessage";
+import ErrorBoundary from "~/components/common/ErrorBoundary";
 import DetailsSidebar from "~/components/common/DetailsSidebar";
 import LoadingMessage from "~/components/common/LoadingMessage";
 import { UserContext } from "~/components/common/UserContext";
@@ -228,16 +229,21 @@ export const BulkDownloadList = () => {
         </ViewHeader>
       </NarrowContainer>
       <Divider />
-      <Suspense
-        fallback={
-          <LoadingMessage
-            className={cs.loadingMessage}
-            message="Loading Downloads"
-          />
-        }
-      >
-        <BulkDownloadListComponent />
-      </Suspense>
+      {/* Downloads view (#466): failures loading/rendering the downloads list
+          surface the friendly, actionable fallback (retry + contact support)
+          rather than a blank list, while still reporting to Sentry. */}
+      <ErrorBoundary view="downloads">
+        <Suspense
+          fallback={
+            <LoadingMessage
+              className={cs.loadingMessage}
+              message="Loading Downloads"
+            />
+          }
+        >
+          <BulkDownloadListComponent />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 };
