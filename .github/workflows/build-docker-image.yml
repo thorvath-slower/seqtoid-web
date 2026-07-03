@@ -70,11 +70,11 @@ jobs:
       - name: Export variables
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
-          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
           # CZID-75: the immutable image ref scanned + signed below
-          echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:${GITHUB_SHA::8}" >> $GITHUB_ENV
+          echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:${GITHUB_SHA::8}" >> "$GITHUB_ENV"
       - name: Build docker image
-        run: bin/build-docker $(basename $GITHUB_REF) ${GITHUB_SHA::8}
+        run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       # CZID-75: scan the built image BEFORE it ships — fail the release on HIGH/CRITICAL CVEs.
       - name: Scan image (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -85,7 +85,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: "true"
       - name: Push docker image
-        run: bin/push-docker $(basename $GITHUB_REF) ${GITHUB_SHA::8}
+        run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       # CZID-75: sign the pushed image so the deploy side can enforce "signed images only" (#77).
       # Keyless (Sigstore/Fulcio, via the GHA OIDC token) — for a private/air-gapped posture swap to a
       # KMS key: `cosign sign --key awskms://<arn> --yes "$REF@$DIGEST"`.

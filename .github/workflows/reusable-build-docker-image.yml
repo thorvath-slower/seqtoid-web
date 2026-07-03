@@ -47,11 +47,11 @@ jobs:
       - name: Export variables
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
-          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
       - name: Build docker image
-        run: bin/build-docker $(basename $GITHUB_REF) ${GITHUB_SHA::8}
+        run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       - name: Push docker image
-        run: bin/push-docker $(basename $GITHUB_REF) ${GITHUB_SHA::8}
+        run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
 
   build_prod_docker_image:
     runs-on: ubuntu-latest
@@ -79,8 +79,8 @@ jobs:
       - name: Export variables
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
-          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
       - name: Build docker image
-        run: bin/build-docker $(basename $GITHUB_REF) ${GITHUB_SHA::8}
+        run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       - name: Push docker image
-        run: bin/push-docker $(basename $GITHUB_REF) ${GITHUB_SHA::8}
+        run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"

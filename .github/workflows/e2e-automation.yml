@@ -6,17 +6,17 @@ on:
       node-environment:
         type: string
         description: "Environment"
-        required: true
+        required: false
         default: "staging"
       test-category:
         type: string
         description: "Test Category"
-        required: true
+        required: false
         default: "smoke"
       should-run-with-feature-flags:
         type: string
         description: "Run with feature flags?"
-        required: true
+        required: false
         default: "false"
 
   workflow_dispatch:
@@ -24,7 +24,7 @@ on:
       node-environment:
         type: choice
         description: "Environment"
-        required: true
+        required: false
         default: "staging"
         options:
           - staging
@@ -32,7 +32,7 @@ on:
       test-category:
         type: choice
         description: "Test Category"
-        required: true
+        required: false
         default: "smoke"
         options:
           - smoke
@@ -40,7 +40,7 @@ on:
       should-run-with-feature-flags:
         type: choice
         description: "Run with feature flags?"
-        required: true
+        required: false
         default: "false"
         options:
           - "true"
@@ -84,8 +84,8 @@ jobs:
           if [[ ${{inputs.should-run-with-feature-flags}} == 'true' ]]; then
             CZID_USERNAME_WITH_FF=${{secrets.CZID_USERNAME_WITH_FF}}
             CZID_PASSWORD_WITH_FF=${{secrets.CZID_PASSWORD_WITH_FF}}
-            echo "CZID_USERNAME=${CZID_USERNAME_WITH_FF}" >> $GITHUB_ENV
-            echo "CZID_PASSWORD=${CZID_PASSWORD_WITH_FF}" >> $GITHUB_ENV
+            echo "CZID_USERNAME=${CZID_USERNAME_WITH_FF}" >> "$GITHUB_ENV"
+            echo "CZID_PASSWORD=${CZID_PASSWORD_WITH_FF}" >> "$GITHUB_ENV"
             echo "Running tests with feature flags"
           else
             echo "Running tests without feature flags"

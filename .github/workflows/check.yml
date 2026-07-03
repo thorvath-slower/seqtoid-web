@@ -52,7 +52,7 @@ jobs:
       uses: actions/checkout@v6
     - name: Determine Kernel Version
       run: |
-        echo "KERNEL_VERSION=`uname -r`" >> $GITHUB_ENV
+        echo "KERNEL_VERSION=$(uname -r)" >> "$GITHUB_ENV"
     - name: Cache Ruby Dependencies
       uses: actions/cache@v5
       with:
@@ -160,7 +160,7 @@ jobs:
           ${{ runner.os }}-node-
     - name: Check the Lockfile Version
       run: |
-        VERSION=`cat package-lock.json | jq '.lockfileVersion'`
+        VERSION=$(jq '.lockfileVersion' < package-lock.json)
         if [ "$VERSION" -lt "2"  ]; then
           echo "Check the lockfileVersion in package-lock.json."
           exit 1
@@ -190,7 +190,7 @@ jobs:
       run: npx eslint app/assets/src -c .eslintrc-a11y.json --ext .js,.jsx,.ts,.tsx --max-warnings 152
     - name: Check for Unused Packages
       # Uses Depcheck to flag unused dependencies in package.json
-      run: exit $(npx depcheck --ignores="core-js" --json | jq '.dependencies | length')
+      run: exit "$(npx depcheck --ignores="core-js" --json | jq '.dependencies | length')"
     - name: TypeScript Checks
       run: npx tsc -p ./app/assets/tsconfig.json --noemit
       # checks for hidden TS errors on  @ts-expect-error escaped lines

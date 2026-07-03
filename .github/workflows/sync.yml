@@ -15,7 +15,8 @@ jobs:
       - name: Sync repository mirrors
         run: |
           git fetch --unshallow
+          # shellcheck disable=SC2046  # intentional word-split: ssh-agent emits multiple `VAR=…; export VAR;` statements that eval must split
           eval $(ssh-agent)
           echo "${{secrets.IDSEQ_WEB_SYNC}}" | ssh-add -
           git remote add czid-web git@github.com:chanzuckerberg/czid-web.git
-          git push --force czid-web $(basename $GITHUB_REF)
+          git push --force czid-web "$(basename "$GITHUB_REF")"
