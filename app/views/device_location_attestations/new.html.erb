@@ -1,0 +1,47 @@
+<%#
+  CZID-286 — Layer 3 device / location attestation step-up page (SERVER-SIDE gate; CLIENT SDK HELD).
+
+  ⚠️ TODO(counsel): copy is a PLACEHOLDER with legal weight — counsel-owned. Precise-location collection is
+  sensitive PII and requires consent + a DPA (design doc §10 item 7).
+
+  ⚠️ TODO(vendor) — CLIENT SDK INTEGRATION POINT (HELD): this page is where the device-location vendor's
+  frontend SDK (e.g. GeoComply PinPoint web SDK) is embedded. The SDK collects a signed device-attestation
+  token and POSTs it to `device_location_attestations_path` as `attestation_token`; the server verifies it
+  (see DeviceLocationAttestationsController#create → ExportControl::DeviceLocationProvider). Building that
+  vendor-specific frontend against an unknown SDK is deliberately HELD (standing rule) — the form below is
+  a documented placeholder so the fail-closed server verifier is exercisable now (an empty/absent token is
+  verified server-side and DENIED, which is the correct dark-mode behavior).
+%>
+<div class="device-location-attestation" style="max-width: 720px; margin: 64px auto; padding: 0 24px; font-family: 'Open Sans', sans-serif;">
+  <h1 style="font-size: 24px; margin-bottom: 16px;">
+    <%# TODO(counsel): heading copy %>
+    Device location verification required
+  </h1>
+
+  <div style="background:#f6f8fa; border:1px solid #d0d7de; border-radius:6px; padding:20px; margin-bottom:24px; line-height:1.6;">
+    <p><strong>PLACEHOLDER — pending counsel-approved text (TODO(counsel)).</strong></p>
+    <p>
+      For the most sensitive export-controlled functions, this service verifies your device's real location
+      to prevent location spoofing. [Consent language, the vendor identity, and what is collected are
+      counsel-owned and will replace this placeholder before enforcement is enabled.]
+    </p>
+  </div>
+
+  <%= form_with url: device_location_attestations_path, method: :post, local: true do %>
+    <p style="color:#57606a; font-size:13px; margin-bottom:20px;">
+      Policy version: <%= @attestation_policy_version %> &nbsp;·&nbsp; Provider: <%= @device_provider %>
+    </p>
+
+    <%#
+      TODO(vendor): the chosen SDK writes the signed device-attestation token into this hidden field before
+      submit. With no SDK wired, it stays empty → the server verifier fails closed (DENY).
+    %>
+    <input type="hidden" name="attestation_token" value="" />
+
+    <button type="submit"
+            style="background:#0969da; color:#fff; border:none; border-radius:6px; padding:10px 20px; font-size:15px; cursor:pointer;">
+      <%# TODO(counsel): button label %>
+      Verify device location
+    </button>
+  <% end %>
+</div>
