@@ -1,28 +1,39 @@
 #!/bin/bash
 # NOTE: We push all created tags to the Docker repo, but only the commit, branch, and latest tags matter.
 # Cache and compose are noise.
+#
+# CZID-76: the ECR repo is being reconciled from the legacy `idseq-web` name to the go-forward
+# `seqtoid-web` name (the GitOps values reference `czid-<env>/seqtoid-web`). We do NOT rename the
+# live `idseq-web` repo. Instead we build+tag for BOTH names during the transition (dual-push), so a
+# `sha-<commit>` tag resolves under either name at deploy time. The set of repo names is driven by
+# ECR_REPO_NAMES (space-separated) so the cutover is a one-line change: drop `idseq-web` once every
+# consumer (deploy scripts, chart values, GitOps values) references `seqtoid-web`.
 set -euo pipefail
 
-export REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web"
+# Space-separated ECR repo names to tag (transition: dual-push legacy + go-forward). Override via env.
+ECR_REPO_NAMES="${ECR_REPO_NAMES:-idseq-web seqtoid-web}"
+REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
 BRANCH="$1"
-BRANCH_CLEANED=$(echo $BRANCH | sed 's/\//-/g')
+BRANCH_CLEANED=$(echo "$BRANCH" | sed 's/\//-/g')
 COMMIT="$2"
-BRANCH_TAG=$REPO:"branch-$BRANCH_CLEANED"
-CACHE_TAG="$REPO:cache"
-COMMIT_TAG=$REPO:"sha-$COMMIT"
-COMPOSE_TAG="$REPO:compose"
-LATEST_TAG="$REPO:latest"
+
+# The first repo name is the canonical build/cache repo; the rest are additional tag targets.
+PRIMARY_REPO="$REGISTRY/$(echo "$ECR_REPO_NAMES" | awk '{print $1}')"
+BRANCH_TAG="$PRIMARY_REPO:branch-$BRANCH_CLEANED"
+CACHE_TAG="$PRIMARY_REPO:cache"
+COMPOSE_TAG="$PRIMARY_REPO:compose"
+LATEST_TAG="$PRIMARY_REPO:latest"
 
 echo "Branch $BRANCH"
 echo "Commit $COMMIT"
-echo "Repo   $REPO"
+echo "Repos  $ECR_REPO_NAMES"
 echo '--'
 
 # Try to pull the latest image for this branch, otherwise pull latest image for caching
-if ! ( docker pull $BRANCH_TAG && docker tag $BRANCH_TAG $CACHE_TAG ); then
+if ! ( docker pull "$BRANCH_TAG" && docker tag "$BRANCH_TAG" "$CACHE_TAG" ); then
     # If we fail to fetch the latest image, continue the build without a cache image.
-    (docker pull $LATEST_TAG && docker tag $LATEST_TAG $CACHE_TAG) || true
+    (docker pull "$LATEST_TAG" && docker tag "$LATEST_TAG" "$CACHE_TAG") || true
 fi
 
 # Hash of the frontend asset source + webpack/babel config, passed as a build-arg
@@ -33,10 +44,14 @@ fi
 SRC_HASH=$(git ls-files -s app/assets webpack.config.common.js webpack.config.prod.js .babelrc | git hash-object --stdin)
 echo "Asset SRC_HASH $SRC_HASH"
 
-docker build -t $COMPOSE_TAG --cache-from $CACHE_TAG --build-arg GIT_COMMIT=${COMMIT} --build-arg SRC_HASH=${SRC_HASH} .
+docker build -t "$COMPOSE_TAG" --cache-from "$CACHE_TAG" --build-arg GIT_COMMIT="${COMMIT}" --build-arg SRC_HASH="${SRC_HASH}" .
 
-if [ "$BRANCH" == "main" ]; then
-    docker tag $COMPOSE_TAG $LATEST_TAG
-fi
-docker tag $COMPOSE_TAG $COMMIT_TAG
-docker tag $COMPOSE_TAG $BRANCH_TAG
+# Tag the built image (the same image content) under every configured repo name.
+for NAME in $ECR_REPO_NAMES; do
+    REPO="$REGISTRY/$NAME"
+    if [ "$BRANCH" == "main" ]; then
+        docker tag "$COMPOSE_TAG" "$REPO:latest"
+    fi
+    docker tag "$COMPOSE_TAG" "$REPO:sha-$COMMIT"
+    docker tag "$COMPOSE_TAG" "$REPO:branch-$BRANCH_CLEANED"
+done
