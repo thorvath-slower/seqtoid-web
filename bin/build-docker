@@ -25,7 +25,15 @@ if ! ( docker pull $BRANCH_TAG && docker tag $BRANCH_TAG $CACHE_TAG ); then
     (docker pull $LATEST_TAG && docker tag $LATEST_TAG $CACHE_TAG) || true
 fi
 
-docker build -t $COMPOSE_TAG --cache-from $CACHE_TAG --build-arg GIT_COMMIT=${COMMIT} .
+# Hash of the frontend asset source + webpack/babel config, passed as a build-arg
+# so the Dockerfile's asset-build layer cache-busts on any frontend change
+# (CZID-380). Without this, --cache-from can reuse a stale `build-img` layer and
+# ship an old bundle even though the source changed. Uses the git-tracked content
+# (index blobs) so the hash is deterministic and matches what gets committed.
+SRC_HASH=$(git ls-files -s app/assets webpack.config.common.js webpack.config.prod.js .babelrc | git hash-object --stdin)
+echo "Asset SRC_HASH $SRC_HASH"
+
+docker build -t $COMPOSE_TAG --cache-from $CACHE_TAG --build-arg GIT_COMMIT=${COMMIT} --build-arg SRC_HASH=${SRC_HASH} .
 
 if [ "$BRANCH" == "main" ]; then
     docker tag $COMPOSE_TAG $LATEST_TAG
