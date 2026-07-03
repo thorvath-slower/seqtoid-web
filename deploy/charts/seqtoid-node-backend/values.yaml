@@ -1,0 +1,147 @@
+# Default values for the seqtoid-node-backend chart. Env overrides live in
+# cypherid-web-infra/deploy/argocd/values/seqtoid-node-backend/<env>.yaml and
+# layer on top.
+#
+# These defaults render a valid dev-shaped manifest so `helm template`/lint work
+# standalone in CI; real per-env values (account id, DNS, cert, subnets, role
+# ARN) come from the infra repo's values files.
+#
+# This is the strangler slice (epic #454): the Node backend runs ALONGSIDE Rails
+# on its OWN hostname/ingress, sharing the same Aurora / S3 / SWIPE / SQS. It
+# does not replace the Rails ingress. See rewrite-node-nestjs/deploy/README.md +
+# docs/AWS-INTEGRATION-PHASE-0-1-SPEC.md.
+
+project: czid
+# Logical env: dev | staging | prod. Drives names, namespace-suffixing.
+# STRANGLER NOTE: Phase 0/1 is dev-ONLY (account 491013321714). staging/prod
+# values exist so the chart renders in CI, but they are NOT deployed until the
+# full-cutover ticket (#457).
+environment: dev
+
+image:
+  # Full ECR repository (per-env values override with the account-scoped repo).
+  # The Node image is a SEPARATE repo from the Rails idseq-web image.
+  repository: seqtoid-node-backend
+  # CI advances this to the immutable sha-<commit> tag on deploy (GitOps, #444).
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# API replicas (per active/preview color). Ignored when autoscaling.enabled.
+replicaCount: 2
+
+aws:
+  region: us-west-2
+  # Account id, informational / for templating bucket names if needed. Empty by
+  # default; per-env values set the real account.
+  accountId: ""
+
+# IRSA: the pod identity that replaces the ECS task role. Grants SSM (config),
+# Secrets Manager (signing key + DB password), S3, SFN, SQS, STS, and (Phase 2,
+# taxon indexing Option A) lambda:InvokeFunction. roleArn is the output
+# node_backend_role_arn from deploy/terraform/irsa-node-backend-dev.tf, filled
+# per-env from the infra repo.
+serviceAccount:
+  create: true
+  name: ""
+  roleArn: ""
+
+# Secrets. The Node app reads non-secret config from SSM and the ES384 signing
+# key / DB password from Secrets Manager at runtime via the central AwsModule
+# (given the IRSA role's SSM+SecretsManager read). The least-change path is to
+# sync those into a k8s Secret via external-secrets (ESO) and envFrom it; when
+# enabled the deploy references `secrets.externalSecretName`. If ESO is not yet
+# installed, leave enabled=false and rely on the app's in-process SSM/Secrets
+# fetch (the AwsModule) — the pod still just needs the IRSA role.
+secrets:
+  externalSecrets:
+    enabled: false
+    # Name of the k8s Secret produced by an ExternalSecret (managed out-of-chart
+    # or by ESO). envFrom'd into api + worker when enabled.
+    secretName: ""
+
+# STRANGLER GUARDRAIL (dev): don't let BOTH the Node worker and Rails' Shoryuken
+# consume the SAME dev SFN-notifications SQS queue (they'd race). Point the Node
+# worker at its OWN dev queue (subscribed to the same EventBridge rule) via
+# extraEnv SFN_NOTIFICATIONS_QUEUE_ARN below, OR pause dev Rails' Shoryuken.
+# Prod is unaffected regardless. See AWS-INTEGRATION-PHASE-0-1-SPEC.md Decision 1.
+
+# DEMO_MODE bypasses real auth/token minting. MUST stay unset/false on a real
+# deploy (the exit criteria mint a real ES384 token). Left unset here.
+
+# API container port (NestJS Nest listen). Services expose `service.port` -> this.
+containerPort: 3000
+service:
+  port: 80
+
+# Blue/green strategy knobs (consumed by the api Rollout).
+blueGreen:
+  autoPromotionEnabled: false     # dev/staging true; prod false (manual gate)
+  scaleDownDelaySeconds: 30
+  abortScaleDownDelaySeconds: 30
+  analysis:
+    enabled: true                 # gate promotion on the smoke AnalysisTemplate
+    postPromotion: false          # prod also re-checks after promotion
+
+# Smoke check the AnalysisTemplate runs against the PREVIEW color before promotion.
+smoke:
+  image: curlimages/curl:8.10.1
+  # Paths that must return HTTP 200 on the preview color. /health_check first
+  # (HealthController); add critical read paths here as they harden.
+  paths:
+    - /health_check
+  timeoutSeconds: 10
+  # How many times the analysis retries the smoke Job before declaring failure.
+  failureLimit: 2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 65
+
+# Public edge: ALB via the AWS Load Balancer Controller -> the ACTIVE service.
+# STRANGLER: a SEPARATE hostname from the Rails ingress (e.g. node-dev.czid...).
+# In dev the seam is internal (scheme: internal); staging/prod would be
+# internet-facing at cutover (#457) — controlled per-env via ingress.scheme.
+ingress:
+  enabled: true
+  host: ""                        # per-env DNS name (NEW host; never the Rails one)
+  scheme: internal                # dev strangler seam is internal; flip at cutover
+  certificateArn: ""              # per-env ACM cert (required when internet-facing)
+  # Extra alb.ingress.kubernetes.io/* annotations (subnets, etc.) merged in per-env.
+  annotations: {}
+  healthCheckPath: /health_check
+
+# Graceful drain so a promotion/scale-down doesn't drop in-flight requests.
+gracefulDrain:
+  preStopSleepSeconds: 15
+  terminationGracePeriodSeconds: 60
+
+# Extra plain env vars applied to api + worker (name/value pairs). Use this for
+# the strangler-isolation SFN_NOTIFICATIONS_QUEUE_ARN (own dev queue), and any
+# non-secret config not sourced from SSM at runtime.
+extraEnv: []
+
+# Worker workload. ONE Deployment running `node dist/jobs/worker.js` = the BullMQ
+# workers + the SFN-notifications SQS consumer (the Node port of the Rails
+# resque x4 + shoryuken services collapsed into a single Node worker process).
+# Kept a singleton in dev (SQS is at-least-once; scale with care).
+worker:
+  enabled: true
+  replicaCount: 1
+  command: ["node", "dist/jobs/worker.js"]
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
