@@ -9,6 +9,11 @@ class SamplesController < ApplicationController
   include SamplesHelper
   include ReportsHelper
   include ParameterSanitization
+  include OtelActionLogging
+
+  # CZID-472: per-user action log for support triage (identifiers only, no PII).
+  log_user_actions :bulk_upload_with_metadata, action: "sample.bulk_upload",
+                                               context: ->(c) { { "czid.project.id" => c.params[:project_id], "czid.sample_count" => Array(c.params[:samples]).size } }
 
   ########################################
   # Note to developers:

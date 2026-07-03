@@ -3,6 +3,11 @@ class BulkDownloadsController < ApplicationController
   include BulkDownloadsHelper
   include PipelineRunsHelper
   include AppConfigHelper
+  include OtelActionLogging
+
+  # CZID-472: per-user action log for support triage (identifiers only, no PII).
+  log_user_actions :create, action: "bulk_download.create",
+                            context: ->(c) { { "czid.download_type" => c.params[:download_type], "czid.workflow" => c.params[:workflow] } }
 
   UPDATE_WITH_TOKEN_ACTIONS = [:success_with_token, :error_with_token, :progress_with_token].freeze
 
