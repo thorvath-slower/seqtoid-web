@@ -705,10 +705,33 @@ describe BulkDownload, type: :model do
       expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
     end
 
-    it "outputs correct command in development", skip: "CZID-186: aegea staging-for-dev cluster/bucket override unimplemented (not a SAMPLES_BUCKET_NAME issue)" do
+    # CZID-186: in a local `development` boot there is no `*-development` aegea
+    # cluster/bucket, so the ECS cluster and executable-file bucket are redirected to a
+    # real deployment stage derived from ENV["ENVIRONMENT"] (default "staging"). The
+    # task-role stays keyed on Rails.env (the download IAM role IS per Rails env).
+    it "redirects the ecs cluster/bucket to the default staging stage in development" do
       allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
+      # Whole-ENV stub with ENVIRONMENT unset -> aegea_deployment_stage falls back to "staging".
       stub_const('ENV', ENV.to_hash.merge("SAMPLES_BUCKET_NAME" => "czid-samples-development",
-                                          "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development"))
+                                          "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development").tap { |h| h.delete("ENVIRONMENT") })
+
+      task_command = [
+        "aegea", "ecs", "run", "--execute=#{mock_executable_file_path}",
+        "--task-role", "czi-infectious-disease-downloads-development",
+        "--task-name", BulkDownload::ECS_TASK_NAME,
+        "--ecr-image", "idseq-s3-tar-writer:latest",
+        "--fargate-cpu", "4096",
+        "--fargate-memory", "8192",
+        "--cluster", "idseq-fargate-tasks-staging",
+        "--staging-s3-bucket", "aegea-ecs-execute-staging",
+      ]
+
+      expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
+    end
+
+    it "derives the ecs cluster/bucket stage from ENV[ENVIRONMENT] in development" do
+      allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
+      stub_const('ENV', ENV.to_hash.merge("ENVIRONMENT" => "staging"))
 
       task_command = [
         "aegea", "ecs", "run", "--execute=#{mock_executable_file_path}",
