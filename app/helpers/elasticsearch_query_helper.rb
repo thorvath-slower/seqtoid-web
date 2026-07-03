@@ -823,8 +823,40 @@ module ElasticsearchQueryHelper
     }
     resp = call_lambda(function_name, payload)
 
-    resp_payload = JSON.parse(resp.payload.string)
-    failure_count = resp_payload.count { |invocation| invocation["FunctionError"] }
+    resp_body = resp&.payload&.string
+    if resp_body.blank?
+      LogUtil.log_error(
+        "Taxon indexing lambda returned an empty response",
+        background_id: background_id,
+        pipeline_run_ids: pipeline_run_ids
+      )
+      raise "Taxon indexing failed: empty response from #{function_name}"
+    end
+
+    begin
+      resp_payload = JSON.parse(resp_body)
+    rescue JSON::ParserError => error
+      LogUtil.log_error(
+        "Taxon indexing lambda returned an unparseable response",
+        exception: error,
+        background_id: background_id,
+        pipeline_run_ids: pipeline_run_ids
+      )
+      raise "Taxon indexing failed: unparseable response from #{function_name}: #{error.message}"
+    end
+
+    # A well-formed response is an array of per-invocation results. Anything else
+    # (nil, a hash-shaped error object, etc.) means the manager itself failed.
+    unless resp_payload.is_a?(Array)
+      LogUtil.log_error(
+        "Taxon indexing lambda returned an unexpected payload shape",
+        background_id: background_id,
+        pipeline_run_ids: pipeline_run_ids
+      )
+      raise "Taxon indexing failed: unexpected response from #{function_name}: #{resp_payload}"
+    end
+
+    failure_count = resp_payload.count { |invocation| invocation.is_a?(Hash) && invocation["FunctionError"] }
     # check if any indexing jobs failed. If they did, raise an error to the user so that
     # they can retry. All indexing jobs must succeed before the heatmap can be rendered.
     if failure_count > 0
