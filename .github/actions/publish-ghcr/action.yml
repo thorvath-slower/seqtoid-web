@@ -1,0 +1,125 @@
+name: Publish known-good build to GHCR
+description: >-
+  CZID-392: tag a locally-built, already-scanned image with an immutable SemVer + build-metadata
+  tag and push it to GHCR (source-of-record) alongside ECR. Stamps the true SemVer into OCI labels
+  and records a build-provenance.json (version, commit, digest). Runs in the SAME job as the build so
+  it operates on the image already present in the runner — no rebuild (build-once, tag-the-digest).
+
+# Reusable composite action. Call from the build job after build + Trivy scan pass, so everything
+# published to GHCR is known-good by construction.
+
+inputs:
+  local_image:
+    description: The locally-built+scanned image ref to publish (e.g. <acct>.dkr.ecr...amazonaws.com/idseq-web:sha-abcd1234).
+    required: true
+  ghcr_repo:
+    description: Target GHCR repository (e.g. ghcr.io/thorvath-slower/seqtoid-web).
+    required: true
+  github_token:
+    description: Token with packages:write to log into GHCR (pass secrets.GITHUB_TOKEN).
+    required: true
+  push_latest:
+    description: Also push the moving `latest` tag to GHCR (typically only on main).
+    required: false
+    default: "false"
+
+outputs:
+  semver:
+    description: The full SemVer version string (with build metadata).
+    value: ${{ steps.version.outputs.semver }}
+  image_tag:
+    description: The OCI-safe image tag pushed to GHCR.
+    value: ${{ steps.version.outputs.tag }}
+  digest:
+    description: The GHCR image digest (sha256:...).
+    value: ${{ steps.push.outputs.digest }}
+
+runs:
+  using: composite
+  steps:
+    - name: Compute version
+      id: version
+      shell: bash
+      # bin/compute-version.sh writes release/semver/version/tag/sha to $GITHUB_OUTPUT.
+      run: bin/compute-version.sh
+
+    - name: Log in to GHCR
+      uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.github_token }}
+
+    - name: Stamp OCI labels + tag for GHCR (no rebuild)
+      id: tag
+      shell: bash
+      env:
+        LOCAL_IMAGE: ${{ inputs.local_image }}
+        GHCR_REPO: ${{ inputs.ghcr_repo }}
+        SEMVER: ${{ steps.version.outputs.semver }}
+        IMAGE_TAG: ${{ steps.version.outputs.tag }}
+        SHA_TAG: sha-${{ steps.version.outputs.sha }}
+        PUSH_LATEST: ${{ inputs.push_latest }}
+      run: |
+        set -euo pipefail
+        # Re-stamp labels onto the exact built image WITHOUT rebuilding the app (FROM <image> is a
+        # cheap metadata-only layer), so the published artifact is bit-for-bit the scanned one.
+        printf 'FROM %s\n' "$LOCAL_IMAGE" | docker build \
+          --label "org.opencontainers.image.version=$SEMVER" \
+          --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
+          --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+          -t "$LOCAL_IMAGE" -
+        docker tag "$LOCAL_IMAGE" "${GHCR_REPO}:${IMAGE_TAG}"
+        docker tag "$LOCAL_IMAGE" "${GHCR_REPO}:${SHA_TAG}"
+        if [ "$PUSH_LATEST" = "true" ]; then
+          docker tag "$LOCAL_IMAGE" "${GHCR_REPO}:latest"
+        fi
+
+    - name: Push to GHCR
+      id: push
+      shell: bash
+      env:
+        GHCR_REPO: ${{ inputs.ghcr_repo }}
+        IMAGE_TAG: ${{ steps.version.outputs.tag }}
+        SHA_TAG: sha-${{ steps.version.outputs.sha }}
+        PUSH_LATEST: ${{ inputs.push_latest }}
+      run: |
+        set -euo pipefail
+        docker push "${GHCR_REPO}:${IMAGE_TAG}"
+        docker push "${GHCR_REPO}:${SHA_TAG}"
+        if [ "$PUSH_LATEST" = "true" ]; then
+          docker push "${GHCR_REPO}:latest"
+        fi
+        DIGEST="$(docker inspect --format='{{ index .RepoDigests 0 }}' "${GHCR_REPO}:${IMAGE_TAG}" | cut -d@ -f2)"
+        echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+        echo "Pushed ${GHCR_REPO}:${IMAGE_TAG} (digest $DIGEST)"
+
+    - name: Record provenance
+      shell: bash
+      env:
+        SEMVER: ${{ steps.version.outputs.semver }}
+        IMAGE_TAG: ${{ steps.version.outputs.tag }}
+        GHCR_REPO: ${{ inputs.ghcr_repo }}
+        DIGEST: ${{ steps.push.outputs.digest }}
+      run: |
+        set -euo pipefail
+        cat > build-provenance.json <<JSON
+        {
+          "version": "${SEMVER}",
+          "tag": "${IMAGE_TAG}",
+          "commit": "$(git rev-parse HEAD)",
+          "ghcr": "${GHCR_REPO}:${IMAGE_TAG}",
+          "digest": "${DIGEST}",
+          "builder": "gha",
+          "run_id": "${GITHUB_RUN_ID:-}",
+          "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        JSON
+        cat build-provenance.json
+
+    - name: Upload provenance artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: build-provenance-${{ steps.version.outputs.sha }}
+        path: build-provenance.json
+        if-no-files-found: error

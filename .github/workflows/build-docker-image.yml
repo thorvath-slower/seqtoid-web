@@ -49,9 +49,14 @@ jobs:
     permissions: # these permissions must be set for AWS auth to work!
       id-token: write
       contents: read
+      packages: write # CZID-392: publish the known-good image to GHCR (source-of-record)
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # CZID-392: full history + tags so bin/compute-version.sh can derive the SemVer
+          # (git describe / rev-list against the vX.Y.Z release tags).
+          fetch-depth: 0
       - uses: actions/cache@v5
         with:
           path: ~/.cache
@@ -86,6 +91,18 @@ jobs:
           ignore-unfixed: "true"
       - name: Push docker image
         run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
+      # CZID-392: publish the SAME known-good, scanned image to GHCR (source-of-record) with an
+      # immutable SemVer + build-metadata tag. Runs after build+scan+push pass, so everything in
+      # GHCR is known-good by construction. Build-once, tag-the-digest — no rebuild here.
+      - name: Publish known-good build to GHCR
+        id: ghcr
+        uses: ./.github/actions/publish-ghcr
+        with:
+          local_image: ${{ env.IMAGE_REF }}
+          ghcr_repo: ghcr.io/${{ github.repository_owner }}/seqtoid-web
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Only main builds are the promotable known-good line; move `latest` for them.
+          push_latest: ${{ github.ref == 'refs/heads/main' }}
       # CZID-75: sign the pushed image so the deploy side can enforce "signed images only" (#77).
       # Keyless (Sigstore/Fulcio, via the GHA OIDC token) — for a private/air-gapped posture swap to a
       # KMS key: `cosign sign --key awskms://<arn> --yes "$REF@$DIGEST"`.
