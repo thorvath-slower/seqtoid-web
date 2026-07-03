@@ -63,7 +63,20 @@ module S3Util
     end
   end
 
+  # CZID-296: Guard against a blank bucket name before handing it to the AWS SDK.
+  # When the downloads bucket env var (e.g. SAMPLES_BUCKET_NAME_V1) is unset, the
+  # bucket resolves to "" and the SDK raises an opaque
+  # 'Parameter validation failed: Invalid bucket name ""' deep in put_object,
+  # producing a cryptic "upload failed: - to s3:///downloads/..." error. Fail fast
+  # here with an actionable message that names the missing configuration.
   def self.upload_to_s3(bucket, key, content)
+    if bucket.blank?
+      raise ArgumentError,
+            "S3Util.upload_to_s3: bucket name is blank (key=#{key.inspect}). " \
+            "The destination bucket env var is likely unset (e.g. SAMPLES_BUCKET_NAME_V1); " \
+            "set it before uploading."
+    end
+
     AwsClient[:s3].put_object(bucket: bucket,
                               key: key,
                               body: content)
