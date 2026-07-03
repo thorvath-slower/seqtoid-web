@@ -1,0 +1,59 @@
+# Worker Deployments — the resque family (workers/scheduler/pipeline-monitor/
+# result-monitor) + shoryuken. Each replaces one czecs worker service. `args` go
+# to the image ENTRYPOINT, which wraps them in `chamber exec ... bundle exec`.
+{{- $root := . -}}
+{{- range .Values.workers }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "seqtoid-web.fullname" $root }}-{{ .name }}
+  labels:
+    {{- include "seqtoid-web.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: worker
+    seqtoid.io/worker: {{ .name }}
+spec:
+  replicas: {{ default 1 .replicaCount }}
+  # Workers are singletons per queue-set; don't run two old+new during a roll.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "seqtoid-web.name" $root }}
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      app.kubernetes.io/component: worker
+      seqtoid.io/worker: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "seqtoid-web.name" $root }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/component: worker
+        seqtoid.io/worker: {{ .name }}
+    spec:
+      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" $root }}
+      terminationGracePeriodSeconds: {{ $root.Values.gracefulDrain.terminationGracePeriodSeconds }}
+      containers:
+        - name: {{ .name }}
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          args:
+            {{- toYaml .args | nindent 12 }}
+          env:
+            {{- include "seqtoid-web.commonEnv" $root | nindent 12 }}
+            - name: COUNT
+              value: "1"
+            {{- with .queue }}
+            - name: QUEUE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .samplesBucket }}
+            {{- $bucket := include "seqtoid-web.samplesBucket" $root }}
+            {{- with $bucket }}
+            - name: SAMPLES_BUCKET_NAME
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+          resources:
+            {{- toYaml (default $root.Values.resources .resources) | nindent 12 }}
+{{- end }}
