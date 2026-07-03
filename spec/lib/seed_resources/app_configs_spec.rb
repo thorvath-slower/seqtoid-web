@@ -1,4 +1,8 @@
 require "rails_helper"
+# lib/seed_resources is not on the Rails autoload path — the seeds load it via
+# `require_all 'lib/seed_resources'` (db/seeds/20230706192000_create_baseline_seed.rb),
+# so the spec must load it explicitly or SeedResource::AppConfigs is undefined.
+require_all "lib/seed_resources"
 
 # Regression coverage for #385: the SFN state-machine ARNs seeded here used to
 # hardcode the "dev" deployment stage, so seeding in the staging account produced
