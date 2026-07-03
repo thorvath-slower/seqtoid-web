@@ -190,11 +190,26 @@ class BulkDownload < ApplicationRecord
     "#{server_host}#{bulk_downloads_progress_path(access_token: access_token, id: id)}"
   end
 
+  # The aegea ECS bulk-download tasks (cluster + executable-file bucket) are only
+  # provisioned per deployment stage (test/staging/prod); there is no "development"
+  # aegea cluster/bucket. So on a local `development` boot the ECS cluster and
+  # executable-file S3 bucket must be redirected to a real deployment stage. We derive
+  # that stage from ENV["ENVIRONMENT"] -- the same var the SFN ARNs are driven from
+  # (#385) -- defaulting to "staging" so a dev-env bulk download submits to the staging
+  # cluster/bucket instead of a non-existent `*-development` one (#186).
+  # NB: this only governs the cluster/bucket; task_role stays keyed on Rails.env, matching
+  # the prior behavior (the download IAM role IS provisioned per Rails env).
+  AEGEA_DEV_FALLBACK_STAGE = "staging".freeze
+
+  def aegea_deployment_stage
+    ENV["ENVIRONMENT"].presence || AEGEA_DEV_FALLBACK_STAGE
+  end
+
   # Returned as an array of strings
   def aegea_ecs_submit_command(
     executable_file_path: nil,
-    task_role: "czi-infectious-disease-downloads-#{Rails.env}", # TODO: Fix Rails.env
-    ecs_cluster: "idseq-fargate-tasks-#{Rails.env}", # TODO: Fix Rails.env
+    task_role: "czi-infectious-disease-downloads-#{Rails.env}", # role is provisioned per Rails env
+    ecs_cluster: "idseq-fargate-tasks-#{Rails.env}",
     executable_s3_bucket: S3_AEGEA_ECS_EXECUTE_BUCKET,
     ecr_image: "idseq-s3-tar-writer:latest",
     fargate_cpu: "4096",
@@ -205,12 +220,12 @@ class BulkDownload < ApplicationRecord
       ecr_image = config_ecr_image
     end
 
-    # Use the staging ecs cluster and executable s3 bucket for development.
-    # TODO Fix this, and use "dev" instead of "development" here, and in the Infra project
-    # if Rails.env.development?
-    #  ecs_cluster = "idseq-fargate-tasks-dev"
-    #  executable_s3_bucket = "aegea-ecs-execute-dev"
-    # end
+    # In local development there is no `*-development` aegea cluster/bucket, so redirect
+    # to a real deployment stage (ENV["ENVIRONMENT"], default "staging"). See #186.
+    if Rails.env.development?
+      ecs_cluster = "idseq-fargate-tasks-#{aegea_deployment_stage}"
+      executable_s3_bucket = "aegea-ecs-execute-#{aegea_deployment_stage}"
+    end
 
     command_flag = "--execute=#{executable_file_path}"
 
