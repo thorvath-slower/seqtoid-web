@@ -44,4 +44,50 @@ RSpec.describe Auth0Controller, type: :request do
       expect(previous_count + 1).to eq(new_count)
     end
   end
+
+  # Regression guard for the /direct_user_login auth-bypass backdoor (CZID-319 / Forgejo #276).
+  #
+  # `GET /direct_user_login?user_id=N` previously logged in as ANY user with no
+  # password, no Auth0, and no environment gate. It was stripped entirely from the
+  # production line (route + action + helper) rather than env-gated, so the router
+  # must not recognize it in ANY environment. These specs fail loudly if the
+  # backdoor is ever reintroduced.
+  context "direct_user_login backdoor (must not exist)" do
+    it "does not register a /direct_user_login route in any environment" do
+      expect do
+        Rails.application.routes.recognize_path("/direct_user_login", method: :get)
+      end.to raise_error(ActionController::RoutingError)
+    end
+
+    it "does not expose a direct_user_login controller action" do
+      expect(Auth0Controller.action_methods).not_to include("direct_user_login")
+    end
+
+    it "does not expose a direct_login helper that sets the warden user" do
+      expect(Auth0Helper.instance_methods).not_to include(:direct_login)
+    end
+
+    it "refuses to reach a login path for /direct_user_login (unrecognized route)" do
+      # show_exceptions is :none in the test env, so an unrecognized route raises
+      # rather than logging anyone in.
+      expect do
+        get "/direct_user_login", params: { user_id: @joe.id }
+      end.to raise_error(ActionController::RoutingError)
+    end
+
+    # Explicit fail-closed guarantee for the environments that matter most.
+    # The route was removed unconditionally (it is NOT wrapped in any
+    # `if Rails.env.development?` block), so it is absent in every environment.
+    # We assert that under a stubbed staging/production env the path is still
+    # unrecognized -> the endpoint denies (no login) and cannot be reached.
+    %w[production staging].each do |env_name|
+      it "denies /direct_user_login when Rails.env is #{env_name} (fail closed)" do
+        allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new(env_name))
+        expect(Rails.env.public_send("#{env_name}?")).to be(true)
+        expect do
+          Rails.application.routes.recognize_path("/direct_user_login", method: :get)
+        end.to raise_error(ActionController::RoutingError)
+      end
+    end
+  end
 end
