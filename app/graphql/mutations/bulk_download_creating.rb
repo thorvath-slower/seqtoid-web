@@ -68,11 +68,18 @@ module Mutations
         workflow_run_ids = viewable_objects.active.pluck(:id)
       end
 
+      # BulkDownload#get_param_value reads params via `params.dig(key, "value")` with a
+      # STRING "value" key, and params_checks (e.g. the consensus_genome download_format
+      # guard) relies on it. The controller path feeds the model an ActionController::
+      # Parameters#to_hash, whose keys are all strings, so those lookups resolve. Here we
+      # build create_params with SYMBOL keys, so without stringifying, get_param_value
+      # returns nil and CG (and any other type with a params_checks guard) fails to save
+      # with KICKOFF_FAILURE_HUMAN_READABLE. Deep-stringify to match the controller.
       bulk_download = BulkDownload.new(
         download_type: input.download_type,
         pipeline_run_ids: pipeline_run_ids,
         workflow_run_ids: workflow_run_ids,
-        params: create_params[:params],
+        params: create_params[:params].deep_stringify_keys,
         status: BulkDownload::STATUS_WAITING,
         user_id: context[:current_user].id
       )
