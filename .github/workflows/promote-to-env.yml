@@ -1,0 +1,138 @@
+name: promote-to-env (advance one tier to a pinned digest)
+
+# CZID-464: reusable per-tier promotion step. Advances ONE environment's GitOps values (in the infra
+# repo) to a specific image DIGEST — the exact tested artifact resolved by promote-image.yml — via a
+# PR, and records the promotion. The approval gate lives here: `environment: <env_name>` means a
+# staging/prod promotion waits for that GitHub Environment's required reviewers before this job runs.
+# (dev has no protection rules, so it proceeds; staging/prod are the human gates.)
+#
+# Digest-pinned promotion: we write BOTH image.tag (sha-<commit>, back-compat / human-readable) and
+# image.digest (the immutable sha256 the chart pins by). Promoting the digest — not rebuilding, not a
+# floating tag — guarantees every tier runs the byte-identical artifact that passed the test gate.
+
+on:
+  workflow_call:
+    inputs:
+      env_name:
+        description: dev | staging | prod
+        required: true
+        type: string
+      digest:
+        description: The immutable image digest to promote (sha256:...).
+        required: true
+        type: string
+      sha_tag:
+        description: The human-readable sha-<commit> / version tag that carries alongside the digest.
+        required: true
+        type: string
+      deployment_reason:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  advance:
+    name: Advance ${{ inputs.env_name }} to ${{ inputs.digest }}
+    runs-on: ubuntu-latest
+    # THE APPROVAL GATE. Protection rules on the staging/prod Environments (required reviewers) fire
+    # before this job runs, so prod is never auto-promoted. dev is ungated. (CZID-81 attaches the
+    # rules; referencing the environment is the authorable hook and is a safe no-op until they exist.)
+    environment: ${{ inputs.env_name }}
+    steps:
+      - name: Checkout infra (the GitOps values repo)
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          # GITOPS_TOKEN (#74): scoped write to the infra repo + PR create.
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Install yq
+        run: |
+          set -euo pipefail
+          YQ=v4.44.3
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ}/yq_linux_amd64" -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Advance ${{ inputs.env_name }} image to the promoted digest
+        id: advance
+        env:
+          ENV_NAME: ${{ inputs.env_name }}
+          DIGEST: ${{ inputs.digest }}
+          SHA_TAG: ${{ inputs.sha_tag }}
+        run: |
+          set -euo pipefail
+          FILE="deploy/argocd/values/seqtoid-web/${ENV_NAME}.yaml"
+          [ -f "$FILE" ] || { echo "::error::$FILE not found"; exit 1; }
+          CUR_DIGEST="$(yq '.image.digest // ""' "$FILE")"
+          echo "current digest=$CUR_DIGEST  new digest=$DIGEST"
+          if [ "$CUR_DIGEST" = "$DIGEST" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "${ENV_NAME} already at $DIGEST — nothing to advance."
+            exit 0
+          fi
+          # Pin by digest (immutable) and keep the readable sha-tag in sync.
+          yq -i ".image.digest = \"$DIGEST\"" "$FILE"
+          yq -i ".image.tag = \"$SHA_TAG\"" "$FILE"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Record promotion (provenance)
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          ENV_NAME: ${{ inputs.env_name }}
+          DIGEST: ${{ inputs.digest }}
+          SHA_TAG: ${{ inputs.sha_tag }}
+          REASON: ${{ inputs.deployment_reason }}
+        run: |
+          set -euo pipefail
+          cat > "promotion-${ENV_NAME}.json" <<JSON
+          {
+            "env": "${ENV_NAME}",
+            "digest": "${DIGEST}",
+            "tag": "${SHA_TAG}",
+            "reason": "${REASON}",
+            "promoted_by": "${GITHUB_ACTOR}",
+            "run": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
+            "promoted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          JSON
+          cat "promotion-${ENV_NAME}.json"
+
+      - name: Upload promotion record
+        if: steps.advance.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: promotion-${{ inputs.env_name }}-${{ inputs.sha_tag }}
+          path: promotion-${{ inputs.env_name }}.json
+          if-no-files-found: error
+
+      - name: Open the promotion PR
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          ENV_NAME: ${{ inputs.env_name }}
+          DIGEST: ${{ inputs.digest }}
+          SHA_TAG: ${{ inputs.sha_tag }}
+          REASON: ${{ inputs.deployment_reason }}
+        run: |
+          set -euo pipefail
+          SHORT="${DIGEST#sha256:}"; SHORT="${SHORT:0:12}"
+          BRANCH="promote/${ENV_NAME}-${SHORT}"
+          git config user.name  "seqtoid-gitops"
+          git config user.email "gitops@seqtoid.local"
+          git checkout -b "$BRANCH"
+          git add "deploy/argocd/values/seqtoid-web/${ENV_NAME}.yaml"
+          git commit -m "promote(${ENV_NAME}): seqtoid-web @ ${SHA_TAG} (${DIGEST})"
+          git push -u origin "$BRANCH" --force-with-lease
+          gh pr create \
+            --title "promote(${ENV_NAME}): seqtoid-web -> ${SHA_TAG}" \
+            --body "Digest-pinned promotion to **${ENV_NAME}** of the exact tested artifact.
+
+          - image tag: \`${SHA_TAG}\`
+          - digest: \`${DIGEST}\`
+          - reason: ${REASON}
+          - source run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          Merging syncs Argo CD for ${ENV_NAME}." \
+            --base main --head "$BRANCH" || echo "PR may already exist for $BRANCH"
