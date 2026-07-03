@@ -14,6 +14,7 @@ import { GlobalContext, globalContextReducer } from "./globalContext/reducer";
 import UserContextType from "./interface/allowedFeatures";
 import "./loader.scss";
 import RelayEnvironment from "./relay/RelayEnvironment";
+import SupportPortal from "~/components/common/SupportPortal/SupportPortal";
 import "./styles/appcues.scss";
 import "./styles/core.scss";
 
@@ -79,6 +80,10 @@ const ReactComponentWithGlobalContext = ({
                 <EmotionThemeProvider theme={defaultTheme}>
                   <ThemeProvider theme={defaultTheme}>
                     {React.createElement(matchedComponent, props)}
+                    {/* In-app self-help portal (#440): floating Help/Diagnostics
+                        button, rendered on every authenticated page. It reads
+                        UserContext and no-ops for signed-out visitors. */}
+                    <SupportPortal />
                   </ThemeProvider>
                 </EmotionThemeProvider>
               </StyledEngineProvider>
