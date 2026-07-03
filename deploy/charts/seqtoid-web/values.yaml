@@ -110,6 +110,26 @@ migrate:
       cpu: 250m
       memory: 512Mi
 
+# Pre-sync taxon-lineage load (ticket #471). A fresh deploy has no taxon lineage
+# data, so reports/taxonomy/heatmaps come up empty. This Job idempotently imports
+# the taxon lineage slice from S3 and (re)builds the ES index, running after the
+# migrate Job (sync-wave 1) so the schema exists first. Default ON for dev; per-env
+# values may turn it off once an env already carries the data.
+taxonLoad:
+  enabled: true
+  # Idempotent wrapper: imports the slice only if absent, then converges the ES
+  # index. Never non-zeros on an already-loaded DB, so redeploys are a no-op.
+  command: ["rake", "taxon_lineage_slice:load_slice_if_needed"]
+  # The import is single-shot and idempotent; don't hammer S3 on failure.
+  backoffLimit: 1
+  # Bound the Job so a stuck import doesn't wedge the sync (2h headroom).
+  activeDeadlineSeconds: 7200
+  # The importer streams the CSV and inserts in chunks; give it memory headroom.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+
 # Extra plain env vars applied to web + workers + migrate (name/value pairs).
 extraEnv: []
 

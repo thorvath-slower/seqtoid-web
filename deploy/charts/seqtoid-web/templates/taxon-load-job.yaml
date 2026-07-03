@@ -1,0 +1,49 @@
+{{- if .Values.taxonLoad.enabled -}}
+# Pre-sync taxon-lineage load — ticket #471.
+# A fresh deploy has NO taxon lineage data loaded, so reports/taxonomy/heatmaps
+# come up empty. The load tooling already exists as rake tasks; this Job wires it
+# into the deploy so every env comes up functional. It mirrors the migrate Job's
+# PreSync-hook pattern but runs at a LATER sync-wave (1 vs migrate's default 0),
+# so the schema is migrated before we import taxon rows.
+#
+# Idempotency: the invoked rake task (taxon_lineage_slice:load_slice_if_needed)
+# imports the slice ONLY when it isn't already present and then converges the ES
+# index, so re-running on every deploy is a safe no-op (it never non-zeros on an
+# already-loaded DB). BeforeHookCreation replaces the prior Job on each sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}-taxon-load
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+    app.kubernetes.io/component: taxon-load
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    # Run after the migrate Job (default wave 0) so the schema exists first.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: {{ .Values.taxonLoad.backoffLimit }}
+  # The import can be large; give it a generous deadline before the Job is failed.
+  activeDeadlineSeconds: {{ .Values.taxonLoad.activeDeadlineSeconds }}
+  # Reap the completed Job after a day.
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "seqtoid-web.labels" . | nindent 8 }}
+        app.kubernetes.io/component: taxon-load
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" . }}
+      containers:
+        - name: taxon-load
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- toYaml .Values.taxonLoad.command | nindent 12 }}
+          env:
+            {{- include "seqtoid-web.commonEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.taxonLoad.resources | nindent 12 }}
+{{- end }}

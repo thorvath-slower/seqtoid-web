@@ -66,4 +66,33 @@ namespace :taxon_lineage_slice do
     puts "Finished removing TaxonLineage index"
   end
 
+  # Idempotent, deploy-safe loader used by the Helm taxon-load Job (ticket #471).
+  # A fresh deploy has no taxon lineage data, which breaks reports/taxonomy/heatmaps.
+  # This runs at deploy time (PreSync hook, after db:migrate) and:
+  #   * imports the taxon lineage slice from S3 ONLY if it isn't already loaded, and
+  #   * (re)builds the OpenSearch/ES index so it matches the loaded data.
+  # Unlike import_data_from_s3, it NEVER aborts/non-zeros when data already exists,
+  # so re-running on every deploy is a no-op instead of a failed Job. It is safe to
+  # run before web/workers come up.
+  desc "Idempotently load the taxon lineage slice + build its ES index (deploy hook)"
+  task load_slice_if_needed: :environment do
+    if TaxonLineage.exists?(version_start: CURRENT_VERSION)
+      puts "Taxon lineage slice #{CURRENT_VERSION} already present; skipping import."
+    else
+      puts "Taxon lineage slice #{CURRENT_VERSION} not found; importing from S3."
+      Rake::Task["taxon_lineage_slice:import_data_from_s3"].invoke
+    end
+
+    unless defined?(ELASTICSEARCH_ON) && ELASTICSEARCH_ON
+      puts "Elasticsearch disabled (ELASTICSEARCH_ON is false); skipping index build."
+      next
+    end
+
+    puts "Ensuring Elasticsearch index for the #{CURRENT_VERSION} slice is built."
+    # create_index!(force: true) + import is idempotent: it (re)creates the index
+    # and reloads documents from the DB, so it converges to the current data.
+    Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+    puts "Taxon lineage load complete."
+  end
+
 end
