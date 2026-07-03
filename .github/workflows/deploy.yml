@@ -56,7 +56,7 @@ jobs:
     with:
       node-environment: "staging"
       test-category: "smoke"
-      should-run-with-feature-flags: "false"
+      should-run-with-feature-flags: false
     secrets: inherit
 
   run_staging_playwright_e2e_tests:
@@ -67,5 +67,5 @@ jobs:
     with:
       node-environment: "staging"
       test-category: "e2e"
-      should-run-with-feature-flags: "false"
+      should-run-with-feature-flags: false
     secrets: inherit
