@@ -1159,6 +1159,63 @@ describe BulkDownload, type: :model do
       expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
     end
 
+    # CZID-469: the AMR combined-results resque handler (generate_download_file's
+    # `elsif download_type == AMR_COMBINED_RESULTS_BULK_DOWNLOAD` branch) was never
+    # exercised on dev (no AMR runs). It reads from the workflow_runs association and
+    # delegates to AmrResultsConcatService, so it must be driven with workflow_run_ids
+    # (not pipeline_run_ids). Locks the AMR generation path against a silent regression.
+    it "correctly generates download file for download type amr_combined_results_bulk_download" do
+      amr_sample = create(:sample, project: @project, name: "AMR Sample")
+      amr_run_one = create(:workflow_run, sample: amr_sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:amr])
+      amr_run_two = create(:workflow_run, sample: amr_sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:amr])
+
+      bulk_download = create(
+        :bulk_download,
+        user: @joe,
+        download_type: BulkDownloadTypesHelper::AMR_COMBINED_RESULTS_BULK_DOWNLOAD,
+        workflow_run_ids: [amr_run_one.id, amr_run_two.id],
+        params: {}
+      )
+
+      expect(AmrResultsConcatService).to receive(:call).with(
+        match_array([amr_run_one.id, amr_run_two.id])
+      ).exactly(1).times.and_return("mock_combined_amr_results_csv")
+
+      add_s3_tar_writer_expectations(
+        "combined_amr_results.csv" => "mock_combined_amr_results_csv"
+      )
+
+      bulk_download.generate_download_file
+
+      expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
+    end
+
+    # CZID-469: the biom_format handler is its own non-tar branch in generate_download_file
+    # (it builds a .biom via BulkDownloadsHelper.generate_biom_format_file + create_biom_file
+    # and uploads directly to S3 rather than through the s3_tar_writer). It was never
+    # exercised on dev (microbiome-flagged, short-read-mngs only). Stub the file-generation
+    # collaborators so the branch and success path run without a live pipeline/biom binary.
+    it "correctly generates download file for download type biom_format" do
+      bulk_download = create_bulk_download(BulkDownloadTypesHelper::BIOM_FORMAT_DOWNLOAD_TYPE, {
+                                             "metric": { "value": "NT_rpm" },
+                                             "background": { "value": mock_background_id },
+                                             "filter_by": { "value": [] },
+                                             "categories": { "value": [] },
+                                           })
+
+      expect(BulkDownloadsHelper).to receive(:generate_biom_format_file).exactly(1).times.and_return(
+        ["/tmp/metrics.tsv", "/tmp/metadata.tsv", "/tmp/taxon_lineage.tsv"]
+      )
+      expect(bulk_download).to receive(:create_biom_file).with("/tmp/metrics.tsv", "/tmp/metadata.tsv", "/tmp/taxon_lineage.tsv").exactly(1).times.and_return("/tmp/output_metadata.biom")
+      allow(File).to receive(:read).and_call_original
+      expect(File).to receive(:read).with("/tmp/output_metadata.biom").exactly(1).times.and_return("mock_biom_bytes")
+      expect(S3Util).to receive(:upload_to_s3).with(anything, anything, "mock_biom_bytes").exactly(1).times
+
+      bulk_download.generate_download_file
+
+      expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
+    end
+
     it "correctly handles individual sample failures" do
       bulk_download = create_bulk_download(BulkDownloadTypesHelper::SAMPLE_TAXON_REPORT_BULK_DOWNLOAD_TYPE, "background": {
                                              "value": mock_background_id,
