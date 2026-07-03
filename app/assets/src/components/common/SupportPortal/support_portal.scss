@@ -9,7 +9,7 @@
   border: none;
   border-radius: 50%;
   bottom: 24px;
-  box-shadow: $sds-drop-shadows-lg;
+  box-shadow: $sds-drop-shadows-shadow-l;
   cursor: pointer;
   display: flex;
   fill: $sds-color-gray-white;
@@ -54,7 +54,7 @@
   // (A) Minimal, user-facing quick report: error / task / project / account.
   .quickReport {
     background: $sds-color-gray-100;
-    border-radius: $sds-corners-m;
+    border-radius: $sds-corners-corner-m;
     margin-top: $sds-spaces-m;
     padding: $sds-spaces-m;
 
@@ -105,7 +105,7 @@
   .diagnostics {
     @include font-body-xxs;
     background: $sds-color-gray-100;
-    border-radius: $sds-corners-m;
+    border-radius: $sds-corners-corner-m;
     color: $sds-color-gray-600;
     margin-top: $sds-spaces-xs;
     max-height: 200px;
