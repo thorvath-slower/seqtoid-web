@@ -28,7 +28,8 @@ import "./styles/core.scss";
 // warnings, errors, and captured exceptions pass through untouched so real
 // regressions stay visible.
 const isGenerateFetchFnInfoNoise = (event: Sentry.Event): boolean => {
-  if (event.level !== Sentry.Severity.Info) return false;
+  // Sentry v7+ removed the Severity enum; event.level is a SeverityLevel string literal.
+  if (event.level !== "info") return false;
   const message = event.message ?? "";
   return (
     message.includes("generateFetchFn") || message.startsWith("[GQL Error]")
@@ -87,7 +88,7 @@ const ReactComponentWithGlobalContext = ({
     initialGlobalContextState,
   );
   return (
-    <Sentry.ErrorBoundary fallback={"An error has occured"}>
+    <Sentry.ErrorBoundary fallback={<>An error has occured</>}>
       <BrowserRouter>
         <RelayEnvironment>
           <UserContext.Provider value={userContext}>
