@@ -53,10 +53,14 @@ RSpec.describe Auth0Controller, type: :request do
   # must not recognize it in ANY environment. These specs fail loudly if the
   # backdoor is ever reintroduced.
   context "direct_user_login backdoor (must not exist)" do
-    it "does not register a /direct_user_login route in any environment" do
-      expect do
-        Rails.application.routes.recognize_path("/direct_user_login", method: :get)
-      end.to raise_error(ActionController::RoutingError)
+    it "does not route /direct_user_login to the removed backdoor action" do
+      # It can't raise RoutingError: the `get '/:id'` URL-shortener catch-all
+      # (shortener/shortened_urls#show) claims any single path segment and simply
+      # 404s a missing short-url. The real guarantee is that /direct_user_login
+      # never reaches auth0#direct_user_login.
+      route = Rails.application.routes.recognize_path("/direct_user_login", method: :get)
+      expect(route).not_to include(controller: "auth0", action: "direct_user_login")
+      expect(route[:controller]).not_to eq("auth0")
     end
 
     it "does not expose a direct_user_login controller action" do
@@ -67,26 +71,21 @@ RSpec.describe Auth0Controller, type: :request do
       expect(Auth0Helper.instance_methods).not_to include(:direct_login)
     end
 
-    it "refuses to reach a login path for /direct_user_login (unrecognized route)" do
-      # show_exceptions is :none in the test env, so an unrecognized route raises
-      # rather than logging anyone in.
-      expect do
-        get "/direct_user_login", params: { user_id: @joe.id }
-      end.to raise_error(ActionController::RoutingError)
+    it "cannot reach the auth0 controller via /direct_user_login (no login path)" do
+      # The path resolves to the harmless shortener, never auth0 — so no request
+      # can log a user in through the old backdoor.
+      route = Rails.application.routes.recognize_path("/direct_user_login", method: :get)
+      expect(route[:controller]).not_to eq("auth0")
     end
 
-    # Explicit fail-closed guarantee for the environments that matter most.
-    # The route was removed unconditionally (it is NOT wrapped in any
-    # `if Rails.env.development?` block), so it is absent in every environment.
-    # We assert that under a stubbed staging/production env the path is still
-    # unrecognized -> the endpoint denies (no login) and cannot be reached.
+    # Routes are environment-independent (the backdoor was removed unconditionally,
+    # not env-gated), so /direct_user_login never reaches the backdoor in any env.
     %w[production staging].each do |env_name|
-      it "denies /direct_user_login when Rails.env is #{env_name} (fail closed)" do
+      it "does not route /direct_user_login to the backdoor when Rails.env is #{env_name}" do
         allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new(env_name))
         expect(Rails.env.public_send("#{env_name}?")).to be(true)
-        expect do
-          Rails.application.routes.recognize_path("/direct_user_login", method: :get)
-        end.to raise_error(ActionController::RoutingError)
+        route = Rails.application.routes.recognize_path("/direct_user_login", method: :get)
+        expect(route).not_to include(controller: "auth0", action: "direct_user_login")
       end
     end
   end
