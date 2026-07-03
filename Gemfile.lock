@@ -2412,8 +2412,12 @@ GEM
       rexml (~> 3.2, >= 3.2.5)
       rubyzip (>= 1.2.2, < 4.0)
       websocket (~> 1.0)
-    sentry-raven (3.1.2)
-      faraday (>= 1.0)
+    sentry-rails (5.28.1)
+      railties (>= 5.0)
+      sentry-ruby (~> 5.28.1)
+    sentry-ruby (5.28.1)
+      bigdecimal
+      concurrent-ruby (~> 1.0, >= 1.0.2)
     shellany (0.0.1)
     shortener (1.0.2)
       voight_kampff (~> 2.0)
@@ -2573,7 +2577,8 @@ DEPENDENCIES
   rubocop-rails
   seed_migration!
   selenium-webdriver
-  sentry-raven
+  sentry-rails (~> 5.17)
+  sentry-ruby (~> 5.17)
   shortener
   shoryuken
   silencer

@@ -5,7 +5,7 @@ class ApplicationController < ActionController::Base
   before_action :check_browser
   before_action :set_current_context_for_logging!
   before_action :set_application_view_variables
-  before_action :set_raven_context
+  before_action :set_sentry_context
 
   include Consul::Controller
   include AppConfigHelper
@@ -128,9 +128,9 @@ class ApplicationController < ActionController::Base
 
   private
 
-  def set_raven_context
-    Raven.user_context(id: current_user.id, admin: current_user.admin?) if current_user
-    Raven.extra_context(params: params.to_unsafe_h, url: request.url)
+  def set_sentry_context
+    Sentry.set_user(id: current_user.id, admin: current_user.admin?) if current_user
+    Sentry.set_extras(params: params.to_unsafe_h, url: request.url)
   end
 
   def check_browser
