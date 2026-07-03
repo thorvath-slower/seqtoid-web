@@ -238,6 +238,9 @@ Rails.application.routes.draw do
 
   resources :frontend_metrics, only: :create
 
+  # In-app self-help portal: records a user-submitted issue report with diagnostics (#440).
+  resources :support_requests, only: :create
+
   resources :host_genomes do
     collection do
       get :index_public

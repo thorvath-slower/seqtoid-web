@@ -1,0 +1,154 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~styles/themes/elements";
+@import "~@czi-sds/components/dist/variables";
+
+.floatingButton {
+  align-items: center;
+  background: $sds-color-primary-400;
+  border: none;
+  border-radius: 50%;
+  bottom: 24px;
+  box-shadow: $sds-drop-shadows-lg;
+  cursor: pointer;
+  display: flex;
+  fill: $sds-color-gray-white;
+  height: 48px;
+  justify-content: center;
+  position: fixed;
+  right: 24px;
+  width: 48px;
+  z-index: 1000;
+
+  &:hover {
+    background: $sds-color-primary-500;
+  }
+
+  .buttonIcon {
+    fill: $sds-color-gray-white;
+    height: 22px;
+    width: 22px;
+  }
+}
+
+.panel {
+  min-width: 420px;
+
+  .header {
+    @include font-header-l;
+    margin-bottom: $sds-spaces-s;
+  }
+
+  .subheader {
+    @include font-body-xs;
+    color: $sds-color-gray-500;
+    margin-bottom: $sds-spaces-l;
+  }
+
+  .sectionLabel {
+    @include font-header-xs;
+    margin-bottom: $sds-spaces-xxs;
+    margin-top: $sds-spaces-l;
+  }
+
+  // (A) Minimal, user-facing quick report: error / task / project / account.
+  .quickReport {
+    background: $sds-color-gray-100;
+    border-radius: $sds-corners-m;
+    margin-top: $sds-spaces-m;
+    padding: $sds-spaces-m;
+
+    .quickRow {
+      align-items: baseline;
+      display: flex;
+      justify-content: space-between;
+      padding: $sds-spaces-xxs 0;
+
+      .quickKey {
+        @include font-header-xs;
+        color: $sds-color-gray-500;
+        margin-right: $sds-spaces-m;
+        white-space: nowrap;
+      }
+
+      .quickValue {
+        @include font-body-xs;
+        color: $sds-color-gray-black;
+        overflow: hidden;
+        text-align: right;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  // "More details" expander that reveals the fuller diagnostics table.
+  .detailsToggle {
+    @include font-header-xs;
+    background: none;
+    border: none;
+    color: $sds-color-primary-400;
+    cursor: pointer;
+    margin-top: $sds-spaces-l;
+    padding: 0;
+
+    &:hover {
+      color: $sds-color-primary-500;
+    }
+  }
+
+  .textarea {
+    min-height: 90px;
+    width: 100%;
+  }
+
+  .diagnostics {
+    @include font-body-xxs;
+    background: $sds-color-gray-100;
+    border-radius: $sds-corners-m;
+    color: $sds-color-gray-600;
+    margin-top: $sds-spaces-xs;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: $sds-spaces-m;
+
+    .diagnosticRow {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 0;
+
+      .key {
+        @include font-header-xxs;
+        margin-right: $sds-spaces-m;
+        white-space: nowrap;
+      }
+
+      .value {
+        overflow: hidden;
+        text-align: right;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: $sds-spaces-m;
+    justify-content: flex-end;
+    margin-top: $sds-spaces-xl;
+  }
+
+  .statusMessage {
+    @include font-body-xs;
+    margin-top: $sds-spaces-m;
+
+    &.error {
+      color: $sds-color-error-400;
+    }
+
+    &.success {
+      color: $sds-color-success-400;
+    }
+  }
+}
