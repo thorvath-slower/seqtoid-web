@@ -81,4 +81,30 @@ RSpec.describe S3Util do
       expect(S3Util.abort_multipart_uploads(bucket, prefix)).to eq(0)
     end
   end
+
+  describe "#upload_to_s3" do
+    let(:key) { "downloads/67/Reads (Non-host).tar.gz" }
+    let(:content) { "some-content" }
+
+    it "uploads the content to S3 when the bucket name is present" do
+      uploaded_args = nil
+      allow(@mock_aws_clients[:s3]).to receive(:put_object) { |args| uploaded_args = args }
+
+      S3Util.upload_to_s3("fake-downloads-bucket", key, content)
+
+      expect(uploaded_args).to eq(bucket: "fake-downloads-bucket", key: key, body: content)
+    end
+
+    # CZID-296: a blank bucket (unset downloads-bucket env var) must fail fast with an
+    # actionable error instead of the opaque SDK "Invalid bucket name" deep in put_object.
+    it "raises an actionable error and does not call the SDK when the bucket name is blank" do
+      expect(@mock_aws_clients[:s3]).not_to receive(:put_object)
+
+      [nil, "", "  "].each do |blank_bucket|
+        expect do
+          S3Util.upload_to_s3(blank_bucket, key, content)
+        end.to raise_error(ArgumentError, /bucket name is blank/)
+      end
+    end
+  end
 end
