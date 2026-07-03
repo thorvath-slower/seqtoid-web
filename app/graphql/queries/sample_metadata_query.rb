@@ -12,6 +12,7 @@ module Queries
     extend ActiveSupport::Concern
     include ReportHelper          # select_pipeline_run
     include PipelineOutputsHelper # curate_pipeline_run_display
+    include SamplesHelper         # job_stats_get, get_summary_stats
 
     LOCATION_OBJECT_TYPENAME = Types::SampleMetadataLocationOneof1Type.graphql_name
     LOCATION_STRING_TYPENAME = Types::SampleMetadataLocationOneof0Type.graphql_name
