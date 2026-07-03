@@ -4,6 +4,16 @@ class AppConfig < ApplicationRecord
   # page and cannot reach the app until they accept. Defaults OFF ("" / nil) so the mechanism ships
   # DARK — enforcement go-live is gated on counsel sign-off (CZID-292/335), never flipped by engineering.
   ENABLE_EXPORT_CONTROL_ATTESTATION = 'enable_export_control_attestation'.freeze
+  # CZID-285/286 — when this is "1", the Layer 3 export-control gate is ENFORCED: a logged-in user without
+  # a current, affirmatively-passed clearance (IDV verified AND denied-party screening clear) is redirected
+  # to the clearance flow and cannot reach the app until cleared. Defaults OFF ("" / nil) so this ships
+  # DARK — go-live is gated on counsel + vendor sign-off (CZID-292/278/335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_LAYER3 = 'enable_export_control_layer3'.freeze
+  # CZID-286 — when this is "1" (AND Layer 3 above is on), device/location attestation is ALSO required:
+  # a cleared user must additionally hold a current, server-verified device-location attestation. Separate
+  # flag so device attestation can be scoped to the highest-sensitivity flows only. Defaults OFF (dark);
+  # go-live is counsel/vendor-gated. TODO(counsel/product): which flows require it.
+  ENABLE_EXPORT_CONTROL_DEVICE_ATTESTATION = 'enable_export_control_device_attestation'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.

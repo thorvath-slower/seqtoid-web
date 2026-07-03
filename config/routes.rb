@@ -125,6 +125,20 @@ Rails.application.routes.draw do
   get  'export_control_attestation',     to: 'export_control_attestations#new',    as: :new_export_control_attestation
   post 'export_control_attestation',     to: 'export_control_attestations#create', as: :export_control_attestations
   get  'export_control_denied',          to: 'export_control_attestations#denied', as: :export_control_denied
+
+  # CZID-285 — Layer 3 identity-verification + export-screening clearance flow (ships DARK).
+  # new/create is the clearance hand-off; callback is the IDV vendor webhook (signature-verified);
+  # denied is the non-bypassable deny page.
+  get  'export_control_clearance',          to: 'export_control_clearances#new',      as: :new_export_control_clearance
+  post 'export_control_clearance',          to: 'export_control_clearances#create',   as: :export_control_clearances
+  post 'export_control_clearance/callback', to: 'export_control_clearances#callback',  as: :export_control_clearance_callback
+  get  'export_control_clearance_denied',   to: 'export_control_clearances#denied',    as: :export_control_clearance_denied
+
+  # CZID-286 — Layer 3 device/location attestation (SERVER-SIDE verify; client SDK HELD, ships DARK).
+  get  'device_location_attestation',        to: 'device_location_attestations#new',    as: :new_device_location_attestation
+  post 'device_location_attestation',        to: 'device_location_attestations#create', as: :device_location_attestations
+  get  'device_location_attestation_denied', to: 'device_location_attestations#denied', as: :device_location_attestation_denied
+
   get 'my_data', to: 'home#my_data'
   get 'page_not_found', to: 'home#page_not_found'
   get 'public', to: 'home#public'
