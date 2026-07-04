@@ -78,5 +78,25 @@ jobs:
           git push -u origin "$BRANCH" --force-with-lease
           gh pr create \
             --title "gitops(dev): advance seqtoid-web -> ${TAG}" \
-            --body "Automated dev tag-advance from a green seqtoid-web build (${TAG}). Merging syncs Argo CD (dev auto-promotes on smoke pass). Source build: ${{ github.event.workflow_run.html_url }}" \
+            --body "Automated dev tag-advance from a green seqtoid-web build (${TAG}). Auto-merges once its checks pass; Argo CD then syncs (dev auto-promotes on smoke pass). Source build: ${{ github.event.workflow_run.html_url }}" \
             --base main --head "$BRANCH" || echo "PR may already exist for $BRANCH"
+
+      - name: Auto-merge the dev tag-advance (wait for green, then merge)
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          TAG: ${{ steps.advance.outputs.tag }}
+          INFRA_REPO: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+        run: |
+          set -euo pipefail
+          BRANCH="gitops/advance-dev-${TAG}"
+          # DEV-ONLY continuous delivery. The image already passed build + Trivy + Cosign
+          # before this workflow fired (it is chained off that success), so the tag-advance
+          # only moves the dev Git pointer. Wait for the PR's own infra checks (validate /
+          # tflint / trivy / checkov) to go green, then squash-merge. If ANY check fails,
+          # --fail-fast exits non-zero and the PR is left OPEN for a human — never force-merged.
+          # Staging/prod are NOT auto-advanced (that stays a separate, gated path).
+          sleep 30  # give the PR's checks time to register before watching
+          gh pr checks "$BRANCH" --repo "$INFRA_REPO" --watch --fail-fast --interval 20
+          gh pr merge "$BRANCH" --repo "$INFRA_REPO" --squash --delete-branch
+          echo "Dev advanced to ${TAG} and merged; Argo CD will sync."
