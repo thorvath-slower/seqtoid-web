@@ -95,6 +95,7 @@ jobs:
           exit-code: "1"
           severity: HIGH,CRITICAL
           ignore-unfixed: "true"
+          trivyignores: .trivyignore  # accept-current app-dep CVEs (Forgejo #474); NEW ones still fail
       - name: Push docker image
         run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       # CZID-392: publish the SAME known-good, scanned image to GHCR (source-of-record) with an
