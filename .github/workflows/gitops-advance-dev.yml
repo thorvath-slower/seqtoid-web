@@ -46,7 +46,10 @@ jobs:
           BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          TAG="${BUILT_SHA:0:8}"
+          # Match the pushed image tag exactly: bin/push-docker pushes `<repo>:sha-<sha8>`, and the
+          # chart renders `{{ .repository }}:{{ .tag }}` verbatim (no prefix added), so image.tag must
+          # be the full `sha-<sha8>` or Argo pulls a tag that doesn't exist in ECR.
+          TAG="sha-${BUILT_SHA:0:8}"
           FILE=deploy/argocd/values/seqtoid-web/dev.yaml
           CURRENT="$(yq '.image.tag' "$FILE")"
           echo "current=$CURRENT  new=$TAG"
