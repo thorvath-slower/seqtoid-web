@@ -37,6 +37,15 @@ class User < ApplicationRecord
   has_many :bulk_downloads, dependent: :destroy
   has_many :user_settings, dependent: :destroy
   has_many :persisted_backgrounds, dependent: :destroy
+  # CZID-330 — export-control attestation records are COMPLIANCE EVIDENCE and must be retained; they are
+  # deliberately NOT dependent: :destroy. TODO(counsel): confirm the retention/erasure policy for these
+  # records on user deletion (evidence retention vs. data-subject erasure requests).
+  has_many :export_control_attestations, dependent: :restrict_with_exception
+  # CZID-285/286 — Layer 3 export-control evidence (identity/screening clearances + device-location
+  # attestations) are COMPLIANCE EVIDENCE and must be retained; like the CZID-330 records they are
+  # deliberately NOT dependent: :destroy. TODO(counsel): retention/erasure policy on user deletion.
+  has_many :export_control_clearances, dependent: :restrict_with_exception
+  has_many :device_location_attestations, dependent: :restrict_with_exception
 
   validates :email, presence: true, uniqueness: true, format: {
     # Auth0 converts all emails to lowercase. Let's raise this at creation time

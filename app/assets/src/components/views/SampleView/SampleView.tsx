@@ -39,6 +39,7 @@ import {
   getPersistedBackground,
   updatePersistedBackground,
 } from "~/api/persisted_backgrounds";
+import ErrorBoundary from "~/components/common/ErrorBoundary";
 import CoverageVizBottomSidebar from "~/components/common/CoverageVizBottomSidebar";
 import { CoverageVizParamsRaw } from "~/components/common/CoverageVizBottomSidebar/types";
 import { getCoverageVizParams } from "~/components/common/CoverageVizBottomSidebar/utils";
@@ -545,31 +546,41 @@ const SampleViewComponent = ({
   const processRawSampleReportData = useCallback(
     (rawReportData: RawReportData) => {
       const reportData: Taxon[] = [];
-      const highlightedTaxIds = new Set(rawReportData.highlightedTaxIds);
-      if (rawReportData.sortedGenus) {
-        const generaPathogenCounts = getGeneraPathogenCounts(
-          rawReportData.counts[SPECIES_LEVEL_INDEX],
-        );
+      // A GraphQL/report response can come back null or with an unexpected shape
+      // (e.g. `counts`/`sortedGenus` missing) — Sentry #386. Default every field we
+      // iterate over so a degenerate response renders an empty report instead of
+      // throwing "forEach/map is not a function" or "'in' on null" inside this callback.
+      const highlightedTaxIds = new Set(rawReportData?.highlightedTaxIds ?? []);
+      const counts = rawReportData?.counts ?? {};
+      const speciesCounts = counts[SPECIES_LEVEL_INDEX] ?? {};
+      const genusCounts = counts[GENUS_LEVEL_INDEX] ?? {};
+      const sortedGenus = rawReportData?.sortedGenus;
+      if (Array.isArray(sortedGenus)) {
+        const generaPathogenCounts = getGeneraPathogenCounts(speciesCounts);
 
-        rawReportData.sortedGenus.forEach((genusTaxId: number) => {
+        sortedGenus.forEach((genusTaxId: number) => {
+          const genusInfo = genusCounts[genusTaxId];
+          // Skip genera the counts map doesn't describe rather than throwing on
+          // `undefined.species_tax_ids`.
+          if (!genusInfo) return;
           let hasHighlightedChildren = false;
-          const childrenSpecies =
-            rawReportData.counts[GENUS_LEVEL_INDEX][genusTaxId].species_tax_ids;
-          const speciesData = childrenSpecies?.map((speciesTaxId: number) => {
-            const isHighlighted = highlightedTaxIds.has(speciesTaxId);
-            hasHighlightedChildren = hasHighlightedChildren || isHighlighted;
-            const speciesInfo =
-              rawReportData.counts[SPECIES_LEVEL_INDEX][speciesTaxId];
-            const speciesWithAdjustedMetricPrecision =
-              adjustMetricPrecision(speciesInfo);
-            return merge(speciesWithAdjustedMetricPrecision, {
-              highlighted: isHighlighted,
-              taxId: speciesTaxId,
-              taxLevel: TAX_LEVEL_SPECIES,
-            });
-          });
+          const childrenSpecies = genusInfo.species_tax_ids;
+          const speciesData = (childrenSpecies ?? []).map(
+            (speciesTaxId: number) => {
+              const isHighlighted = highlightedTaxIds.has(speciesTaxId);
+              hasHighlightedChildren = hasHighlightedChildren || isHighlighted;
+              const speciesInfo = speciesCounts[speciesTaxId];
+              const speciesWithAdjustedMetricPrecision =
+                adjustMetricPrecision(speciesInfo);
+              return merge(speciesWithAdjustedMetricPrecision, {
+                highlighted: isHighlighted,
+                taxId: speciesTaxId,
+                taxLevel: TAX_LEVEL_SPECIES,
+              });
+            },
+          );
           reportData.push(
-            merge(rawReportData.counts[GENUS_LEVEL_INDEX][genusTaxId], {
+            merge(genusInfo, {
               highlightedChildren: hasHighlightedChildren,
               pathogens: generaPathogenCounts[genusTaxId],
               taxId: genusTaxId,
@@ -589,14 +600,15 @@ const SampleViewComponent = ({
           reportData,
         },
       });
-      setLineageData(rawReportData.lineage);
+      setLineageData(rawReportData?.lineage);
       setReportData(reportData);
-      setReportMetadata(rawReportData.metadata);
+      const reportMetadata = rawReportData?.metadata ?? ({} as ReportMetadata);
+      setReportMetadata(reportMetadata);
       setLoadingReport(false);
       dispatchSelectedOptions({
         type: "newBackground",
         payload: {
-          background: rawReportData.metadata.backgroundId,
+          background: reportMetadata.backgroundId,
         },
       });
     },
@@ -1384,20 +1396,27 @@ export const SampleView = ({
   snapshotShareId,
 }: SampleViewWrapperProps) => {
   return (
-    <Suspense
-      fallback={
-        <SampleMessage
-          icon={<IconLoading className={csSampleMessage.icon} />}
-          message={"Loading report data."}
-          status={"Loading"}
-          type={"inProgress"}
+    // Report view (#466): a render error here -- bad report data, a failed
+    // query resolving into a throw, etc. -- shows the friendly, actionable
+    // fallback (retry + contact support) instead of a blank page, while still
+    // reporting to Sentry. Resets automatically when the user opens a different
+    // sample so an error on sample A doesn't stick to sample B.
+    <ErrorBoundary view="report" resetKeys={[sampleId, snapshotShareId]}>
+      <Suspense
+        fallback={
+          <SampleMessage
+            icon={<IconLoading className={csSampleMessage.icon} />}
+            message={"Loading report data."}
+            status={"Loading"}
+            type={"inProgress"}
+          />
+        }
+      >
+        <SampleViewComponent
+          sampleId={sampleId}
+          snapshotShareId={snapshotShareId}
         />
-      }
-    >
-      <SampleViewComponent
-        sampleId={sampleId}
-        snapshotShareId={snapshotShareId}
-      />
-    </Suspense>
+      </Suspense>
+    </ErrorBoundary>
   );
 };

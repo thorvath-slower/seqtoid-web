@@ -14,14 +14,34 @@ import { GlobalContext, globalContextReducer } from "./globalContext/reducer";
 import UserContextType from "./interface/allowedFeatures";
 import "./loader.scss";
 import RelayEnvironment from "./relay/RelayEnvironment";
+import SupportPortal from "~/components/common/SupportPortal/SupportPortal";
 import "./styles/appcues.scss";
 import "./styles/core.scss";
+
+// CZID-391: the Relay GraphQL fetch client (generateFetchFn) used to log every
+// request/response — and non-fatal field-level GraphQL errors — to Sentry as
+// Info-level events, drowning the dashboard (~74 `generateFetchFn.req=` /
+// `generateFetchFn.res=` / `[GQL Error]` Info entries). The source-side logging is
+// removed in relay/environment.ts; this beforeSend is a defense-in-depth filter that
+// also suppresses any residual Info-level generateFetchFn/GQL noise still emitted by
+// older deployed bundles. Only `level: "info"` req/res breadcrumbs are dropped —
+// warnings, errors, and captured exceptions pass through untouched so real
+// regressions stay visible.
+const isGenerateFetchFnInfoNoise = (event: Sentry.Event): boolean => {
+  // Sentry v7+ removed the Severity enum; event.level is a SeverityLevel string literal.
+  if (event.level !== "info") return false;
+  const message = event.message ?? "";
+  return (
+    message.includes("generateFetchFn") || message.startsWith("[GQL Error]")
+  );
+};
 
 // Sentry Basic Configuration Options: https://docs.sentry.io/platforms/javascript/guides/react/config/basics/
 Sentry.init({
   dsn: window.SENTRY_DSN_FRONTEND,
   environment: window.ENVIRONMENT,
   release: window.GIT_RELEASE_SHA,
+  beforeSend: event => (isGenerateFetchFnInfoNoise(event) ? null : event),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -68,7 +88,7 @@ const ReactComponentWithGlobalContext = ({
     initialGlobalContextState,
   );
   return (
-    <Sentry.ErrorBoundary fallback={"An error has occured"}>
+    <Sentry.ErrorBoundary fallback={<>An error has occured</>}>
       <BrowserRouter>
         <RelayEnvironment>
           <UserContext.Provider value={userContext}>
@@ -79,6 +99,10 @@ const ReactComponentWithGlobalContext = ({
                 <EmotionThemeProvider theme={defaultTheme}>
                   <ThemeProvider theme={defaultTheme}>
                     {React.createElement(matchedComponent, props)}
+                    {/* In-app self-help portal (#440): floating Help/Diagnostics
+                        button, rendered on every authenticated page. It reads
+                        UserContext and no-ops for signed-out visitors. */}
+                    <SupportPortal />
                   </ThemeProvider>
                 </EmotionThemeProvider>
               </StyledEngineProvider>

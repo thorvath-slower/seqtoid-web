@@ -2,7 +2,7 @@ module Types
   # Federation mesh type `query_SampleMetadata_additional_info_pipeline_run` (CZID-285):
   # the curated pipeline-run display (PipelineRun#as_json with `version` replaced and
   # `host_subtracted` humanized). `id` is stringified to match the federation contract.
-  # This is a distinct mesh type from the app's existing PipelineRunType — it is NOT a
+  # This is a distinct mesh type from the app's existing PipelineRunType -- it is NOT a
   # rename or replacement of that type (CZID-285 never-rename rule).
   class SampleMetadataPipelineRunType < Types::BaseObject
     graphql_name "query_SampleMetadata_additional_info_pipeline_run"

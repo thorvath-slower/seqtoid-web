@@ -261,8 +261,11 @@ export const ImpactCountryShowcase = (props: ImpactCountryShowcaseProps) => {
             </h2>
           </div>
           <div className={cs.countryShowcaseWindowMapContainer}>
-            {props.selectedCountry.countryName !==
-              ("Brazil" || "The Gambia" || "Guinea" || "Pakistan") &&
+            {/* NOTE: `("Brazil" || "The Gambia" || ...)` always evaluates to "Brazil",
+                so this only excludes Brazil (pre-existing latent bug; TS 5 flags the
+                always-truthy ||). Preserving exact prior runtime behavior by comparing
+                against the value the || chain already resolved to. */}
+            {props.selectedCountry.countryName !== "Brazil" &&
             props.selectedCountry?.mapImage?.src ? (
               <img
                 className={cs.countryShowcaseWindowMapImage}

@@ -1,9 +1,9 @@
 module Types
   # Federation mesh type `SampleMetadata` (CZID-285): the root payload of the
-  # SampleMetadata query — the data behind the sample details metadata sidebar.
+  # SampleMetadata query -- the data behind the sample details metadata sidebar.
   # The top-level collection* scalars exist in the federation contract but are not
   # populated by SamplesController#metadata (the REST payload only carries `metadata`
-  # and `additional_info`), so they resolve to nil — matching the federation output.
+  # and `additional_info`), so they resolve to nil -- matching the federation output.
   class SampleMetadataType < Types::BaseObject
     graphql_name "SampleMetadata"
 

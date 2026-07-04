@@ -1,16 +1,28 @@
 class ApplicationController < ActionController::Base
   before_action :authenticate_user!
   before_action :check_for_maintenance
+  # CZID-330 — export-control / Terms-of-Use attestation gate. Runs AFTER auth (needs current_user) and
+  # after the maintenance check. No-op unless AppConfig::ENABLE_EXPORT_CONTROL_ATTESTATION == "1", so it
+  # ships DARK; go-live is a counsel-gated flag flip (CZID-292/335). See ExportControlAttestationGate.
+  before_action :require_export_control_attestation
+  # CZID-285/286 — Layer 3 export-control gate (identity verification + export screening, and — when its
+  # own flag is on — device/location attestation). Runs AFTER the CZID-330 attestation gate so the ordering
+  # (authenticate → maintenance → attestation → layer3) is visible here. No-op unless
+  # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 == "1", so it ships DARK; go-live is counsel/vendor-gated
+  # (CZID-292/278/335). See ExportControlLayer3Gate.
+  before_action :require_export_control_layer3
   before_action :check_rack_mini_profiler
   before_action :check_browser
   before_action :set_current_context_for_logging!
   before_action :set_application_view_variables
-  before_action :set_raven_context
+  before_action :set_sentry_context
 
   include Consul::Controller
   include AppConfigHelper
   include Auth0Helper
   include ApplicationHelper
+  include ExportControlAttestationGate # CZID-330 — provides require_export_control_attestation
+  include ExportControlLayer3Gate # CZID-285/286 — provides require_export_control_layer3
 
   current_power do
     Power.new(current_user)
@@ -128,9 +140,9 @@ class ApplicationController < ActionController::Base
 
   private
 
-  def set_raven_context
-    Raven.user_context(id: current_user.id, admin: current_user.admin?) if current_user
-    Raven.extra_context(params: params.to_unsafe_h, url: request.url)
+  def set_sentry_context
+    Sentry.set_user(id: current_user.id, admin: current_user.admin?) if current_user
+    Sentry.set_extras(params: params.to_unsafe_h, url: request.url)
   end
 
   def check_browser

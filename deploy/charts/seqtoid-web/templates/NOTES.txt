@@ -1,0 +1,17 @@
+seqtoid-web ({{ .Values.environment }}) deployed as a blueGreen Rollout.
+
+  Rollout:    {{ include "seqtoid-web.fullname" . }}
+  Namespace:  {{ .Release.Namespace }}
+  Image:      {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Promotion:  {{ if .Values.blueGreen.autoPromotionEnabled }}AUTOMATED (promotes on smoke pass){{ else }}MANUAL (pauses after smoke; run `kubectl argo rollouts promote`){{ end }}
+
+Watch the rollout:
+  kubectl argo rollouts get rollout {{ include "seqtoid-web.fullname" . }} -n {{ .Release.Namespace }} --watch
+
+{{- if not .Values.blueGreen.autoPromotionEnabled }}
+
+Promote (after eyeballing the preview color):
+  kubectl argo rollouts promote {{ include "seqtoid-web.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+
+Full driver guide: cypherid-web-infra/deploy/RUNBOOK.md

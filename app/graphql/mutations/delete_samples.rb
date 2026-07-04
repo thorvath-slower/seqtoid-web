@@ -3,7 +3,7 @@ module Mutations
   # CZID-304. Serves `DeleteSamples` natively instead of proxying POST /samples/bulk_delete.
   # Reproduces SamplesController#bulk_delete exactly: re-validate the selected ids
   # (DeletionValidationService), require all of them to be eligible, then delete via
-  # BulkDeletionService — and map {deletedIds, error} to the federation's
+  # BulkDeletionService -- and map {deletedIds, error} to the federation's
   # {deleted_workflow_ids, error} contract.
   class DeleteSamples < Mutations::BaseMutation
     graphql_name "DeleteSamples"

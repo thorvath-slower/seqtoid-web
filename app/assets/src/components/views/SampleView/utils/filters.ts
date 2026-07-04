@@ -145,6 +145,9 @@ const getTaxonMetricValue = (row: $TSFixMe, metric: $TSFixMe) => {
 };
 
 export const adjustMetricPrecision = (species: $TSFixMe) => {
+  // A species entry can be null/undefined when a report response is sparse or
+  // malformed — Object.entries(null) throws, so bail out early (#386).
+  if (isNil(species)) return species;
   Object.entries(species).forEach(([key, metricValue]) => {
     if (isNil(metricValue)) {
       // Do nothing
@@ -153,7 +156,7 @@ export const adjustMetricPrecision = (species: $TSFixMe) => {
         Number(metricValue).toFixed(METRIC_DECIMAL_PLACES[key]),
       );
     } else if (["nt", "nr"].includes(key)) {
-      Object.entries(species[key]).forEach(([metricKey, metricValue]) => {
+      Object.entries(species[key] ?? {}).forEach(([metricKey, metricValue]) => {
         if (metricKey in METRIC_DECIMAL_PLACES && metricValue) {
           species[key][metricKey] = parseFloat(
             Number(metricValue).toFixed(METRIC_DECIMAL_PLACES[metricKey]),
@@ -173,10 +176,11 @@ export const setDisplayName = ({
   nameType: string;
 }) => {
   const useScientific = nameType === "Scientific name";
-  reportData.forEach(genus => {
+  // `reportData` (and each genus's `species`) can be empty/undefined for a
+  // degenerate report response — default to [] so we don't throw on forEach (#386).
+  (reportData ?? []).forEach(genus => {
     genus.displayName = useScientific ? genus.name : genus.common_name;
-    // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2532
-    genus.species.forEach(species => {
+    (genus.species ?? []).forEach(species => {
       species.displayName = useScientific ? species.name : species.common_name;
     });
   });

@@ -6,7 +6,7 @@ module Types
     graphql_name "queryInput_fedWorkflowRuns_input_where_Input"
 
     # where.id._in drives the CG bulk-download-modal mode; modeled so that input
-    # validates, but the resolver raises (that mode is a separate follow-up — see
+    # validates, but the resolver raises (that mode is a separate follow-up -- see
     # FedWorkflowRunsQuery).
     argument :id, Types::StringListInFilterType, required: false, camelize: false
     argument :deprecatedById, Types::NullCheckFilterType, required: false, camelize: false

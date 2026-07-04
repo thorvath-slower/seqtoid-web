@@ -1,6 +1,6 @@
 require "rails_helper"
 
-# Regression for #451 / #452: the ported bulk-download mutations
+# Regression for #451 / #452 / #458: the ported bulk-download mutations
 # (createAsyncBulkDownload / CreateBulkDownload) must resolve the Rails helpers
 # their REAL validation chain invokes. Unlike create_bulk_download_mutation_spec.rb,
 # these examples do NOT stub `validate_bulk_download_create_params`, so the real
@@ -65,16 +65,23 @@ GQL
       expect(parsed.dig("data", "createAsyncBulkDownload", "id")).to eq(BulkDownload.last.id.to_s)
     end
 
-    it "GAP 2: over the object limit reaches the domain MAX_OBJECTS guard (current_user resolved), not NoMethodError" do
+    it "GAP 2 / #458: over the object limit comes back as a GraphQL error, not an uncaught RuntimeError 500" do
       wr = cg_workflow_run_pg
-      # 1 object > 0 allowed -> validate_num_objects evaluates `current_user.admin?` (line 128).
+      # 1 object > 0 allowed -> validate_num_objects evaluates `current_user.admin?` (line 128)
+      # then raises MAX_OBJECTS_EXCEEDED at :129.
       AppConfigHelper.set_app_config(AppConfig::MAX_OBJECTS_BULK_DOWNLOAD, "0")
 
-      # Pre-fix: NoMethodError(current_user) at bulk_downloads_helper.rb:128.
-      # Post-fix: current_user resolves (Joe, non-admin) and the code reaches the intended
-      # domain guard at :129, which raises MAX_OBJECTS_EXCEEDED. Reaching that line at all
-      # proves current_user was callable -- the port gap is closed.
-      expect { post_async(wr) }.to raise_error(RuntimeError, /No more than 0 objects allowed/)
+      # #451 (GAP 2) closed the current_user port gap so the code reaches the domain guard.
+      # #458 additionally requires that guard's bare RuntimeError be surfaced as a GraphQL
+      # error in the response `errors` array -- NOT bubble out of resolve as a 500. So the
+      # request must NOT raise, and the domain message must land in errors.
+      parsed = nil
+      expect { parsed = post_async(wr) }.not_to raise_error
+
+      expect(error_messages(parsed)).to match(/No more than 0 objects allowed/)
+      expect(parsed.dig("data", "createAsyncBulkDownload")).to be_nil
+      # No stray bulk download should have been persisted on the validation failure.
+      expect(BulkDownload.count).to eq(0)
     end
   end
 end

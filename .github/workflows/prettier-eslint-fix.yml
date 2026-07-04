@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Generate token
         id: generate_token
-        uses: chanzuckerberg/github-app-token@v1.1.4
+        uses: chanzuckerberg/github-app-token@365b1f2db827eb8f17288ec335b1a7e3c03ff683 # v1.1.4
         with:
           app_id: ${{ secrets.GH_ACTIONS_HELPER_APP_ID }}
           private_key: ${{ secrets.GH_ACTIONS_HELPER_PK }}
@@ -35,7 +35,7 @@ jobs:
             ${{ runner.os }}-node-
       - name: Check the Lockfile Version
         run: |
-          VERSION=`cat package-lock.json | jq '.lockfileVersion'`
+          VERSION=$(jq '.lockfileVersion' < package-lock.json)
           if [ "$VERSION" -lt "2"  ]; then
             echo "Check the lockfileVersion in package-lock.json."
             exit 1
@@ -46,7 +46,7 @@ jobs:
           git config --global url."https://github.com/".insteadOf
           ssh://git@github.com/
       - name: Pin npm (matches Dockerfile / engines)
-        run: npm install -g npm@10.9.0
+        run: npm install -g npm@11.16.0
       - name: Install Dependencies
         # Verifies that package.json and package-lock.json match.
         # See: https://docs.npmjs.com/cli/v7/commands/npm-ci
@@ -55,7 +55,7 @@ jobs:
         run: npx prettier app/assets/src --ext .js,.jsx,.ts,.tsx --write
       - name: ESLint --fix
         run: npx eslint --fix app/assets/src --ext .js,.jsx,.ts,.tsx
-      - uses: EndBug/add-and-commit@v10
+      - uses: EndBug/add-and-commit@290ea2c423ad77ca9c62ae0f5b224379612c0321 # v10
         with:
           add: -A
           message: ci - prettier and eslint fixes 

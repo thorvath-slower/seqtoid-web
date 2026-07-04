@@ -1,0 +1,24 @@
+apiVersion: v2
+name: seqtoid-node-backend
+description: >-
+  The NestJS/Node backend (strangler slice) on EKS via Argo CD + Argo Rollouts.
+  Ships the API workload as a blueGreen Rollout (active/preview Services), the
+  BullMQ/SFN-notifications worker as a Deployment, and a smoke AnalysisTemplate
+  gating promotion. Runs ALONGSIDE Rails on its own hostname (dev-only strangler
+  seam, epic #454); shares the same Aurora / S3 / SWIPE / SQS as Rails. Mirrors
+  the seqtoid-web chart pattern (#323-327) but for the Node runtime: `node
+  dist/main.js` (api) + `node dist/jobs/worker.js` (worker), no Rails
+  db:migrate/chamber-Rails specifics.
+type: application
+# Chart version tracks the chart's own shape; appVersion is set per-deploy via image.tag.
+version: 0.1.0
+appVersion: "latest"
+maintainers:
+  - name: Thomas Horvath
+keywords:
+  - seqtoid
+  - nestjs
+  - node
+  - argo-rollouts
+  - blue-green
+  - strangler

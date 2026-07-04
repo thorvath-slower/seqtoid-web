@@ -1,5 +1,5 @@
 module Types
-  # Shared discovery filter leaf — `{ _eq: String }`. CZID-285.
+  # Shared discovery filter leaf -- `{ _eq: String }`. CZID-285.
   class StringEqFilterType < Types::BaseInputObject
     graphql_name "StringEqFilter"
 

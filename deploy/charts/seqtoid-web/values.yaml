@@ -1,0 +1,187 @@
+# Default values for the seqtoid-web chart. Env overrides live in
+# cypherid-web-infra/deploy/argocd/values/seqtoid-web/<env>.yaml and layer on top.
+#
+# These defaults render a valid dev-shaped manifest so `helm template`/lint work
+# standalone in CI; real per-env values (account id, DNS, cert, subnets) come
+# from the infra repo's values files.
+
+project: czid
+# Logical env: dev | staging | prod. Drives names, namespace-suffixing, Chamber service.
+environment: dev
+# Rails RACK/RAILS_ENV. Leave blank to derive from `environment` (dev->development,
+# staging->staging, prod->production) via the seqtoid-web.railsEnv helper.
+railsEnv: ""
+
+image:
+  # Full ECR repository (per-env values override with the account-scoped repo).
+  # CZID-76: go-forward name is `seqtoid-web` (the per-env GitOps values reference
+  # `czid-<env>/seqtoid-web`). bin/build-docker + bin/push-docker dual-push both this
+  # name and the legacy `idseq-web` during the transition, so this default resolves to a
+  # real image. The live `idseq-web` repo is kept in place, not renamed.
+  repository: seqtoid-web
+  # CI advances this to the immutable sha-<commit> tag on deploy (GitOps, #444).
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Web replicas (per active/preview color). Ignored when autoscaling.enabled.
+replicaCount: 2
+
+aws:
+  region: us-west-2
+  # Account id, used to template SAMPLES_BUCKET_NAME (mirrors the czecs default).
+  # Empty by default; per-env values set the real account.
+  accountId: ""
+  # Override the samples bucket name outright if it doesn't follow the pattern.
+  # (At runtime Chamber may also inject SAMPLES_BUCKET_NAME, which wins.)
+  samplesBucketName: ""
+
+# IRSA: the pod identity that replaces the ECS web task role. Grants SSM (Chamber),
+# S3, SQS, etc. via the role's policy. roleArn is filled per-env from the infra repo.
+serviceAccount:
+  create: true
+  name: ""
+  roleArn: ""
+
+# Secrets: least-change path is Chamber-in-container (the image ENTRYPOINT already
+# runs `chamber exec idseq-<env>-web`). ESO is a later swap (#325). When chamber is
+# enabled the pod just needs the IRSA role with SSM read; no envFrom needed.
+secrets:
+  chamber:
+    enabled: true
+    # Defaults to idseq-<environment>-web (the existing Chamber service name).
+    service: ""
+
+# Web container port (Rails server). Services expose `service.port` -> this.
+containerPort: 3000
+service:
+  port: 80
+
+# Blue/green strategy knobs (consumed by the Rollout).
+blueGreen:
+  autoPromotionEnabled: false     # dev/staging true; prod false (manual gate)
+  scaleDownDelaySeconds: 30
+  abortScaleDownDelaySeconds: 30
+  analysis:
+    enabled: true                 # gate promotion on the smoke AnalysisTemplate
+    postPromotion: false          # prod also re-checks after promotion
+
+# Smoke check the AnalysisTemplate runs against the PREVIEW color before promotion.
+smoke:
+  image: curlimages/curl:8.10.1
+  # Paths that must return HTTP 200 on the preview color. /health_check first;
+  # add critical read paths here as they harden.
+  paths:
+    - /health_check
+  timeoutSeconds: 10
+  # How many times the analysis retries the smoke Job before declaring failure.
+  failureLimit: 2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 65
+
+# Public edge: ALB via the AWS Load Balancer Controller -> the ACTIVE service.
+ingress:
+  enabled: true
+  host: ""                        # per-env DNS name
+  certificateArn: ""              # per-env ACM cert
+  # Extra alb.ingress.kubernetes.io/* annotations (subnets, etc.) merged in per-env.
+  annotations: {}
+  healthCheckPath: /health_check
+
+# Graceful drain so a promotion/scale-down doesn't drop in-flight requests.
+gracefulDrain:
+  preStopSleepSeconds: 15
+  terminationGracePeriodSeconds: 60
+
+# Pre-sync migration (was the ECS run-task `rails db:migrate:with_data`).
+migrate:
+  enabled: true
+  command: ["rails", "db:migrate:with_data"]
+  # Kept modest; migrations are usually quick. Bump per-env if needed.
+  backoffLimit: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+# Pre-sync taxon-lineage load (ticket #471). A fresh deploy has no taxon lineage
+# data, so reports/taxonomy/heatmaps come up empty. This Job idempotently imports
+# the taxon lineage slice from S3 and (re)builds the ES index, running after the
+# migrate Job (sync-wave 1) so the schema exists first. Default ON for dev; per-env
+# values may turn it off once an env already carries the data.
+taxonLoad:
+  enabled: true
+  # Idempotent wrapper: imports the slice only if absent, then converges the ES
+  # index. Never non-zeros on an already-loaded DB, so redeploys are a no-op.
+  command: ["rake", "taxon_lineage_slice:load_slice_if_needed"]
+  # The import is single-shot and idempotent; don't hammer S3 on failure.
+  backoffLimit: 1
+  # Bound the Job so a stuck import doesn't wedge the sync (2h headroom).
+  activeDeadlineSeconds: 7200
+  # The importer streams the CSV and inserts in chunks; give it memory headroom.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+
+# Extra plain env vars applied to web + workers + migrate (name/value pairs).
+extraEnv: []
+
+# Worker workloads (ECS czecs-resque.json x4 + czecs-shoryuken.json). Each becomes
+# a Deployment. `args` are passed to the image ENTRYPOINT (bin/entrypoint.sh), which
+# wraps them in `chamber exec ... bundle exec`.
+workers:
+  - name: resque
+    args: ["rake", "resque:workers"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 500m
+        memory: 3Gi
+  - name: resque-scheduler
+    args: ["rake", "resque:scheduler"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+  - name: resque-pipeline-monitor
+    args: ["rake", "pipeline_monitor"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+  - name: resque-result-monitor
+    args: ["rake", "result_monitor"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+  - name: shoryuken
+    args: ["shoryuken", "-R", "-C", "config/shoryuken.yml"]
+    replicaCount: 1
+    samplesBucket: false
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi

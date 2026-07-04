@@ -1,0 +1,167 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# gitops_deploy — the EKS/Argo CD replacement for bin/deploy's czecs service-roll (#328).
+#
+# The old path (bin/deploy) shells out to `czecs upgrade` to register an ECS task
+# definition and roll idseq-<env>-{web,resque*,shoryuken} in place. Under the Argo
+# CD + Argo Rollouts model (epic #319) the app never touches the cluster: a deploy
+# is a *Git pointer move*. This script performs that move — it bumps `image.tag` in
+# the seqtoid-web env values in the infra GitOps repo (cypherid-web-infra). Argo CD
+# then syncs the change and Argo Rollouts runs the blueGreen promotion, gated on the
+# smoke AnalysisTemplate (#326):
+#
+#     build image (unchanged, still sha-<commit> in ECR)
+#       -> bin/gitops_deploy ENV sha-<commit>        <-- THIS SCRIPT
+#          -> bump image.tag in deploy/argocd/values/seqtoid-web/<env>.yaml (infra repo)
+#          -> commit/PR to the infra repo
+#       -> Argo CD syncs the values change
+#       -> Argo Rollouts blueGreen + smoke AnalysisTemplate gate
+#
+# This is a NEW script (bin/deploy is left untouched so the ECS path keeps working
+# until the live cutover, #329); it is the authorable local half of #328. The CI
+# half — auto-advance on a green main build and dev->staging->prod promotion — is
+# the gitops-advance-dev.yml (this repo) + gitops-promote.yml (infra repo) pair (#444).
+#
+# GATED: writing to the infra repo needs the GITOPS_TOKEN (#74) and only makes sense
+# once the cluster + Argo CD are live (#321/#322). Until then run with --dry-run to
+# see the exact tag bump this would make. NO cluster apply happens here regardless.
+#
+# Usage:
+#   ./bin/gitops_deploy ENV IMAGE_TAG [YOUR_NAME] [REASON]
+#   ./bin/gitops_deploy dev sha-abc12345 tom "ship report fix"
+#   ./bin/gitops_deploy --dry-run staging sha-abc12345
+#
+# Env:
+#   INFRA_REPO   override the GitOps repo (default thorvath-slower/cypherid-web-infra)
+#   GITOPS_MODE  pr (default) | commit  — open a PR, or commit straight to main
+#   GITOPS_BASE  base branch for the PR/commit (default main)
+
+require 'json'
+require 'shellwords'
+require 'tmpdir'
+
+DEFAULT_INFRA_REPO = 'thorvath-slower/cypherid-web-infra'
+VALID_ENVS = %w[dev staging prod].freeze
+
+def abort!(msg)
+  warn "\n== #{msg} ==\n"
+  exit 1
+end
+
+def run!(cmd, err = nil)
+  puts "+ #{cmd}"
+  system(cmd) || abort!("Command failed: #{cmd}#{err ? "\n#{err}" : ''}")
+end
+
+def capture!(cmd)
+  out = `#{cmd}`
+  abort!("Command failed: #{cmd}") unless $?.success?
+  out.strip
+end
+
+dry_run = false
+ARGV.reject! do |a|
+  if a == '--dry-run'
+    dry_run = true
+    true
+  else
+    false
+  end
+end
+
+env = ARGV.shift
+image = ARGV.shift
+deployed_by = ARGV.shift || ENV['USER'] || 'unknown'
+reason = ARGV.shift || 'gitops deploy'
+
+if env.nil? || image.nil?
+  abort!('Usage: ./bin/gitops_deploy [--dry-run] ENV IMAGE_TAG [YOUR_NAME] [REASON]')
+end
+
+abort!("Unknown env '#{env}' — expected one of: #{VALID_ENVS.join(', ')}") unless VALID_ENVS.include?(env)
+
+# Argo diffs must be deterministic and rollbacks must be a git revert, so the tag
+# has to be the immutable sha-<commit> tag, never a floating 'latest' (#444).
+if image == 'latest' || image.empty?
+  abort!("Refusing to deploy '#{image}': GitOps needs an immutable tag (sha-<commit>), not a floating tag")
+end
+unless image.match?(/\Asha-[0-9a-f]{7,40}\z/)
+  warn "warning: image tag '#{image}' doesn't look like an immutable sha-<commit> tag; continuing anyway"
+end
+
+# Prod is the manual gate. A direct app-driven push to prod would bypass the
+# dev->staging->prod promotion chain (gitops-promote.yml) and the human release
+# gate (prod Rollout autoPromotionEnabled: false). Mirror apply_all's no-direct-
+# to-prod rule and route prod through promotion instead.
+if env == 'prod'
+  abort!(<<~MSG.strip)
+    Refusing a direct deploy to prod. Prod is promoted, not pushed:
+      1. deploy to staging:  ./bin/gitops_deploy staging #{image}
+      2. promote staging->prod via the gitops-promote workflow (infra repo), then
+      3. release manually:   kubectl argo rollouts promote czid-prod-seqtoid-web -n czid-prod
+  MSG
+end
+
+infra_repo = ENV['INFRA_REPO'] || DEFAULT_INFRA_REPO
+mode = (ENV['GITOPS_MODE'] || 'pr').downcase
+base = ENV['GITOPS_BASE'] || 'main'
+values_path = "deploy/argocd/values/seqtoid-web/#{env}.yaml"
+
+puts "gitops deploy: #{image} -> #{env}  (infra=#{infra_repo}, mode=#{mode}, by=#{deployed_by})"
+puts "  reason: #{reason}"
+puts "  will set image.tag=#{image} in #{infra_repo}:#{values_path}"
+
+if dry_run
+  puts "\n[dry-run] no changes made. Rerun without --dry-run (with GITOPS_TOKEN set) to apply."
+  puts "[dry-run] after apply: Argo CD syncs #{env}; Rollouts runs blueGreen gated on the smoke AnalysisTemplate."
+  exit 0
+end
+
+abort!('gh CLI not found (needed to write the GitOps repo)') if `which gh`.strip.empty?
+
+Dir.mktmpdir('gitops-deploy-') do |tmp|
+  clone = File.join(tmp, 'infra')
+  run!("gh repo clone #{Shellwords.escape(infra_repo)} #{Shellwords.escape(clone)} -- --depth 1 --branch #{Shellwords.escape(base)}")
+
+  Dir.chdir(clone) do
+    abort!("values file not found in infra repo: #{values_path}") unless File.exist?(values_path)
+
+    content = File.read(values_path)
+    # Bump the `image.tag:` line under the top-level `image:` block. The values files
+    # keep tag on its own line with an inline comment; preserve any trailing comment.
+    new_content = content.sub(/^(\s*tag:\s*)\S+(.*)$/) { "#{Regexp.last_match(1)}#{image}#{Regexp.last_match(2)}" }
+    if new_content == content
+      abort!("could not find an image.tag line to bump in #{values_path}")
+    end
+
+    current = content[/^\s*tag:\s*(\S+)/, 1]
+    if current == image
+      puts "#{env} already at #{image} — nothing to deploy."
+      exit 0
+    end
+
+    File.write(values_path, new_content)
+    puts "bumped image.tag: #{current} -> #{image}"
+
+    run!('git config user.name  "seqtoid-gitops"')
+    run!('git config user.email "gitops@seqtoid.local"')
+
+    if mode == 'commit'
+      run!("git commit -am #{Shellwords.escape("gitops(#{env}): deploy seqtoid-web image.tag -> #{image} (#{reason})")}")
+      run!("git push origin HEAD:#{Shellwords.escape(base)}")
+      puts "\ncommitted to #{base}. Argo CD (#{env}) will sync; Rollouts runs blueGreen (smoke-gated)."
+    else
+      branch = "gitops/deploy-#{env}-#{image}"
+      run!("git checkout -b #{Shellwords.escape(branch)}")
+      run!("git commit -am #{Shellwords.escape("gitops(#{env}): deploy seqtoid-web image.tag -> #{image} (#{reason})")}")
+      run!("git push -u origin #{Shellwords.escape(branch)} --force-with-lease")
+      body = "Deploy #{image} to #{env} (by #{deployed_by}: #{reason}).\n\n" \
+             "After merge, Argo CD syncs #{env} and Argo Rollouts runs the blueGreen " \
+             "promotion gated on the smoke AnalysisTemplate."
+      run!("gh pr create --title #{Shellwords.escape("gitops(#{env}): deploy seqtoid-web -> #{image}")} " \
+           "--body #{Shellwords.escape(body)} --base #{Shellwords.escape(base)} --head #{Shellwords.escape(branch)}")
+      puts "\nopened a GitOps deploy PR. Merge it to trigger the Argo CD sync + Rollout."
+    end
+  end
+end

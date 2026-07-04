@@ -6,12 +6,13 @@ module Queries
   # payload, then apply the federation's post-processing (stringify ids; resolve the
   # location_validated_value union).
   #
-  # snapshotLinkId is accepted for query parity but unused — the federation resolver
+  # snapshotLinkId is accepted for query parity but unused -- the federation resolver
   # likewise built the non-snapshot /samples/:id/metadata URL and ignored it.
   module SampleMetadataQuery
     extend ActiveSupport::Concern
     include ReportHelper          # select_pipeline_run
     include PipelineOutputsHelper # curate_pipeline_run_display
+    include SamplesHelper         # job_stats_get, get_summary_stats
 
     LOCATION_OBJECT_TYPENAME = Types::SampleMetadataLocationOneof1Type.graphql_name
     LOCATION_STRING_TYPENAME = Types::SampleMetadataLocationOneof0Type.graphql_name

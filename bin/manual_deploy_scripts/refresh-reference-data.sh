@@ -2,7 +2,8 @@
 # On-demand refresh of taxon-lineage reference data + its Elasticsearch index, DECOUPLED from a web deploy
 # (#334 / feature 20029). Runs `reference_data:refresh[version,file_key]` as a one-off czecs task against
 # the CURRENTLY-DEPLOYED web task definition for the target environment — no new image build, no service
-# upgrade, no full destroy+rebuild. Mirrors the czecs-task-rake mechanism in deploy-web.sh.
+# upgrade, no full destroy+rebuild. Uses the same czecs-task-rake mechanism the taxon reload in
+# bin/rebuild_system (Path B) uses.
 #
 # Usage: refresh-reference-data.sh <env> <version> <file_key>
 #   env       dev|staging|prod|sandbox
@@ -17,7 +18,7 @@ file_key=${3:?file_key required (S3 key under S3_DATABASE_BUCKET)}
 
 cd "$(dirname "$0")"
 
-# Download czecs (same pin as deploy-web.sh).
+# Download czecs (same v0.1.2 pin used by bin/deploy and bin/rebuild_system).
 os=$(uname | tr '[:upper:]' '[:lower:]')
 trap 'rm -f /tmp/czecs' EXIT
 curl -sS -L "https://github.com/chanzuckerberg/czecs/releases/download/v0.1.2/czecs_0.1.2_${os}_amd64.tar.gz" | tar xz -C /tmp czecs

@@ -27,8 +27,8 @@ RUN NODE_VERSION="$(cat /tmp/.node-version)" \
   && rm "node-v${NODE_VERSION}-linux-x64.tar.gz" \
   && node --version && npm --version
 
-# Node 20 ships npm 10; pin to a known-good npm 10 line for reproducibility.
-RUN npm i -g npm@10.9.0
+# Node 24 ships npm 11; pin to a known-good npm 11 line for reproducibility.
+RUN npm i -g npm@11.16.0
 
 RUN pip3 config set global.break-system-packages true
 RUN pip3 install --upgrade pip
@@ -73,7 +73,17 @@ ENV NODE_OPTIONS="--max_old_space_size=6144"
 COPY app/assets app/assets
 COPY webpack.config.common.js webpack.config.prod.js .babelrc ./
 
-# Generate assets
+# Cache-bust the asset build layer on any frontend source/config change (CZID-380).
+# BuildKit does not always invalidate the COPY above reliably, so the `build-img`
+# RUN below could be served from a stale cache and ship an old bundle. Pass
+# --build-arg SRC_HASH="$(git ls-files -s app/assets webpack.config.common.js \
+# webpack.config.prod.js .babelrc | git hash-object --stdin)" so this ARG changes
+# whenever the asset source changes, forcing webpack to rebuild from current source.
+ARG SRC_HASH=unset
+RUN echo "asset source hash: ${SRC_HASH}"
+
+# Generate assets. webpack's output.clean (webpack.config.common.js) wipes
+# app/assets/dist first, so the bundle is always fresh from the current source.
 RUN mkdir -p app/assets/dist && npm run build-img && ls -l app/assets/dist/
 
 # Copy the Gemfile as well as the Gemfile.lock and install

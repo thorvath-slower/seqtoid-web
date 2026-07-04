@@ -8,6 +8,7 @@ import cx from "classnames";
 import React from "react";
 import ReactDOM from "react-dom";
 import { Manager, Popper, Reference } from "react-popper";
+import { IconArrowDownSmall } from "~ui/icons";
 import cs from "./portal_dropdown.scss";
 
 interface PortalDropdownProps {
@@ -126,7 +127,16 @@ class PortalDropdown extends React.Component<PortalDropdownProps> {
                   active: open,
                 })}
                 {!this.props.hideArrow && (
-                  <i className={cx(cs.arrow, this.state.open && cs.active)} />
+                  // CZID-320: render the chevron as a static SVG (IconArrowDownSmall)
+                  // rather than a FontAwesome \f107 glyph. The font-backed glyph could
+                  // paint in a fallback font on the heavy open-render of a large option
+                  // list (Host Organism, Sample Type), showing a transient wrong shape
+                  // before FontAwesome settled. An SVG has no font-load dependency, so the
+                  // arrow is stable regardless of list size and matches the SVG arrow used
+                  // by the non-portal BareDropdown paths.
+                  <IconArrowDownSmall
+                    className={cx(cs.arrow, this.state.open && cs.active)}
+                  />
                 )}
               </div>
             );

@@ -2,7 +2,7 @@ module Queries
   # Ported from the GraphQL federation server (resolver-functions/MetadataFields) as
   # part of CZID-285. Mirrors SamplesController#metadata_fields (both paths return
   # MetadataField#field_info hashes). snapshotLinkId is accepted for query parity but
-  # unused — the federation resolver also posted to the non-snapshot /samples/metadata_fields.
+  # unused -- the federation resolver also posted to the non-snapshot /samples/metadata_fields.
   module MetadataFieldsQuery
     extend ActiveSupport::Concern
 

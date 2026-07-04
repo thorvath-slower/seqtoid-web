@@ -58,7 +58,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         expect(Open3).to receive(:capture3)
           .with("aegea", "ecs", "run", a_string_starting_with("--execute"), any_args)
           .exactly(1).times.and_return(
-            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0)]
+            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
           )
 
         bulk_download_params = {
@@ -92,7 +92,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
                                       pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }])
 
         expect(Open3).to receive(:capture3).exactly(1).times.and_return(
-          ["", "", instance_double(Process::Status, exitstatus: 1)]
+          ["", "", instance_double(Process::Status, exitstatus: 1, success?: false)]
         )
 
         bulk_download_params = {
@@ -273,7 +273,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         # This runs "aegea ecs run", which won't succeed in CI, so we must mock it out.
         allow(Open3).to receive(:capture3)
           .and_return(
-            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0)]
+            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
           )
 
         bulk_download_params = {
@@ -383,7 +383,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         expect(Open3).to receive(:capture3)
           .with("aegea", "ecs", "run", a_string_starting_with("--execute"), any_args)
           .exactly(1).times.and_return(
-            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0)]
+            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
           )
 
         allow_any_instance_of(SfnExecution).to receive(:output_path) { |output_key| "#{@s3_path}/#{output_key}" }
@@ -891,7 +891,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         # This runs "aegea ecs run", which won't succeed in CI, so we must mock it out.
         allow(Open3).to receive(:capture3)
           .and_return(
-            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0)]
+            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
           )
 
         bulk_download_params = {
@@ -914,7 +914,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         # This runs "aegea ecs run", which won't succeed in CI, so we must mock it out.
         allow(Open3).to receive(:capture3)
           .and_return(
-            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0)]
+            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
           )
 
         bulk_download_params = {

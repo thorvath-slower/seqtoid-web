@@ -4,8 +4,35 @@ namespace :taxon_lineage_slice do
   INDEXES_PREFIX = "ncbi-indexes-prod/#{CURRENT_VERSION}/index-generation-2".freeze
   TAXON_LINEAGE_FILE_KEY = "#{INDEXES_PREFIX}/#{SLICE_NAME}".freeze
 
+  # These are long-running offline jobs. Their DB connection can be dropped by the
+  # server ("Server has gone away") between chunks, surfacing as
+  # ActiveRecord::StatementInvalid / ConnectionNotEstablished (Forgejo #388).
+  # Wrap the risky DB work so we reconnect once and retry before giving up.
+  def self.with_db_reconnect(context, max_retries: 2)
+    attempts = 0
+    begin
+      yield
+    rescue ActiveRecord::StatementInvalid, ActiveRecord::ConnectionNotEstablished => exception
+      attempts += 1
+      raise if attempts > max_retries
+
+      puts "DB connection lost during #{context} (#{exception.class}: #{exception.message}); reconnecting (attempt #{attempts}/#{max_retries})."
+      ActiveRecord::Base.connection.reconnect!
+      retry
+    end
+  end
+
   desc "Seed 2024 taxon lineage data"
   task import_data_from_s3: :environment do
+    # Long-running S3 import: on deploy/rollout the pod may be sent SIGTERM. Trap it
+    # so we exit cleanly instead of raising `SignalException: SIGTERM` to Sentry
+    # (Forgejo #388). The job is idempotent (guarded by the exists? check) and safe
+    # to re-run on the next deploy.
+    trap('SIGTERM') do
+      puts "Received SIGTERM; aborting taxon lineage import cleanly (safe to re-run)."
+      exit(0)
+    end
+
     puts "Inserting #{CURRENT_VERSION} taxon lineage slice, this could take a while"
 
     if TaxonLineage.exists?(version_start: CURRENT_VERSION)
@@ -30,7 +57,7 @@ namespace :taxon_lineage_slice do
       if rows.size >= chunk_size
         # Inserting in bulk for performance reasons
         # rubocop:disable Rails/SkipsModelValidations
-        TaxonLineage.insert_all(rows)
+        with_db_reconnect("taxon lineage chunk insert") { TaxonLineage.insert_all(rows) }
         # rubocop:enable Rails/SkipsModelValidations
         rows.clear # Clear the array to free up memory and prepare for the next chunk
         counter += chunk_size
@@ -41,7 +68,7 @@ namespace :taxon_lineage_slice do
     # Insert any remaining rows that didn't fill up the last chunk
     unless rows.empty?
       # rubocop:disable Rails/SkipsModelValidations
-      TaxonLineage.insert_all(rows) unless rows.empty?
+      with_db_reconnect("taxon lineage final chunk insert") { TaxonLineage.insert_all(rows) }
       # rubocop:enable Rails/SkipsModelValidations
       counter += rows.size
       puts "#{(counter.to_f / total_rows) * 100}% of rows imported"
@@ -50,7 +77,12 @@ namespace :taxon_lineage_slice do
 
   task remove_slice: :environment do
     puts "Removing #{CURRENT_VERSION} taxon lineage slice"
-    TaxonLineage.where(version_end: CURRENT_VERSION).destroy_all
+    # destroy_all on a large slice can outlive the DB connection ("Server has gone
+    # away"); reconnect+retry instead of raising ActiveRecord::StatementInvalid
+    # (Forgejo #388).
+    with_db_reconnect("remove_slice") do
+      TaxonLineage.where(version_end: CURRENT_VERSION).destroy_all
+    end
   end
 
   task create_taxon_lineage_slice_es_index: :environment do
@@ -66,4 +98,32 @@ namespace :taxon_lineage_slice do
     puts "Finished removing TaxonLineage index"
   end
 
+  # Idempotent, deploy-safe loader used by the Helm taxon-load Job (ticket #471).
+  # A fresh deploy has no taxon lineage data, which breaks reports/taxonomy/heatmaps.
+  # This runs at deploy time (PreSync hook, after db:migrate) and:
+  #   * imports the taxon lineage slice from S3 ONLY if it isn't already loaded, and
+  #   * (re)builds the OpenSearch/ES index so it matches the loaded data.
+  # Unlike import_data_from_s3, it NEVER aborts/non-zeros when data already exists,
+  # so re-running on every deploy is a no-op instead of a failed Job. It is safe to
+  # run before web/workers come up.
+  desc "Idempotently load the taxon lineage slice + build its ES index (deploy hook)"
+  task load_slice_if_needed: :environment do
+    if TaxonLineage.exists?(version_start: CURRENT_VERSION)
+      puts "Taxon lineage slice #{CURRENT_VERSION} already present; skipping import."
+    else
+      puts "Taxon lineage slice #{CURRENT_VERSION} not found; importing from S3."
+      Rake::Task["taxon_lineage_slice:import_data_from_s3"].invoke
+    end
+
+    unless defined?(ELASTICSEARCH_ON) && ELASTICSEARCH_ON
+      puts "Elasticsearch disabled (ELASTICSEARCH_ON is false); skipping index build."
+      next
+    end
+
+    puts "Ensuring Elasticsearch index for the #{CURRENT_VERSION} slice is built."
+    # create_index!(force: true) + import is idempotent: it (re)creates the index
+    # and reloads documents from the DB, so it converges to the current data.
+    Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+    puts "Taxon lineage load complete."
+  end
 end

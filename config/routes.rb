@@ -14,6 +14,16 @@
 Rails.application.routes.draw do
   if Rails.env.development?
     mount GraphiQL::Rails::Engine, at: "/graphiql", graphql_path: "/graphql"
+
+    # CZID-280 (#237) -- local-development sign-in without a live Auth0 tenant.
+    # This route is defined ONLY inside this `Rails.env.development?` guard, so it
+    # is entirely absent from the route table in every deployed environment
+    # (staging/production never register it -- it cannot 404-vs-exist ambiguously,
+    # it simply does not exist). The action is additionally guarded at runtime.
+    # This deliberately does NOT reintroduce the removed /direct_user_login
+    # backdoor (CZID-319 / #276): it takes no arbitrary user_id, so it cannot be
+    # used to "become any user" -- it signs in a single fixed seeded dev user.
+    get "auth0/dev_login", to: "auth0#dev_login"
   end
   post "/graphql", to: "graphql#execute"
   # It's unclear what it would mean to update a background, so we disallow.
@@ -109,6 +119,26 @@ Rails.application.routes.draw do
   get 'all_data', to: 'home#all_data'
   get 'home', to: 'home#index'
   get 'maintenance', to: 'home#maintenance'
+
+  # CZID-330 — export-control / Terms-of-Use attestation click-through + deny UX.
+  # new/create is the click-through gate; denied is the non-bypassable deny page.
+  get  'export_control_attestation',     to: 'export_control_attestations#new',    as: :new_export_control_attestation
+  post 'export_control_attestation',     to: 'export_control_attestations#create', as: :export_control_attestations
+  get  'export_control_denied',          to: 'export_control_attestations#denied', as: :export_control_denied
+
+  # CZID-285 — Layer 3 identity-verification + export-screening clearance flow (ships DARK).
+  # new/create is the clearance hand-off; callback is the IDV vendor webhook (signature-verified);
+  # denied is the non-bypassable deny page.
+  get  'export_control_clearance',          to: 'export_control_clearances#new',      as: :new_export_control_clearance
+  post 'export_control_clearance',          to: 'export_control_clearances#create',   as: :export_control_clearances
+  post 'export_control_clearance/callback', to: 'export_control_clearances#callback',  as: :export_control_clearance_callback
+  get  'export_control_clearance_denied',   to: 'export_control_clearances#denied',    as: :export_control_clearance_denied
+
+  # CZID-286 — Layer 3 device/location attestation (SERVER-SIDE verify; client SDK HELD, ships DARK).
+  get  'device_location_attestation',        to: 'device_location_attestations#new',    as: :new_device_location_attestation
+  post 'device_location_attestation',        to: 'device_location_attestations#create', as: :device_location_attestations
+  get  'device_location_attestation_denied', to: 'device_location_attestations#denied', as: :device_location_attestation_denied
+
   get 'my_data', to: 'home#my_data'
   get 'page_not_found', to: 'home#page_not_found'
   get 'public', to: 'home#public'
@@ -237,6 +267,9 @@ Rails.application.routes.draw do
   resources :annotations, only: :create
 
   resources :frontend_metrics, only: :create
+
+  # In-app self-help portal: records a user-submitted issue report with diagnostics (#440).
+  resources :support_requests, only: :create
 
   resources :host_genomes do
     collection do

@@ -11,7 +11,7 @@ import {
   times,
   zipObject,
 } from "lodash/fp";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ANALYTICS_EVENT_NAMES, useTrackEvent } from "~/api/analytics";
 import {
   completeSampleUpload,
@@ -21,8 +21,14 @@ import {
 } from "~/api/upload";
 import { TaxonOption } from "~/components/common/filters/types";
 import PrimaryButton from "~/components/ui/controls/buttons/PrimaryButton";
+import SecondaryButton from "~/components/ui/controls/buttons/SecondaryButton";
 import { logError } from "~/components/utils/logUtil";
 import { ResumableUpload } from "~/components/views/SampleUploadFlow/components/UploadProgressModal/resumableUpload";
+import {
+  clearUploadResumeState,
+  loadUploadResumeState,
+  saveUploadResumeState,
+} from "~/components/views/SampleUploadFlow/components/UploadProgressModal/uploadResumeState";
 import { MetadataBasic, Project, SampleFromApi } from "~/interface/shared";
 import Modal from "~ui/containers/Modal";
 import { UploadWorkflows } from "../../../../constants";
@@ -85,16 +91,31 @@ export const LocalUploadProgressModal = ({
   const [retryingSampleUpload, setRetryingSampleUpload] = useState(false);
   const [uploadComplete, setUploadComplete] = useState(false);
 
+  // Pause/resume state. `paused` drives the UI; `pausedRef` is read inside async upload loops
+  // (which close over the initial render's state) so a pause takes effect immediately.
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  // Live ResumableUpload instances by s3Key, so Pause can soft-pause each in-flight upload.
+  const activeUploadsRef = useRef<Record<string, ResumableUpload>>({});
+
+  // Seed resume state from a prior (paused / interrupted) session so a page reload can pick up:
+  // the persisted uploadIds let ResumableUpload skip already-uploaded parts via ListParts.
+  const persistedResumeState = loadUploadResumeState(project.id);
+
   // Store samples created in API
   const [locallyCreatedSamples, setLocallyCreatedSamples] = useState<
     SampleForUpload[]
   >([]);
 
   // State to track download progress
-  const [sampleFileUploadIds, setSampleFileUploadIds] = useState({});
+  const [sampleFileUploadIds, setSampleFileUploadIds] = useState<
+    Record<string, string>
+  >(persistedResumeState?.sampleFileUploadIds ?? {});
   const [sampleUploadPercentages, setSampleUploadPercentages] = useState({});
   const [sampleUploadStatuses, setSampleUploadStatuses] = useState({});
-  const [sampleFileCompleted, setSampleFileCompleted] = useState({});
+  const [sampleFileCompleted, setSampleFileCompleted] = useState<
+    Record<string, boolean>
+  >(persistedResumeState?.sampleFileCompleted ?? {});
 
   let sampleFilePercentages = {};
   let wakeLock: WakeLockSentinel | null = null;
@@ -120,6 +141,17 @@ export const LocalUploadProgressModal = ({
 
     completeLocalUpload();
   }, [sampleUploadStatuses]);
+
+  // Durably persist the per-file resume state (uploadIds + completed files) so a Resume can
+  // re-drive ResumableUpload with the saved uploadId even after a page reload. Cleared on
+  // successful completion (see completeLocalUpload).
+  useEffect(() => {
+    if (uploadComplete) return;
+    saveUploadResumeState(project.id, {
+      sampleFileUploadIds,
+      sampleFileCompleted,
+    });
+  }, [sampleFileUploadIds, sampleFileCompleted, uploadComplete]);
 
   // Try to prevent the computer going to sleep during upload; this can be rejected e.g. if the battery is low
   const acquireScreenLock = async () => {
@@ -240,6 +272,10 @@ export const LocalUploadProgressModal = ({
         }),
       );
 
+      // If the user paused, the sample's files are not fully uploaded — leave the sample "in
+      // progress" (uploadIds persisted) so Resume can finish it. Don't mark it complete.
+      if (pausedRef.current) return;
+
       // Update the sample upload status (success or error)
       await completeSampleUpload({
         sample,
@@ -319,6 +355,13 @@ export const LocalUploadProgressModal = ({
       }),
     });
 
+    // Track this live upload so a Pause can soft-pause it. If the user already hit Pause before
+    // this file started, don't start it — leave it for Resume to pick up.
+    activeUploadsRef.current[s3Key] = fileUpload;
+    if (pausedRef.current) {
+      await fileUpload.pause();
+    }
+
     const removeS3KeyFromUploadIds = (s3Key: string) => {
       setSampleFileUploadIds(prevState => omit(s3Key, prevState));
     };
@@ -336,16 +379,29 @@ export const LocalUploadProgressModal = ({
     });
 
     fileUpload.onCreatedMultipartUpload(uploadId => {
-      setSampleFileUploadIds(prevState => {
-        return uploadId
+      setSampleFileUploadIds(prevState =>
+        uploadId
           ? { ...prevState, [s3Key]: uploadId }
           : // when there is no valid upload ID we could not create a multipart upload
             // for the file, so remove it from upload ID list to avoid retrying it
-            removeS3KeyFromUploadIds(s3Key);
-      });
+            omit(s3Key, prevState),
+      );
     });
 
-    await fileUpload.done();
+    try {
+      await fileUpload.done();
+    } catch (e) {
+      // A PauseError means the user paused: the multipart upload (and its parts) are left on S3 and
+      // the uploadId is already persisted, so Resume will continue it. Swallow it here so it isn't
+      // surfaced as an upload failure; any other error propagates to be handled as a real failure.
+      if (isPauseError(e)) {
+        delete activeUploadsRef.current[s3Key];
+        return;
+      }
+      throw e;
+    } finally {
+      delete activeUploadsRef.current[s3Key];
+    }
 
     // prevent successfully uploaded files from being resumed if other files fail
     removeS3KeyFromUploadIds(s3Key);
@@ -355,6 +411,9 @@ export const LocalUploadProgressModal = ({
       [s3Key]: true,
     }));
   };
+
+  const isPauseError = (error: unknown): boolean =>
+    error instanceof Error && error.name === "PauseError";
 
   const updateSampleUploadStatus = (sampleName: string, status: string) => {
     setSampleUploadStatuses(prevState => ({
@@ -480,13 +539,66 @@ export const LocalUploadProgressModal = ({
   };
 
   const completeLocalUpload = () => {
+    // Don't finalize while paused: samples are intentionally still "in progress" awaiting Resume.
+    if (pausedRef.current) return;
     onUploadComplete();
     setUploadComplete(true);
     setRetryingSampleUpload(false);
+    // Upload finished successfully: no resume state to keep around.
+    clearUploadResumeState(project.id);
+  };
+
+  // Soft-pause every in-flight upload: parts already sent stay on S3 and the uploadIds are
+  // persisted, so Resume continues from where it stopped rather than re-uploading.
+  const handlePauseUpload = async () => {
+    pausedRef.current = true;
+    setPaused(true);
+    await Promise.all(
+      Object.values(activeUploadsRef.current).map(upload => upload.pause()),
+    );
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (wakeLock !== null) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  };
+
+  // Resume: re-drive the still-in-progress samples. Their persisted uploadIds are in
+  // sampleFileUploadIds, so ResumableUpload lists existing parts and only uploads what's missing.
+  const handleResumeUpload = async () => {
+    pausedRef.current = false;
+    setPaused(false);
+    activeUploadsRef.current = {};
+
+    const inProgressSamples = getLocalSamplesInProgress();
+    const samplesToResume =
+      locallyCreatedSamples.length > 0
+        ? inProgressSamples
+            .map(inProgressSample =>
+              locallyCreatedSamples.find(
+                createdSample => createdSample.name === inProgressSample.name,
+              ),
+            )
+            .filter(
+              (createdSample): createdSample is SampleForUpload =>
+                createdSample !== undefined,
+            )
+        : [];
+
+    if (samplesToResume.length > 0) {
+      // Re-acquire the screen wake lock we released on pause before resuming the transfers.
+      await acquireScreenLock();
+      await uploadSamples(samplesToResume);
+    } else {
+      // No created-sample records in memory (e.g. after a page reload) — restart the flow, which
+      // re-creates/looks up samples and resumes files via their persisted uploadIds.
+      await initiateLocalUpload();
+    }
   };
 
   const hasFailedSamples = !isEmpty(getLocalSamplesFailed());
   const numberOfFailedSamples = size(getLocalSamplesFailed());
+  const uploadsInProgress = !isEmpty(getLocalSamplesInProgress());
 
   return (
     <Modal
@@ -515,6 +627,15 @@ export const LocalUploadProgressModal = ({
         sampleUploadStatuses={sampleUploadStatuses}
         onRetryUpload={retryFailedSampleUploads}
       />
+      {!uploadComplete && uploadsInProgress && (
+        <div className={cs.footer}>
+          {paused ? (
+            <PrimaryButton text="Resume upload" onClick={handleResumeUpload} />
+          ) : (
+            <SecondaryButton text="Pause upload" onClick={handlePauseUpload} />
+          )}
+        </div>
+      )}
       {!retryingSampleUpload && uploadComplete && (
         <div className={cs.footer}>
           <PrimaryButton

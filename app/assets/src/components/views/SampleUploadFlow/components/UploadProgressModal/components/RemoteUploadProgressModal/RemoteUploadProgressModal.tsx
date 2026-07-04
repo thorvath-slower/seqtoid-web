@@ -170,7 +170,7 @@ export const RemoteUploadProgressModal = ({
         // but do not contain the files that need to be upload to S3.
         // We need to fetch the files from samplesWithFlags and copy them over to response.samples
         response.samples.forEach(createdSample => {
-          let filesToUpload = get(
+          const filesToUpload = get(
             "files",
             find({ name: createdSample.name }, samplesWithFlags),
           );

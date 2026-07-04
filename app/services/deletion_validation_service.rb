@@ -86,8 +86,14 @@ class DeletionValidationService
     sample_ids_failed_to_upload = current_power.destroyable_samples
                                                .where(id: sample_ids)
                                                .where(upload_error: Sample::FINALIZED_UPLOAD_ERRORS).pluck(:id)
+    # Orphaned upload shells: still created, never finalized, and old enough to
+    # be stalled (e.g. a stalled local upload that never got a finalized error
+    # set). Let owners clear these too so they are not stuck in the UI forever.
+    orphaned_created_sample_ids = current_power.destroyable_samples
+                                               .where(id: sample_ids)
+                                               .merge(Sample.orphaned_created_uploads).pluck(:id)
     deletable_pipeline_runs = current_power.deletable_pipeline_runs.where(sample_id: sample_ids, technology: technology).non_deprecated
-    valid_sample_ids = deletable_pipeline_runs.pluck(:sample_id) | sample_ids_failed_to_upload
+    valid_sample_ids = deletable_pipeline_runs.pluck(:sample_id) | sample_ids_failed_to_upload | orphaned_created_sample_ids
 
     invalid_sample_ids = sample_ids.reject { |id| valid_sample_ids.include?(id) }
 

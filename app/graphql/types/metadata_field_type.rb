@@ -1,6 +1,6 @@
 module Types
   # Ported from the GraphQL federation server (CZID-285). One item of the
-  # MetadataFields list — mirrors MetadataField#field_info. Field method names
+  # MetadataFields list -- mirrors MetadataField#field_info. Field method names
   # match the field_info hash keys exactly (some camelCase, some snake_case), and
   # camelize:false preserves the federation's field names for the Relay cutover.
   class MetadataFieldType < Types::BaseObject

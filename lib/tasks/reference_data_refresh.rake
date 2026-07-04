@@ -1,8 +1,9 @@
 # On-demand, parametrized refresh of taxon-lineage reference data + its Elasticsearch index,
 # decoupled from a full web deploy (#334 / feature 20029).
 #
-# The legacy `taxon_lineage_slice:*` tasks hardcode the version ("2024-02-06") and S3 key, and only run
-# as part of `deploy-web.sh` on every deploy. This task takes the version + S3 key as parameters so a
+# The legacy `taxon_lineage_slice:*` tasks hardcode the version ("2024-02-06") and S3 key, and historically
+# ran only as part of the retired hand-edited destructive deploy script on every deploy. This task takes
+# the version + S3 key as parameters so a
 # reference-data update can be applied on demand (via the refresh-reference-data GitHub Action) without
 # redeploying the web service.
 #

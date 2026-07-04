@@ -1,6 +1,6 @@
 module Queries
   # Ported from the GraphQL federation server (resolver-functions/Ziplink) as part of
-  # CZID-285 — serve the `ZipLink` query natively from Rails instead of proxying
+  # CZID-285 -- serve the `ZipLink` query natively from Rails instead of proxying
   # GET /workflow_runs/:id/zip_link.json. Mirrors WorkflowRunsController#zip_link.
   module ZipLinkQuery
     extend ActiveSupport::Concern
@@ -22,11 +22,11 @@ module Queries
       else
         # Parity (CZID-307): WorkflowRunsController#zip_link renders HTTP 404 when there is no
         # output, and the federation Ziplink resolver returns `res.statusText` (the HTTP reason
-        # phrase, "Not Found") — NOT the JSON body ("Output not available"). Mirror that exactly.
+        # phrase, "Not Found") -- NOT the JSON body ("Output not available"). Mirror that exactly.
         { url: nil, error: "Not Found" }
       end
     rescue ActiveRecord::RecordNotFound
-      # A non-viewable / missing run is likewise a 404 → statusText "Not Found" via the federation.
+      # A non-viewable / missing run is likewise a 404 -> statusText "Not Found" via the federation.
       { url: nil, error: "Not Found" }
     end
   end

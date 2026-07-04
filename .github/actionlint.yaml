@@ -1,0 +1,7 @@
+# actionlint config. Declare the self-hosted runner labels so `runs-on:
+# [self-hosted, idseq-<env>]` isn't flagged as an unknown label.
+self-hosted-runner:
+  labels:
+    - idseq-dev
+    - idseq-staging
+    - idseq-prod

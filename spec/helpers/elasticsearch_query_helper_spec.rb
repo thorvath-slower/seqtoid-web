@@ -36,6 +36,55 @@ RSpec.describe ElasticsearchQueryHelper, type: :helper do
     end
   end
 
+  describe "#call_taxon_indexing_lambda" do
+    let(:background_id) { 1 }
+    let(:pipeline_run_ids) { [101, 102] }
+
+    def lambda_resp(body)
+      OpenStruct.new(payload: OpenStruct.new(string: body))
+    end
+
+    it "raises a clear error (not JSON::ParserError) when the lambda returns an empty body" do
+      allow(ElasticsearchQueryHelper).to receive(:call_lambda).and_return(lambda_resp(""))
+      allow(LogUtil).to receive(:log_error)
+      expect do
+        ElasticsearchQueryHelper.call_taxon_indexing_lambda(background_id, pipeline_run_ids)
+      end.to raise_error(/empty response/)
+    end
+
+    it "raises a clear error when the lambda returns an unparseable body" do
+      allow(ElasticsearchQueryHelper).to receive(:call_lambda).and_return(lambda_resp("not json"))
+      allow(LogUtil).to receive(:log_error)
+      expect do
+        ElasticsearchQueryHelper.call_taxon_indexing_lambda(background_id, pipeline_run_ids)
+      end.to raise_error(/unparseable response/)
+    end
+
+    it "raises when the payload is not an array (unexpected shape)" do
+      allow(ElasticsearchQueryHelper).to receive(:call_lambda).and_return(lambda_resp('{"error":"boom"}'))
+      allow(LogUtil).to receive(:log_error)
+      expect do
+        ElasticsearchQueryHelper.call_taxon_indexing_lambda(background_id, pipeline_run_ids)
+      end.to raise_error(/unexpected response/)
+    end
+
+    it "raises when any invocation reports a FunctionError" do
+      allow(ElasticsearchQueryHelper).to receive(:call_lambda)
+        .and_return(lambda_resp('[{"FunctionError":"Unhandled"},{}]'))
+      allow(LogUtil).to receive(:log_error)
+      expect do
+        ElasticsearchQueryHelper.call_taxon_indexing_lambda(background_id, pipeline_run_ids)
+      end.to raise_error(/Some taxon indexing jobs failed/)
+    end
+
+    it "succeeds when all invocations succeed" do
+      allow(ElasticsearchQueryHelper).to receive(:call_lambda).and_return(lambda_resp('[{},{}]'))
+      expect do
+        ElasticsearchQueryHelper.call_taxon_indexing_lambda(background_id, pipeline_run_ids)
+      end.not_to raise_error
+    end
+  end
+
   describe "#parse_es_response" do
     let(:es_resp) { file_fixture("helpers/elasticsearch_query_helper/es_response.json").read }
     it "should return 2 taxons" do

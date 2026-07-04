@@ -6,6 +6,12 @@ class ProjectsController < ApplicationController
   include MetadataHelper
   include ParameterSanitization
   include ProjectsDiscovery
+  include OtelActionLogging
+
+  # CZID-472: per-user action log for support triage (identifiers only, no PII).
+  log_user_actions :create, action: "project.create"
+  log_user_actions :update, :destroy, action: "project.mutate",
+                                      context: ->(c) { { "czid.project.id" => c.params[:id] } }
   ########################################
   # Note to developers:
   # If you are adding a new action to the project controller, you must classify your action into

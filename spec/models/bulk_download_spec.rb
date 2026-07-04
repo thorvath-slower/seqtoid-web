@@ -705,10 +705,33 @@ describe BulkDownload, type: :model do
       expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
     end
 
-    it "outputs correct command in development", skip: "CZID-186: aegea staging-for-dev cluster/bucket override unimplemented (not a SAMPLES_BUCKET_NAME issue)" do
+    # CZID-186: in a local `development` boot there is no `*-development` aegea
+    # cluster/bucket, so the ECS cluster and executable-file bucket are redirected to a
+    # real deployment stage derived from ENV["ENVIRONMENT"] (default "staging"). The
+    # task-role stays keyed on Rails.env (the download IAM role IS per Rails env).
+    it "redirects the ecs cluster/bucket to the default staging stage in development" do
       allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
+      # Whole-ENV stub with ENVIRONMENT unset -> aegea_deployment_stage falls back to "staging".
       stub_const('ENV', ENV.to_hash.merge("SAMPLES_BUCKET_NAME" => "czid-samples-development",
-                                          "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development"))
+                                          "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development").tap { |h| h.delete("ENVIRONMENT") })
+
+      task_command = [
+        "aegea", "ecs", "run", "--execute=#{mock_executable_file_path}",
+        "--task-role", "czi-infectious-disease-downloads-development",
+        "--task-name", BulkDownload::ECS_TASK_NAME,
+        "--ecr-image", "idseq-s3-tar-writer:latest",
+        "--fargate-cpu", "4096",
+        "--fargate-memory", "8192",
+        "--cluster", "idseq-fargate-tasks-staging",
+        "--staging-s3-bucket", "aegea-ecs-execute-staging",
+      ]
+
+      expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
+    end
+
+    it "derives the ecs cluster/bucket stage from ENV[ENVIRONMENT] in development" do
+      allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
+      stub_const('ENV', ENV.to_hash.merge("ENVIRONMENT" => "staging"))
 
       task_command = [
         "aegea", "ecs", "run", "--execute=#{mock_executable_file_path}",
@@ -740,7 +763,7 @@ describe BulkDownload, type: :model do
       )
 
       expect(Open3).to receive(:capture3).exactly(1).times.with(mock_aegea_ecs_submit_command).and_return(
-        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0)]
+        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
       )
 
       expect_any_instance_of(Tempfile).to receive(:unlink).exactly(1).times
@@ -752,13 +775,61 @@ describe BulkDownload, type: :model do
     end
 
     it "correctly updates bulk download on aegea ecs failure" do
+      # "An error occurred" is not a transient signal, so no retry (exactly once).
       expect(Open3).to receive(:capture3).exactly(1).times.and_return(
-        ["", "An error occurred", instance_double(Process::Status, exitstatus: 1)]
+        ["", "An error occurred", instance_double(Process::Status, exitstatus: 1, success?: false)]
       )
 
       expect do
         @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
       end.to raise_error(StandardError, 'An error occurred')
+
+      expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
+    end
+
+    it "retries a transient aegea failure then succeeds" do
+      # Don't actually sleep between retries.
+      allow(AegeaRetry).to receive(:sleep)
+
+      # First call: transient throttling failure. Second call: success.
+      expect(Open3).to receive(:capture3).exactly(2).times.and_return(
+        ["", "An error occurred (ThrottlingException): Rate exceeded", instance_double(Process::Status, exitstatus: 1, success?: false)],
+        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
+      )
+
+      @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+
+      expect(@bulk_download.ecs_task_arn).to eq(mock_task_arn)
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_RUNNING)
+    end
+
+    it "does NOT retry a permanent aegea failure" do
+      allow(AegeaRetry).to receive(:sleep)
+
+      # AccessDenied is permanent -- must fail on the first attempt, no retry.
+      expect(Open3).to receive(:capture3).exactly(1).times.and_return(
+        ["", "An error occurred (AccessDenied): not authorized to perform ecs:RunTask", instance_double(Process::Status, exitstatus: 1, success?: false)]
+      )
+
+      expect do
+        @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+      end.to raise_error(StandardError, /AccessDenied/)
+
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
+    end
+
+    it "raises with the last stderr after exhausting retries on persistent transient failures" do
+      allow(AegeaRetry).to receive(:sleep)
+
+      # Every attempt is a (retryable) throttle. Default policy = 4 attempts.
+      expect(Open3).to receive(:capture3).exactly(4).times.and_return(
+        ["", "Rate exceeded (ThrottlingException)", instance_double(Process::Status, exitstatus: 1, success?: false)]
+      )
+
+      expect do
+        @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+      end.to raise_error(StandardError, /Rate exceeded/)
 
       expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
       expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
@@ -1153,6 +1224,63 @@ describe BulkDownload, type: :model do
       add_s3_tar_writer_expectations(
         "sample_metadata.csv" => "mock_sample_metadata_csv"
       )
+
+      bulk_download.generate_download_file
+
+      expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
+    end
+
+    # CZID-469: the AMR combined-results resque handler (generate_download_file's
+    # `elsif download_type == AMR_COMBINED_RESULTS_BULK_DOWNLOAD` branch) was never
+    # exercised on dev (no AMR runs). It reads from the workflow_runs association and
+    # delegates to AmrResultsConcatService, so it must be driven with workflow_run_ids
+    # (not pipeline_run_ids). Locks the AMR generation path against a silent regression.
+    it "correctly generates download file for download type amr_combined_results_bulk_download" do
+      amr_sample = create(:sample, project: @project, name: "AMR Sample")
+      amr_run_one = create(:workflow_run, sample: amr_sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:amr])
+      amr_run_two = create(:workflow_run, sample: amr_sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:amr])
+
+      bulk_download = create(
+        :bulk_download,
+        user: @joe,
+        download_type: BulkDownloadTypesHelper::AMR_COMBINED_RESULTS_BULK_DOWNLOAD,
+        workflow_run_ids: [amr_run_one.id, amr_run_two.id],
+        params: {}
+      )
+
+      expect(AmrResultsConcatService).to receive(:call).with(
+        match_array([amr_run_one.id, amr_run_two.id])
+      ).exactly(1).times.and_return("mock_combined_amr_results_csv")
+
+      add_s3_tar_writer_expectations(
+        "combined_amr_results.csv" => "mock_combined_amr_results_csv"
+      )
+
+      bulk_download.generate_download_file
+
+      expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
+    end
+
+    # CZID-469: the biom_format handler is its own non-tar branch in generate_download_file
+    # (it builds a .biom via BulkDownloadsHelper.generate_biom_format_file + create_biom_file
+    # and uploads directly to S3 rather than through the s3_tar_writer). It was never
+    # exercised on dev (microbiome-flagged, short-read-mngs only). Stub the file-generation
+    # collaborators so the branch and success path run without a live pipeline/biom binary.
+    it "correctly generates download file for download type biom_format" do
+      bulk_download = create_bulk_download(BulkDownloadTypesHelper::BIOM_FORMAT_DOWNLOAD_TYPE, {
+                                             "metric": { "value": "NT_rpm" },
+                                             "background": { "value": mock_background_id },
+                                             "filter_by": { "value": [] },
+                                             "categories": { "value": [] },
+                                           })
+
+      expect(BulkDownloadsHelper).to receive(:generate_biom_format_file).exactly(1).times.and_return(
+        ["/tmp/metrics.tsv", "/tmp/metadata.tsv", "/tmp/taxon_lineage.tsv"]
+      )
+      expect(bulk_download).to receive(:create_biom_file).with("/tmp/metrics.tsv", "/tmp/metadata.tsv", "/tmp/taxon_lineage.tsv").exactly(1).times.and_return("/tmp/output_metadata.biom")
+      allow(File).to receive(:read).and_call_original
+      expect(File).to receive(:read).with("/tmp/output_metadata.biom").exactly(1).times.and_return("mock_biom_bytes")
+      expect(S3Util).to receive(:upload_to_s3).with(anything, anything, "mock_biom_bytes").exactly(1).times
 
       bulk_download.generate_download_file
 
