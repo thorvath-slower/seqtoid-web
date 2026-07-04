@@ -1,4 +1,4 @@
-{{- if .Values.taxonLoad.enabled -}}
+{{- if and .Values.taxonLoad.enabled (not .Values.suspend) -}}
 # Pre-sync taxon-lineage load — ticket #471.
 # A fresh deploy has NO taxon lineage data loaded, so reports/taxonomy/heatmaps
 # come up empty. The load tooling already exists as rake tasks; this Job wires it
