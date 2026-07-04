@@ -21,10 +21,13 @@ env:
   AWS_REGION: us-west-2
   DEBIAN_FRONTEND: noninteractive
   # CZID-40 (CICD-6): drive the CI identity from repo/org Actions variables so it is rotatable and
-  # not tied to a hardcoded account. Falls back to the current values if the vars are unset, so this
-  # is safe to merge before the Actions variables are configured.
-  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '941377154785' }}
-  GHA_ROLE: ${{ vars.GHA_ROLE || 'gha-seqtoid' }}
+  # not tied to a hardcoded account. Falls back to these defaults if the vars are unset.
+  # Default = the DEV account (491013321714) + its dedicated build role. The old default was the
+  # idseq-support account (941377154785) — a stale idseq shared-registry holdover; per isolated-envs
+  # (D5) the deploy must not touch support, and dev is where the app runs + pulls its image. The role
+  # czid-dev-gh-actions-build is provisioned in dev/access-management (cypherid-web-infra).
+  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
+  GHA_ROLE: ${{ vars.GHA_ROLE || 'czid-dev-gh-actions-build' }}
   LC_ALL: C.UTF-8
   LANG: C.UTF-8
   #GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
