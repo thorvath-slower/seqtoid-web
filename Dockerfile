@@ -1,10 +1,23 @@
-# bug-#001/#004: Ruby 3.1.6 (EOL) -> 3.3.6, pinned by multi-arch digest.
-FROM ruby:3.3.6@sha256:347edd0c70ee08d87de9f01b99de2f14a64cedb5d1bfb38457dfe8cd0bf113c5
+# =============================================================================
+# Multi-stage build (EOL image hardening, #251-255/#346): compile everything in a
+# full-toolchain `builder` stage, then ship a slim `runtime` stage carrying ONLY
+# the runtime deps + built artifacts. Drops build-essential, all `-dev` headers,
+# the C/C++ toolchain, and node from the shipped image — the bulk of the Trivy
+# HIGH/CRITICAL CVEs (the ~1354 came from the full Debian base + build packages).
+#
+# Both stages are Debian bookworm on ruby 3.3.6, so the gems + python extensions
+# compiled in `builder` are ABI-compatible when copied into `runtime`.
+#
+# WARNING: RUNTIME NOT YET VALIDATED end-to-end (the container booting + serving) —
+# that needs a dev smoke once the EKS/Argo dev cluster is up. This pass proves the
+# build assembles and the CVE count drops; runtime acceptance is the follow-up gate.
+# =============================================================================
 
-# Install apt based dependencies required to run Rails as
-# well as RubyGems. As the Ruby image itself is based on a
-# Debian image, we use apt-get to install those.
-RUN apt-get update && \
+# ---------- builder: full toolchain (unchanged from the single-stage image) ----------
+# bug-#001/#004: Ruby 3.1.6 (EOL) -> 3.3.6, pinned by multi-arch digest.
+FROM ruby:3.3.6@sha256:347edd0c70ee08d87de9f01b99de2f14a64cedb5d1bfb38457dfe8cd0bf113c5 AS builder
+
+RUN apt-get update && apt-get upgrade -y && \
   apt-get install -y \
   build-essential \
   default-libmysqlclient-dev \
@@ -13,27 +26,23 @@ RUN apt-get update && \
   lsb-release \
   apt-transport-https
 
-# Install samtools (note: `apt-get install samtools` installs samtools 1.9, which is missing features such as the "-X" flag)
+# samtools 1.17 (apt's 1.9 lacks the -X flag the AMR download service needs).
 RUN curl -L https://github.com/samtools/samtools/releases/download/1.17/samtools-1.17.tar.bz2 | \
   tar xj && cd samtools-1.17/ && make && make install
 
-# Install node pinned to the exact .node-version (single source of truth), instead of
-# the floating NodeSource setup_20.x line which installs whatever the latest 20.x is at
-# build time. Uses the official nodejs.org binaries. Image builds linux/amd64 -> x64. (CZID-197)
+# node pinned to .node-version (CZID-197) — build-time only (webpack); NOT shipped.
 COPY .node-version /tmp/.node-version
 RUN NODE_VERSION="$(cat /tmp/.node-version)" \
   && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
   && tar -xzf "node-v${NODE_VERSION}-linux-x64.tar.gz" -C /usr/local --strip-components=1 --no-same-owner \
   && rm "node-v${NODE_VERSION}-linux-x64.tar.gz" \
   && node --version && npm --version
-
-# Node 24 ships npm 11; pin to a known-good npm 11 line for reproducibility.
 RUN npm i -g npm@11.16.0
 
 RUN pip3 config set global.break-system-packages true
 RUN pip3 install --upgrade pip
 
-# Install chamber, for pulling secrets into the container.
+# chamber — pulls secrets at boot (bin/entrypoint.sh); needed at runtime, copied below.
 RUN curl -L https://github.com/segmentio/chamber/releases/download/v2.10.8/chamber-v2.10.8-linux-amd64 -o /bin/chamber
 RUN chmod +x /bin/chamber
 
@@ -42,78 +51,67 @@ RUN pip3 install "cython<3.0.0"
 RUN pip3 install "pyyaml==5.4.1" --no-build-isolation
 RUN pip3 install -r requirements.txt
 
-# Configure the main working directory. This is the base
-# directory used in any further RUN, COPY, and ENTRYPOINT
-# commands.
-RUN mkdir -p /app
 WORKDIR /app
 
-# Copy package.json and install packages, allowing the
-# dependencies to be cached. .npmrc carries legacy-peer-deps=true (bug-#003):
-# npm 10 enforces peer deps strictly and the legacy frontend tree (e.g.
-# @sentry/react@5 peers react 15/16/17 vs the app's react 18) trips `npm ci`
-# without it. It must be present BEFORE `npm ci`, not via the later `COPY . ./`.
+# .npmrc carries legacy-peer-deps=true (bug-#003) — must precede `npm ci`.
 COPY .npmrc package.json package-lock.json ./
-
 RUN npm ci --omit=optional
 
-# This section is for the purpose of installing the non-MariaDB mysql-client /
-# mysqldump utility. The default-mysql-client package is actually
-# mariadb-client, and we found some incompatibility with virtual generated
-# columns when importing into non-MariaDB MySQL Community Server.
-# More info about mysql apt repository: https://dev.mysql.com/doc/mysql-apt-repo-quick-guide/en/
-RUN apt-get install libaio1
-RUN wget http://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_5.7.42-1debian10_amd64.deb && dpkg -i mysql-community-client*.deb && rm mysql-community-client*.deb
-
-# Generate the app's static resources using npm/webpack
-# Increase memory available to node to 6GB (from default 1.5GB). At this time, our self-hosted Github runner has ~16GB.
+# Generate the app's static resources (webpack). 6GB heap for node.
 ENV NODE_OPTIONS="--max_old_space_size=6144"
-
-# Only copy what is required so we don't need to rebuild when we are only updating the api
 COPY app/assets app/assets
 COPY webpack.config.common.js webpack.config.prod.js .babelrc ./
-
-# Cache-bust the asset build layer on any frontend source/config change (CZID-380).
-# BuildKit does not always invalidate the COPY above reliably, so the `build-img`
-# RUN below could be served from a stale cache and ship an old bundle. Pass
-# --build-arg SRC_HASH="$(git ls-files -s app/assets webpack.config.common.js \
-# webpack.config.prod.js .babelrc | git hash-object --stdin)" so this ARG changes
-# whenever the asset source changes, forcing webpack to rebuild from current source.
+# CZID-380: cache-bust the asset build on any frontend source/config change.
 ARG SRC_HASH=unset
 RUN echo "asset source hash: ${SRC_HASH}"
-
-# Generate assets. webpack's output.clean (webpack.config.common.js) wipes
-# app/assets/dist first, so the bundle is always fresh from the current source.
 RUN mkdir -p app/assets/dist && npm run build-img && ls -l app/assets/dist/
 
-# Copy the Gemfile as well as the Gemfile.lock and install
-# the RubyGems. This is a separate step so the dependencies
-# will be cached unless changes to one of those two files
-# are made. .ruby-version is required here too: the Gemfile pins the runtime
-# via `ruby file: '.ruby-version'`, so bundler reads it during install (before
-# the later `COPY . ./`).
+# RubyGems (.ruby-version needed: Gemfile pins `ruby file: '.ruby-version'`).
 COPY Gemfile Gemfile.lock .ruby-version ./
 RUN gem install bundler -v '2.5.22'
-
-# allow nokogiri to install on arm64 / M1 Macs
 RUN bundle config set force_ruby_platform true
 RUN bundle install --jobs 20 --retry 5
 
-# Copy the main application.
 COPY . ./
+ARG GIT_COMMIT
+ENV GIT_VERSION=${GIT_COMMIT}
+
+# ---------- runtime: slim — only runtime deps + built artifacts ----------
+FROM ruby:3.3.6-slim AS runtime
+
+# Runtime-only apt deps (NO compilers / -dev headers / node):
+#  - libaio1 + the mysql-5.7 community client (deliberately non-MariaDB, for MySQL-8
+#    virtual-generated-column import compat — see the original single-stage note).
+#  - samtools shared libs (libncurses/libbz2/liblzma/zlib/libcurl/libdeflate).
+#  - libmariadb3: the mysql2 gem's native ext links libmysqlclient (built against
+#    default-libmysqlclient-dev = libmariadb-dev in builder).
+#  - python3 runtime (the app shells out to python/awscli).
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+  ca-certificates curl wget tzdata procps \
+  libaio1 libatomic1 libnuma1 \
+  libncurses6 libbz2-1.0 liblzma5 zlib1g libcurl4 libdeflate0 \
+  libmariadb3 \
+  python3 libyaml-0-2 \
+  && wget http://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_5.7.42-1debian10_amd64.deb \
+  && (dpkg -i mysql-community-client*.deb || apt-get install -f -y --no-install-recommends) \
+  && rm mysql-community-client*.deb \
+  && rm -rf /var/lib/apt/lists/*
+
+# Built artifacts from the builder stage.
+COPY --from=builder /usr/local/bundle /usr/local/bundle
+COPY --from=builder /usr/local/bin/samtools /usr/local/bin/samtools
+COPY --from=builder /bin/chamber /bin/chamber
+# python packages + the awscli entrypoint (NOT /usr/local/bin wholesale — that would
+# drag node back in). pip3 (break-system-packages) installs here on bookworm.
+COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
+COPY --from=builder /usr/local/bin/aws /usr/local/bin/aws
+
+WORKDIR /app
+COPY --from=builder /app /app
 
 ARG GIT_COMMIT
 ENV GIT_VERSION=${GIT_COMMIT}
 
-# Expose port 3000 to the Docker host, so we can access it
-# from the outside.
 EXPOSE 3000
-
-# Configure an entry point, so we don't need to specify
-# "bundle exec" or "chamber" for each of our commands.
 ENTRYPOINT ["bin/entrypoint.sh"]
-
-# The main command to run when the container starts. Also
-# tell the Rails dev server to bind to all interfaces by
-# default.
 CMD ["rails", "server", "-b", "0.0.0.0", "-p", "3000"]
