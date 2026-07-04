@@ -1,9 +1,9 @@
 {
   "_comment": "Regression baseline for the main-merge no-regressions gate. Consumed by seqtoid-ssot-infra/platform-harness bin/regression-compare.sh (wired into ci-test-mysql8.yml). Monotonic-up metrics FAIL the gate if they drop below these floors (coverage tol 0.5pp); rspec/jest failure counts must be 0 (enforced from the live run, not this file). RE-BLESS after an intentional change: on a green main run `seqtoid-ssot-infra/platform-harness/capture-baseline.sh --run-app` and commit the updated numbers. Counts are null until the first blessed run fills them (null = skipped, not failed).",
-  "captured_at": "2026-07-03 (seed: coverage measured from committed SimpleCov artifact; counts pending first CI capture)",
+  "captured_at": "2026-07-04 (rspec blessed from green integration ci-test-mysql8: 1876 examples, 0 failures)",
   "metrics": {
     "app.coverage.line": 72.13,
-    "app.rspec.examples": null,
+    "app.rspec.examples": 1876,
     "app.jest.total": null
   }
 }
