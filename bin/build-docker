@@ -20,31 +20,44 @@ COMMIT="$2"
 
 # The first repo name is the canonical build/cache repo; the rest are additional tag targets.
 PRIMARY_REPO="$REGISTRY/$(echo "$ECR_REPO_NAMES" | awk '{print $1}')"
-BRANCH_TAG="$PRIMARY_REPO:branch-$BRANCH_CLEANED"
-CACHE_TAG="$PRIMARY_REPO:cache"
 COMPOSE_TAG="$PRIMARY_REPO:compose"
-LATEST_TAG="$PRIMARY_REPO:latest"
 
 echo "Branch $BRANCH"
 echo "Commit $COMMIT"
 echo "Repos  $ECR_REPO_NAMES"
 echo '--'
 
-# Try to pull the latest image for this branch, otherwise pull latest image for caching
-if ! ( docker pull "$BRANCH_TAG" && docker tag "$BRANCH_TAG" "$CACHE_TAG" ); then
-    # If we fail to fetch the latest image, continue the build without a cache image.
-    (docker pull "$LATEST_TAG" && docker tag "$LATEST_TAG" "$CACHE_TAG") || true
-fi
-
-# Hash of the frontend asset source + webpack/babel config, passed as a build-arg
-# so the Dockerfile's asset-build layer cache-busts on any frontend change
-# (CZID-380). Without this, --cache-from can reuse a stale `build-img` layer and
-# ship an old bundle even though the source changed. Uses the git-tracked content
-# (index blobs) so the hash is deterministic and matches what gets committed.
+# Hash of the frontend asset source + webpack/babel config, passed as a build-arg so
+# the Dockerfile's asset-build layer cache-busts on any frontend change (CZID-380).
+# Without this the webpack layer could be reused stale and ship an old bundle even
+# though the source changed. Uses git-tracked content (index blobs) so the hash is
+# deterministic and matches what gets committed.
 SRC_HASH=$(git ls-files -s app/assets webpack.config.common.js webpack.config.prod.js .babelrc | git hash-object --stdin)
 echo "Asset SRC_HASH $SRC_HASH"
 
-docker build -t "$COMPOSE_TAG" --cache-from "$CACHE_TAG" --build-arg GIT_COMMIT="${COMMIT}" --build-arg SRC_HASH="${SRC_HASH}" .
+# BuildKit registry cache. The old classic `docker build --cache-from <final image>`
+# could NOT cache this MULTI-STAGE build's expensive builder stage (apt/samtools/node/
+# npm ci/webpack/bundle install) — those layers aren't in the final runtime image, so
+# they rebuilt from scratch every run (~9 min). buildx with `--cache-to mode=max`
+# exports ALL stage layers (builder included) to a dedicated `:buildcache` tag in ECR,
+# so the next build restores them and only re-runs what actually changed: a backend-only
+# change becomes ~2-4 min; a frontend change busts just the webpack layer (SRC_HASH); a
+# Gemfile change busts just bundle install. `image-manifest=true` + `oci-mediatypes=true`
+# are REQUIRED for ECR (it rejects buildkit's default cache manifest type). A first build
+# on a fresh cache ref cache-misses gracefully and populates it.
+CACHE_REF="$PRIMARY_REPO:buildcache"
+docker buildx inspect seqtoid-cache-builder >/dev/null 2>&1 \
+  || docker buildx create --name seqtoid-cache-builder --driver docker-container --use
+docker buildx use seqtoid-cache-builder
+
+docker buildx build \
+    --load \
+    -t "$COMPOSE_TAG" \
+    --cache-from "type=registry,ref=$CACHE_REF" \
+    --cache-to   "type=registry,ref=$CACHE_REF,mode=max,image-manifest=true,oci-mediatypes=true" \
+    --build-arg GIT_COMMIT="${COMMIT}" \
+    --build-arg SRC_HASH="${SRC_HASH}" \
+    .
 
 # Tag the built image (the same image content) under every configured repo name.
 for NAME in $ECR_REPO_NAMES; do
