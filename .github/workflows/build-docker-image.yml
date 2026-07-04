@@ -79,8 +79,11 @@ jobs:
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
           echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
-          # CZID-75: the immutable image ref scanned + signed below
-          echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:${GITHUB_SHA::8}" >> "$GITHUB_ENV"
+          # CZID-75: the immutable image ref scanned + signed below. The `sha-` prefix is REQUIRED —
+          # bin/build-docker tags the local image `<repo>:sha-<sha8>` (and bin/push-docker pushes that
+          # exact tag), so Trivy/cosign/GHCR must reference `sha-<sha8>` or they scan a tag that was
+          # never built (fails "MANIFEST_UNKNOWN" / "No such image").
+          echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:sha-${GITHUB_SHA::8}" >> "$GITHUB_ENV"
       - name: Build docker image
         run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       # CZID-75: scan the built image BEFORE it ships — fail the release on HIGH/CRITICAL CVEs.
