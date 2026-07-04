@@ -87,8 +87,28 @@ namespace :taxon_lineage_slice do
 
   task create_taxon_lineage_slice_es_index: :environment do
     puts "Creating Elasticsearch index for #{CURRENT_VERSION} slice of TaxonLineage data"
-    TaxonLineage.__elasticsearch__.create_index!(force: true)
-    TaxonLineage.__elasticsearch__.import
+    es = TaxonLineage.__elasticsearch__
+    es.create_index!(force: true)
+
+    # Bulk-load tuning (#477): during the import, disable per-batch refresh and drop
+    # replicas so OpenSearch spends its I/O on ingest, not on refreshing segments and
+    # replicating every doc. Capture the index's original settings first and restore
+    # them in an `ensure` (so a failed import can't leave the index un-refreshed or
+    # under-replicated). Larger `batch_size` = fewer, bigger `_bulk` requests.
+    index = es.index_name
+    current = es.client.indices.get_settings(index: index).values.first["settings"]["index"]
+    restore = {
+      refresh_interval: current["refresh_interval"] || "1s",
+      number_of_replicas: current["number_of_replicas"] || "1",
+    }
+    puts "Bulk-load tuning: refresh_interval=-1, number_of_replicas=0 during import; restoring #{restore} after."
+    es.client.indices.put_settings(index: index, body: { index: { refresh_interval: -1, number_of_replicas: 0 } })
+    begin
+      es.import(batch_size: 5000, refresh: false)
+    ensure
+      es.client.indices.put_settings(index: index, body: { index: restore })
+      es.client.indices.refresh(index: index)
+    end
     puts "Finished indexing TaxonLineage."
   end
 
@@ -120,10 +140,29 @@ namespace :taxon_lineage_slice do
       next
     end
 
-    puts "Ensuring Elasticsearch index for the #{CURRENT_VERSION} slice is built."
-    # create_index!(force: true) + import is idempotent: it (re)creates the index
-    # and reloads documents from the DB, so it converges to the current data.
-    Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+    # Guard the (~53 min) ES rebuild (#476). This runs as an Argo PreSync hook on
+    # EVERY deploy; the old code unconditionally called create_index!(force: true) +
+    # a full re-import, which DROPS the index first — so taxonomy/heatmap were degraded
+    # for the whole rebuild on every single deploy. Only (re)build when the index is
+    # missing or its doc-count is out of sync with the DB. On ANY check error we fall
+    # through to a rebuild — the safe default (never leaves a stale or missing index).
+    es = TaxonLineage.__elasticsearch__
+    db_count = TaxonLineage.count
+    in_sync =
+      begin
+        es.client.indices.exists?(index: es.index_name) &&
+          es.client.count(index: es.index_name)["count"].to_i == db_count
+      rescue StandardError => e
+        puts "ES index sync-check failed (#{e.class}: #{e.message}); will rebuild to be safe."
+        false
+      end
+
+    if in_sync
+      puts "ES index #{es.index_name} already built and in sync with the DB (#{db_count} docs); skipping rebuild."
+    else
+      puts "ES index missing or out of sync with the DB; (re)building."
+      Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+    end
     puts "Taxon lineage load complete."
   end
 end
