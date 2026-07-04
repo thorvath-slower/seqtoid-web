@@ -23,6 +23,13 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
+# Node scheduling. The image is single-arch (linux/amd64), but this cluster's
+# Karpenter also provisions arm64 (Graviton) nodes — an amd64 image on an arm64
+# node crashloops with "exec format error". Pin every seqtoid-web pod (web,
+# workers, migrate + taxon-load hooks) to amd64 until the image is multi-arch.
+nodeSelector:
+  kubernetes.io/arch: amd64
+
 # Web replicas (per active/preview color). Ignored when autoscaling.enabled.
 replicaCount: 2
 
