@@ -1,4 +1,4 @@
-{{- if .Values.migrate.enabled -}}
+{{- if and .Values.migrate.enabled (not .Values.suspend) -}}
 # Pre-sync DB migration — replaces the ECS run-task `rails db:migrate:with_data`.
 # Argo CD runs this as a PreSync hook (before the Rollout syncs), so schema is
 # migrated before the new color comes up. BeforeHookCreation replaces the prior

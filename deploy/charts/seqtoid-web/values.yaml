@@ -30,7 +30,14 @@ image:
 nodeSelector:
   kubernetes.io/arch: amd64
 
-# Web replicas (per active/preview color). Ignored when autoscaling.enabled.
+# Cost spin-down switch. When true, scale ALL workloads to 0 (web Rollout + every
+# worker) AND skip the migrate/taxon-load PreSync hooks. The app's data lives in
+# Aurora + OpenSearch (persistent, not on the pods), so this is a safe, reversible
+# way to spin dev down (e.g. nights/weekends) — flip back to false to restore.
+# GitOps-managed (Argo keeps it at 0); overridable per-env in the infra values.
+suspend: false
+
+# Web replicas (per active/preview color). Ignored when autoscaling.enabled or suspend.
 replicaCount: 2
 
 aws:
@@ -144,11 +151,13 @@ taxonLoad:
 # Extra plain env vars applied to web + workers + migrate (name/value pairs).
 extraEnv: []
 
-# Worker workloads (ECS czecs-resque.json x4 + czecs-shoryuken.json). Each becomes
-# a Deployment. `args` are passed to the image ENTRYPOINT (bin/entrypoint.sh), which
-# wraps them in `chamber exec ... bundle exec`.
+# Worker workloads (ECS czecs-resque.json x4 + czecs-shoryuken.json). Each becomes a
+# Deployment. `args` go to the image ENTRYPOINT (bin/entrypoint.sh), which wraps them
+# in `chamber exec ... bundle exec`. Keyed by NAME (a map, not a list) so a per-env
+# values file can override a single worker's replicaCount/resources without redefining
+# the whole set — Helm deep-merges maps by key but replaces lists wholesale (#486/#487).
 workers:
-  - name: resque
+  resque:
     args: ["rake", "resque:workers"]
     replicaCount: 1
     queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
@@ -157,7 +166,7 @@ workers:
       requests:
         cpu: 500m
         memory: 3Gi
-  - name: resque-scheduler
+  resque-scheduler:
     args: ["rake", "resque:scheduler"]
     replicaCount: 1
     queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
@@ -166,7 +175,7 @@ workers:
       requests:
         cpu: 250m
         memory: 3Gi
-  - name: resque-pipeline-monitor
+  resque-pipeline-monitor:
     args: ["rake", "pipeline_monitor"]
     replicaCount: 1
     queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
@@ -175,7 +184,7 @@ workers:
       requests:
         cpu: 250m
         memory: 3Gi
-  - name: resque-result-monitor
+  resque-result-monitor:
     args: ["rake", "result_monitor"]
     replicaCount: 1
     queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
@@ -184,7 +193,7 @@ workers:
       requests:
         cpu: 250m
         memory: 3Gi
-  - name: shoryuken
+  shoryuken:
     args: ["shoryuken", "-R", "-C", "config/shoryuken.yml"]
     replicaCount: 1
     samplesBucket: false
