@@ -39,10 +39,10 @@ import {
   getPersistedBackground,
   updatePersistedBackground,
 } from "~/api/persisted_backgrounds";
-import ErrorBoundary from "~/components/common/ErrorBoundary";
 import CoverageVizBottomSidebar from "~/components/common/CoverageVizBottomSidebar";
 import { CoverageVizParamsRaw } from "~/components/common/CoverageVizBottomSidebar/types";
 import { getCoverageVizParams } from "~/components/common/CoverageVizBottomSidebar/utils";
+import ErrorBoundary from "~/components/common/ErrorBoundary";
 import csSampleMessage from "~/components/common/SampleMessage/sample_message.scss";
 import NarrowContainer from "~/components/layout/NarrowContainer";
 import { IconLoading } from "~/components/ui/icons";
@@ -754,9 +754,19 @@ const SampleViewComponent = ({
   const previousBackground = useRef<number | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!sample?.pipeline_runs || sample?.pipeline_runs?.length === 0) {
-      // don't fetch sample report data if there is no mngs run on the sample
-      // this will be fixed when we split the sample report by tab
+    if (!sample) {
+      // The sample record itself is still loading — keep showing the spinner.
+      return;
+    }
+    if (!sample.pipeline_runs || sample.pipeline_runs.length === 0) {
+      // No mngs pipeline run on this sample (e.g. a dead/failed upload that never
+      // dispatched a run). The report fetch below is the ONLY path that clears
+      // loadingReport, and it never runs for these samples — so without this,
+      // fetchBackgrounds' initial setLoadingReport(true) is never reset and
+      // SampleViewMessage loops forever on "Loading report data." Clearing it lets
+      // SampleViewMessage fall through to the upload-error / failed state
+      // (sampleErrorInfo) that tells the user why it failed.
+      setLoadingReport(false);
       return;
     }
     if (!ignoreProjectBackground && hasPersistedBackground === null) {
@@ -794,6 +804,7 @@ const SampleViewComponent = ({
     fetchSampleReportData,
     hasPersistedBackground,
     persistNewBackgroundModelSelection,
+    sample,
     sample?.pipeline_runs,
     handleInvalidBackgroundSelection,
     previousBackground,
