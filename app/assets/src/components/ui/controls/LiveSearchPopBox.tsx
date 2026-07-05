@@ -1,6 +1,6 @@
 import cx from "classnames";
 import { forEach, sumBy, values } from "lodash/fp";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { BareDropdown } from "~ui/controls/dropdowns";
 import Input from "~ui/controls/Input";
 import cs from "./live_search_pop_box.scss";
@@ -55,6 +55,11 @@ const LiveSearchPopBox = ({
   const [isFocused, setIsFocused] = useState<boolean>(false);
   const [results, setResults] = useState<SearchResults>({});
   const [inputValue, setInputValue] = useState<string>("");
+  // The query for the most recently requested search. Used to (a) run the search on the
+  // value the user actually typed — not a stale `inputValue` captured by the debounced
+  // closure, which lagged one keystroke behind (so "france" searched "franc" and the
+  // plain-text fallback showed "franc") — and (b) discard out-of-order responses.
+  const latestQueryRef = useRef<string>("");
 
   // If the value has changed, reset the input value.
   // Store the prevValue to detect whether the value has changed.
@@ -87,19 +92,21 @@ const LiveSearchPopBox = ({
     closeDropdown();
   };
 
-  const triggerSearch = async () => {
-    const timerId = latestTimerId;
+  const triggerSearch = async (query: string) => {
     // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2722
-    const results = await onSearchTriggered(inputValue);
+    const searchResults = await onSearchTriggered(query);
 
-    if (timerId === latestTimerId) {
+    // Only apply if this is still the latest requested query; drop stale/out-of-order
+    // responses so an earlier "franc" search can't overwrite the current "france" one.
+    if (query === latestQueryRef.current) {
       setIsLoading(false);
-      setResults(results);
+      setResults(searchResults);
     }
   };
 
   const handleSearchChange = value => {
     setInputValue(value);
+    latestQueryRef.current = value;
 
     // check minimum requirements for value
     const parsedValue = value.trim();
@@ -111,8 +118,18 @@ const LiveSearchPopBox = ({
         clearTimeout(latestTimerId);
       }
 
-      const newTimerId = setTimeout(triggerSearch, delayTriggerSearch);
+      // Pass `value` explicitly so the debounced search runs on exactly what the user
+      // typed — not the `inputValue` state, which the closure captured one keystroke ago.
+      const newTimerId = setTimeout(
+        () => triggerSearch(value),
+        delayTriggerSearch,
+      );
       setLatestTimerId(newTimerId);
+    } else {
+      // Below the minimum: stop loading and clear any stale results so the dropdown
+      // doesn't linger on a previous query's suggestions.
+      setIsLoading(false);
+      setResults({});
     }
   };
 
