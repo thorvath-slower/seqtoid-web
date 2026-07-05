@@ -638,14 +638,36 @@ export const LocalUploadProgressModal = ({
       )}
       {!retryingSampleUpload && uploadComplete && (
         <div className={cs.footer}>
-          <PrimaryButton
-            text="Go to Project"
-            onClick={() => {
-              hasFailedSamples
-                ? setConfirmationModalOpen(true)
-                : redirectToProject(project.id);
-            }}
-          />
+          {hasFailedSamples ? (
+            // Option A — retry-in-place. When uploads finish with failures, keep the
+            // user in this session and make Retry the PRIMARY action instead of
+            // nudging them to "Go to Project" (which drops the in-memory File objects
+            // and forces re-doing the whole wizard). Retry re-uploads the failed
+            // samples using the files already in memory, and any parts already sent
+            // resume via their persisted uploadId (ResumableUpload), so it's a
+            // one-click recovery. "Go to Project" stays available as a secondary path.
+            <>
+              <PrimaryButton
+                text={
+                  numberOfFailedSamples === 1
+                    ? "Retry failed upload"
+                    : `Retry ${numberOfFailedSamples} failed uploads`
+                }
+                onClick={() =>
+                  retryFailedSampleUploads(getLocalSamplesFailed())
+                }
+              />
+              <SecondaryButton
+                text="Go to Project"
+                onClick={() => setConfirmationModalOpen(true)}
+              />
+            </>
+          ) : (
+            <PrimaryButton
+              text="Go to Project"
+              onClick={() => redirectToProject(project.id)}
+            />
+          )}
         </div>
       )}
       {confirmationModalOpen && (
