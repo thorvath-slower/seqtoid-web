@@ -33,4 +33,20 @@ spec:
                 name: {{ include "seqtoid-web.fullname" . }}-active
                 port:
                   number: {{ .Values.service.port }}
+    {{- /* Additional hostnames routed to the same active service — e.g. a
+           www.<host> vanity host that the app 301-redirects to the apex. Needed so
+           the ALB serves them (the cert must already cover them) rather than 404,
+           and so the old ECS edge can be retired without breaking those hosts. */}}
+    {{- range .Values.ingress.aliasHosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "seqtoid-web.fullname" $ }}-active
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- end }}
 {{- end }}
