@@ -50,7 +50,12 @@
 // FontAwesome \f107 glyph, so it never flickers through a fallback-font glyph on
 // the heavy open-render of a large option list. Style it via fill/width.
 .arrow {
-  fill: currentColor;
+  // Themed gray, not `currentColor`: the chevron previously inherited the trigger's
+  // text color, which resolves to near-black on a plain dropdown (e.g. the metadata
+  // Nucleotide Type field) — a heavy black arrow that clashed with the light-gray
+  // chevrons on the adjacent SDS dropdowns. A fixed gray keeps every closed dropdown
+  // chevron consistent; it still turns primary when the menu is open (`.active`).
+  fill: $sds-color-gray-500;
   width: 14px;
   height: 14px;
 
