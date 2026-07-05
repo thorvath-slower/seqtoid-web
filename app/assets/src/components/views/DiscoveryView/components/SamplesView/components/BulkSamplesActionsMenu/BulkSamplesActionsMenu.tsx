@@ -13,6 +13,12 @@ interface BulkSamplesActionsMenuProps {
   handleBulkKickoffAmr: () => void;
   handleClickBenchmark: () => void;
   handleClickPhyloTree: () => void;
+  // Retry Upload: enabled only when a selected sample's upload failed. For a local
+  // upload the browser no longer has the file after leaving the upload session, so
+  // this routes the user back into the upload flow to re-select (Options C/B will
+  // later recover the file automatically — see docs/upload-recovery.md).
+  canRetryUpload: boolean;
+  onRetryUpload: () => void;
   popupPosition?: "top left" | "top center";
 }
 
@@ -21,6 +27,8 @@ const BulkSamplesActionsMenu = ({
   handleBulkKickoffAmr,
   handleClickPhyloTree,
   handleClickBenchmark,
+  canRetryUpload,
+  onRetryUpload,
   popupPosition,
 }: BulkSamplesActionsMenuProps) => {
   const { admin, allowedFeatures = [] } = useContext(UserContext) || {};
@@ -92,6 +100,45 @@ const BulkSamplesActionsMenu = ({
     );
   };
 
+  const renderRetryUpload = () => {
+    let retryUploadMenuItem = (
+      <MenuItem
+        className={cs.dropdownItem}
+        disabled={!canRetryUpload}
+        onClick={() => {
+          closeActionsMenu();
+          onRetryUpload();
+        }}
+      >
+        <div className={cs.itemWrapper}>
+          <div
+            className={cx(
+              cs.bulkActionsIcon,
+              !canRetryUpload && cs.iconDisabled,
+            )}
+          >
+            <Icon sdsIcon={"refresh"} sdsSize="xs" sdsType="static" />
+          </div>
+          {"Retry Upload"}
+        </div>
+      </MenuItem>
+    );
+
+    if (!canRetryUpload) {
+      retryUploadMenuItem = (
+        <Tooltip
+          arrow
+          placement="top"
+          title={"Select a sample whose upload failed to retry it."}
+        >
+          <span>{retryUploadMenuItem}</span>
+        </Tooltip>
+      );
+    }
+
+    return retryUploadMenuItem;
+  };
+
   const hasAccessToBenchmark =
     admin && allowedFeatures.includes(BENCHMARKING_FEATURE);
 
@@ -121,6 +168,7 @@ const BulkSamplesActionsMenu = ({
         open={Boolean(menuAnchorEl)}
         onClose={closeActionsMenu}
       >
+        {renderRetryUpload()}
         {renderKickoffPhyloTree()}
         {/* @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2774 */}
         {handleBulkKickoffAmr && renderBulkKickoffAmr()}

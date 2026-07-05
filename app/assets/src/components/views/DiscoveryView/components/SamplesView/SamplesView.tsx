@@ -859,6 +859,17 @@ export const SamplesView = forwardRef(function SamplesView(
       }
       handleClickPhyloTree={handleClickPhyloTree}
       handleClickBenchmark={handleClickBenchmark}
+      // Retry Upload is offered when a selected sample's upload failed. It routes back
+      // into the project's upload flow so the user can re-send that data (re-select the
+      // file today; Options C/B — tickets #490/#491 — will recover it automatically).
+      canRetryUpload={selectedObjects.some(obj =>
+        Boolean(get(["sample", "uploadError"], obj)),
+      )}
+      onRetryUpload={() => {
+        location.href = projectId
+          ? `/samples/upload?projectId=${projectId}`
+          : "/samples/upload";
+      }}
       popupPosition={popupPosition}
     />
   );
