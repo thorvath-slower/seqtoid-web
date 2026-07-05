@@ -560,6 +560,11 @@ module SamplesHelper
       { result_status_description: 'SKIPPED' }
     elsif sample.upload_error != Sample::UPLOAD_ERROR_LOCAL_UPLOAD_STALLED
       { result_status_description: 'FAILED' }
+    else
+      # A stalled local upload never finished, but it did not outright fail — surface it
+      # as INCOMPLETE (distinct from FAILED) so the sample-list pill isn't blank. Without
+      # this branch the method returned nil and the row rendered an empty status pill.
+      { result_status_description: 'INCOMPLETE' }
     end
   end
 
