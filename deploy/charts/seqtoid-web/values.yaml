@@ -121,8 +121,15 @@ gracefulDrain:
 migrate:
   enabled: true
   command: ["rails", "db:migrate:with_data"]
-  # Kept modest; migrations are usually quick. Bump per-env if needed.
-  backoffLimit: 1
+  # A single deterministic, idempotent db:migrate invocation. `rails db:migrate`
+  # only applies pending migrations and records schema_migrations per step, so an
+  # interrupted run safely resumes on retry — do NOT add destructive steps here.
+  # Retries are handled by K8s (backoffLimit) so an overlapping Argo sync can't
+  # interrupt an in-flight migration (#481).
+  backoffLimit: 3
+  # Bound the Job so a stuck/hung migration fails cleanly (30m headroom) instead
+  # of wedging the PreSync phase indefinitely.
+  activeDeadlineSeconds: 1800
   resources:
     requests:
       cpu: 250m
