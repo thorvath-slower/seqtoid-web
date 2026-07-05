@@ -3,12 +3,14 @@
 @import "~@czi-sds/components/dist/variables";
 
 .sampleUploadTable {
-  // Size to content, don't grow to fill the step. Previously `flex: 1 1 0` +
-  // `min-height: 400px` forced this container to eat all remaining vertical space,
-  // so with only a sample or two the table stretched to fill the viewport and left
-  // a huge empty gap between the row and the Continue/Cancel footer. Growing to
-  // content keeps short lists compact; long lists simply extend and the page scrolls.
-  flex: 0 1 auto;
+  // NOTE: keep `flex: 1 1 0` + `min-height: 400px`. The inner <Table> is
+  // react-virtualized and sizes its rows to this container's height via AutoSizer,
+  // so a definite height is REQUIRED — content-sizing it (a previous "shrink the gap"
+  // attempt, #132) starved AutoSizer to 0 and rendered zero rows (only the header
+  // showed). The empty-space-below-few-rows is cosmetic; fix it by driving the height
+  // from the sample count, not by removing the height (tracked separately).
+  flex: 1 1 0;
+  min-height: 400px;
   display: flex;
   flex-direction: column;
   margin-bottom: 20px;
