@@ -15,6 +15,8 @@ export const STATUS_TYPE = {
   failed: "error",
   aborted: "error",
   "timed out": "error",
+  // A stalled/unfinished local upload — orange (warning), distinct from red "failed".
+  incomplete: "warning",
   "complete - issue": "warning",
   "complete*": "warning",
   "post processing": "default",
