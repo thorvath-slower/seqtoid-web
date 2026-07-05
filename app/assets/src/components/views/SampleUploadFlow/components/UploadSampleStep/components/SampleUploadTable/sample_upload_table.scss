@@ -3,8 +3,12 @@
 @import "~@czi-sds/components/dist/variables";
 
 .sampleUploadTable {
-  flex: 1 1 0;
-  min-height: 400px;
+  // Size to content, don't grow to fill the step. Previously `flex: 1 1 0` +
+  // `min-height: 400px` forced this container to eat all remaining vertical space,
+  // so with only a sample or two the table stretched to fill the viewport and left
+  // a huge empty gap between the row and the Continue/Cancel footer. Growing to
+  // content keeps short lists compact; long lists simply extend and the page scrolls.
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   margin-bottom: 20px;
