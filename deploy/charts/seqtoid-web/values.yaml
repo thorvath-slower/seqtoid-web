@@ -201,3 +201,44 @@ workers:
       requests:
         cpu: 250m
         memory: 3Gi
+
+# Scheduled taxon-lineage refresh CronJob (ticket #484). Keeps the taxon-lineage ->
+# OpenSearch index fresh BETWEEN deploys by re-running the SAME idempotent load path
+# the deploy-time PreSync Job uses (taxon_lineage_slice:load_slice_if_needed). Cheap
+# by construction: the #476 guard makes each run a no-op skip when the index is
+# already in sync, so it only does real work when there's a newer slice to load.
+# Appended as a NEW top-level key at the END of the file to minimize merge overlap
+# with other in-flight chart PRs.
+taxonRefresh:
+  # Default OFF: rollout is opt-in per env. Enable in an env's infra values once
+  # that env's taxon data is bootstrapped and it wants between-deploy freshness.
+  # The template is additionally gated on (not .Values.suspend) so a cost-spun-down
+  # dev never schedules a run even if this is left on.
+  enabled: false
+  # Every 6 hours. Conservative: frequent enough that a newer slice lands within a
+  # quarter-day, but — because the #476 guard makes in-sync runs a no-op — cheap
+  # enough that the off-peak cost is negligible. Tune per-env in the infra values.
+  schedule: "0 */6 * * *"
+  # Never overlap: a second concurrent run would race the same ES index.
+  concurrencyPolicy: Forbid
+  # Same idempotent task the deploy-time Job runs — do NOT diverge from taxonLoad.
+  command: ["rake", "taxon_lineage_slice:load_slice_if_needed"]
+  # If a scheduled time is missed (node churn), only start within this window;
+  # past it, skip rather than backfill.
+  startingDeadlineSeconds: 300
+  # Keep a small audit trail of recent runs without letting Jobs accumulate.
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # Single-shot, idempotent load; don't hammer S3 on failure.
+  backoffLimit: 1
+  # Bound each run (2h headroom, mirrors taxonLoad) so a stuck import can't wedge
+  # the next scheduled tick.
+  activeDeadlineSeconds: 7200
+  # Reap finished Jobs after a day (belt-and-suspenders alongside the history limits).
+  ttlSecondsAfterFinished: 86400
+  # Mirror the deploy-time Job: the importer streams the CSV and inserts in chunks,
+  # so give it the same memory headroom.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
