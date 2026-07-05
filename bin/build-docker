@@ -8,11 +8,37 @@
 # `sha-<commit>` tag resolves under either name at deploy time. The set of repo names is driven by
 # ECR_REPO_NAMES (space-separated) so the cutover is a one-line change: drop `idseq-web` once every
 # consumer (deploy scripts, chart values, GitOps values) references `seqtoid-web`.
+#
+# #482 (multi-arch amd64+arm64): the image is now built for BOTH linux/amd64 and linux/arm64 and
+# pushed to ECR as a MANIFEST LIST, so the dev cluster's Karpenter arm64 (Graviton) nodes can pull a
+# native image instead of crashlooping the amd64 binary ("exec format error"). A multi-arch build
+# CANNOT be `--load`ed into the local docker daemon (the daemon holds a single-arch image), so buildx
+# pushes the manifest list directly (`--push`) under every tag — this script now OWNS the push (the
+# old bin/push-docker `docker push` step is a no-op for multi-arch and is skipped by the workflow).
+#
+# #485 (weekly build-cache lifecycle): the ECR registry build-cache is now written ONCE A WEEK, not
+# every build. Controlled by CACHE_MODE:
+#   - CACHE_MODE=read  (DEFAULT, weekday builds): `--cache-from` ONLY. Skips the ~30-60s cache PUSH
+#     (`--cache-to mode=max`), so weekday builds are faster AND the cache ref stays byte-stable all
+#     week (no churn / no partial-write races).
+#   - CACHE_MODE=refresh (the Sunday cron, weekly-cache-refresh.yml): `--cache-from` + `--cache-to
+#     mode=max`. A clean weekly rebuild that (a) regenerates a fresh cache for BOTH arches, and
+#     (b) re-pulls the base image + `apt-get upgrade` so Monday starts on the week's security patches
+#     and current deps.
+#   CAVEAT (accepted): with read-only weekday caching, a mid-week dependency change (Gemfile /
+#   package-lock / requirements.txt) is NOT written back to the cache — it rebuilds that layer on
+#   every subsequent weekday build until the Sunday refresh folds it into the cache. That's a
+#   deliberate trade (stable, fast weekday cache) and is fine for the dev cadence.
 set -euo pipefail
 
 # Space-separated ECR repo names to tag (transition: dual-push legacy + go-forward). Override via env.
 ECR_REPO_NAMES="${ECR_REPO_NAMES:-idseq-web seqtoid-web}"
 REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+# #482: target platforms for the manifest list. Override via env for a single-arch local build.
+PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
+# #485: cache lifecycle mode — `read` (weekday, cache-from only) or `refresh` (Sunday, +cache-to).
+CACHE_MODE="${CACHE_MODE:-read}"
 
 BRANCH="$1"
 BRANCH_CLEANED=$(echo "$BRANCH" | sed 's/\//-/g')
@@ -20,11 +46,12 @@ COMMIT="$2"
 
 # The first repo name is the canonical build/cache repo; the rest are additional tag targets.
 PRIMARY_REPO="$REGISTRY/$(echo "$ECR_REPO_NAMES" | awk '{print $1}')"
-COMPOSE_TAG="$PRIMARY_REPO:compose"
 
-echo "Branch $BRANCH"
-echo "Commit $COMMIT"
-echo "Repos  $ECR_REPO_NAMES"
+echo "Branch    $BRANCH"
+echo "Commit    $COMMIT"
+echo "Repos     $ECR_REPO_NAMES"
+echo "Platforms $PLATFORMS"
+echo "CacheMode $CACHE_MODE"
 echo '--'
 
 # Hash of the frontend asset source + webpack/babel config, passed as a build-arg so
@@ -46,25 +73,41 @@ echo "Asset SRC_HASH $SRC_HASH"
 # are REQUIRED for ECR (it rejects buildkit's default cache manifest type). A first build
 # on a fresh cache ref cache-misses gracefully and populates it.
 CACHE_REF="$PRIMARY_REPO:buildcache"
+
+# The docker-container driver is REQUIRED for multi-arch (`--platform` fan-out) AND for
+# registry cache export/import. (The default `docker` driver can do neither.) QEMU emulation
+# for the non-native arch is provided by tonistiigi/binfmt on the CI runner.
 docker buildx inspect seqtoid-cache-builder >/dev/null 2>&1 \
   || docker buildx create --name seqtoid-cache-builder --driver docker-container --use
 docker buildx use seqtoid-cache-builder
 
+# Assemble the full set of `-t` tag targets across every repo name.
+TAG_ARGS=()
+for NAME in $ECR_REPO_NAMES; do
+    REPO="$REGISTRY/$NAME"
+    TAG_ARGS+=(-t "$REPO:sha-$COMMIT")
+    TAG_ARGS+=(-t "$REPO:branch-$BRANCH_CLEANED")
+    if [ "$BRANCH" == "main" ]; then
+        TAG_ARGS+=(-t "$REPO:latest")
+    fi
+done
+
+# #485: only the refresh (Sunday) build WRITES the cache; weekday builds read-only.
+CACHE_ARGS=(--cache-from "type=registry,ref=$CACHE_REF")
+if [ "$CACHE_MODE" == "refresh" ]; then
+    echo "CACHE_MODE=refresh -> writing a fresh cache to $CACHE_REF (mode=max)"
+    CACHE_ARGS+=(--cache-to "type=registry,ref=$CACHE_REF,mode=max,image-manifest=true,oci-mediatypes=true")
+else
+    echo "CACHE_MODE=$CACHE_MODE -> cache is read-only (no --cache-to); Sunday cron refreshes it"
+fi
+
+# #482: `--platform` (multi-arch) forces `--push` (a manifest list cannot be `--load`ed into the
+# local single-arch daemon). buildx builds every platform and pushes ALL tags as one manifest list.
 docker buildx build \
-    --load \
-    -t "$COMPOSE_TAG" \
-    --cache-from "type=registry,ref=$CACHE_REF" \
-    --cache-to   "type=registry,ref=$CACHE_REF,mode=max,image-manifest=true,oci-mediatypes=true" \
+    --platform "$PLATFORMS" \
+    --push \
+    "${TAG_ARGS[@]}" \
+    "${CACHE_ARGS[@]}" \
     --build-arg GIT_COMMIT="${COMMIT}" \
     --build-arg SRC_HASH="${SRC_HASH}" \
     .
-
-# Tag the built image (the same image content) under every configured repo name.
-for NAME in $ECR_REPO_NAMES; do
-    REPO="$REGISTRY/$NAME"
-    if [ "$BRANCH" == "main" ]; then
-        docker tag "$COMPOSE_TAG" "$REPO:latest"
-    fi
-    docker tag "$COMPOSE_TAG" "$REPO:sha-$COMMIT"
-    docker tag "$COMPOSE_TAG" "$REPO:branch-$BRANCH_CLEANED"
-done

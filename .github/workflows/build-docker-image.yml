@@ -64,6 +64,13 @@ jobs:
         with:
           path: ~/.cache
           key: ${{runner.os}}-cache
+      # #482: QEMU for cross-arch (arm64) layers + buildx (docker-container driver) for the
+      # multi-arch `--platform` fan-out and registry cache. bin/build-docker creates the
+      # named builder; these just make binfmt/buildx available on the runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - name: configure aws credentials
         id: configure_aws_credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
@@ -84,9 +91,18 @@ jobs:
           # exact tag), so Trivy/cosign/GHCR must reference `sha-<sha8>` or they scan a tag that was
           # never built (fails "MANIFEST_UNKNOWN" / "No such image").
           echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:sha-${GITHUB_SHA::8}" >> "$GITHUB_ENV"
-      - name: Build docker image
+      # #482: bin/build-docker now builds linux/amd64+linux/arm64 and pushes the manifest list
+      # DIRECTLY to ECR (a multi-arch image cannot be --load'ed into the local single-arch daemon,
+      # so buildx pushes it). That means the separate bin/push-docker step is gone — the build IS
+      # the push. #485: CACHE_MODE=read (weekday) reads the cache but does NOT write it; the Sunday
+      # weekly-cache-refresh.yml cron regenerates it (CACHE_MODE=refresh).
+      - name: Build and push docker image (multi-arch)
+        env:
+          CACHE_MODE: read
         run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       # CZID-75: scan the built image BEFORE it ships — fail the release on HIGH/CRITICAL CVEs.
+      # The image is already in ECR (build pushed it); Trivy pulls IMAGE_REF (the amd64 child of
+      # the manifest list on this amd64 runner) and scans it.
       - name: Scan image (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -96,31 +112,39 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: "true"
           trivyignores: .trivyignore  # accept-current app-dep CVEs (Forgejo #474); NEW ones still fail
-      - name: Push docker image
-        run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
-      # CZID-392: publish the SAME known-good, scanned image to GHCR (source-of-record) with an
-      # immutable SemVer + build-metadata tag. Runs after build+scan+push pass, so everything in
-      # GHCR is known-good by construction. Build-once, tag-the-digest — no rebuild here.
-      - name: Publish known-good build to GHCR
-        id: ghcr
-        uses: ./.github/actions/publish-ghcr
+      # CZID-392: publish the SAME known-good, scanned MANIFEST LIST to GHCR (source-of-record).
+      # #482: `buildx imagetools create` copies the multi-arch manifest list from ECR to GHCR by
+      # digest — preserving BOTH arches — without a local image (the old publish-ghcr composite
+      # re-stamped SemVer labels via `docker build FROM <local single-arch image>`, which cannot
+      # operate on a manifest list; the SemVer/provenance label re-stamp is deferred — see PR notes).
+      - name: Log in to GHCR
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
-          local_image: ${{ env.IMAGE_REF }}
-          ghcr_repo: ghcr.io/${{ github.repository_owner }}/seqtoid-web
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Only main builds are the promotable known-good line; move `latest` for them.
-          push_latest: ${{ github.ref == 'refs/heads/main' }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish manifest list to GHCR
+        env:
+          GHCR_REPO: ghcr.io/${{ github.repository_owner }}/seqtoid-web
+          PUSH_LATEST: ${{ github.ref == 'refs/heads/main' }}
+        run: |
+          SHA_TAG="sha-${GITHUB_SHA::8}"
+          docker buildx imagetools create -t "${GHCR_REPO}:${SHA_TAG}" "${IMAGE_REF}"
+          if [ "$PUSH_LATEST" = "true" ]; then
+            docker buildx imagetools create -t "${GHCR_REPO}:latest" "${IMAGE_REF}"
+          fi
       # CZID-75: sign the pushed image so the deploy side can enforce "signed images only" (#77).
-      # Keyless (Sigstore/Fulcio, via the GHA OIDC token) — for a private/air-gapped posture swap to a
-      # KMS key: `cosign sign --key awskms://<arn> --yes "$REF@$DIGEST"`.
+      # Keyless (Sigstore/Fulcio, via the GHA OIDC token). #482: resolve the ECR manifest-list digest
+      # via buildx imagetools (no local image) and sign with --recursive so BOTH arch children +
+      # the index are signed.
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Sign image (cosign, keyless)
         env:
           COSIGN_YES: "true"
         run: |
-          DIGEST="$(docker inspect --format='{{ index .RepoDigests 0 }}' "${IMAGE_REF}" | cut -d@ -f2)"
-          cosign sign "${IMAGE_REF%:*}@${DIGEST}"
+          DIGEST="$(docker buildx imagetools inspect --format '{{ json .Manifest.Digest }}' "${IMAGE_REF}" | tr -d '"')"
+          cosign sign --recursive "${IMAGE_REF%:*}@${DIGEST}"
 
   # build_prod_docker_image:
   #   runs-on: ubuntu-latest

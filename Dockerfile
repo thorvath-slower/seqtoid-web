@@ -15,7 +15,15 @@
 
 # ---------- builder: full toolchain (unchanged from the single-stage image) ----------
 # bug-#001/#004: Ruby 3.1.6 (EOL) -> 3.3.6, pinned by multi-arch digest.
+#
+# #482 (multi-arch amd64+arm64): the digest above is a MANIFEST LIST, so buildx selects
+# the right per-arch ruby base automatically. buildx also injects the TARGETARCH build-arg
+# (`amd64`|`arm64`) into any stage that declares it — used below to fetch the correct
+# per-arch prebuilt binaries (node, chamber, mysql client).
 FROM ruby:3.3.6@sha256:347edd0c70ee08d87de9f01b99de2f14a64cedb5d1bfb38457dfe8cd0bf113c5 AS builder
+
+# buildx-provided target arch of the image being built: `amd64` or `arm64`.
+ARG TARGETARCH
 
 RUN apt-get update && apt-get upgrade -y && \
   apt-get install -y \
@@ -31,11 +39,18 @@ RUN curl -L https://github.com/samtools/samtools/releases/download/1.17/samtools
   tar xj && cd samtools-1.17/ && make && make install
 
 # node pinned to .node-version (CZID-197) — build-time only (webpack); NOT shipped.
+# #482: node's release assets use `x64`/`arm64` (not Docker's `amd64`/`arm64`), so map
+# TARGETARCH -> node's arch token.
 COPY .node-version /tmp/.node-version
 RUN NODE_VERSION="$(cat /tmp/.node-version)" \
-  && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
-  && tar -xzf "node-v${NODE_VERSION}-linux-x64.tar.gz" -C /usr/local --strip-components=1 --no-same-owner \
-  && rm "node-v${NODE_VERSION}-linux-x64.tar.gz" \
+  && case "${TARGETARCH}" in \
+       amd64) NODE_ARCH=x64 ;; \
+       arm64) NODE_ARCH=arm64 ;; \
+       *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" \
+  && tar -xzf "node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" -C /usr/local --strip-components=1 --no-same-owner \
+  && rm "node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" \
   && node --version && npm --version
 RUN npm i -g npm@11.16.0
 
@@ -43,7 +58,9 @@ RUN pip3 config set global.break-system-packages true
 RUN pip3 install --upgrade pip
 
 # chamber — pulls secrets at boot (bin/entrypoint.sh); needed at runtime, copied below.
-RUN curl -L https://github.com/segmentio/chamber/releases/download/v2.10.8/chamber-v2.10.8-linux-amd64 -o /bin/chamber
+# #482: chamber's release assets use Docker's arch token (`amd64`/`arm64`), so TARGETARCH
+# slots in directly.
+RUN curl -L "https://github.com/segmentio/chamber/releases/download/v2.10.8/chamber-v2.10.8-linux-${TARGETARCH}" -o /bin/chamber
 RUN chmod +x /bin/chamber
 
 COPY requirements.txt ./
@@ -77,24 +94,46 @@ ARG GIT_COMMIT
 ENV GIT_VERSION=${GIT_COMMIT}
 
 # ---------- runtime: slim — only runtime deps + built artifacts ----------
+# ruby:3.3.6-slim is a manifest list, so buildx picks the per-arch base automatically.
 FROM ruby:3.3.6-slim AS runtime
 
+# buildx-provided target arch (`amd64`|`arm64`) — drives the MySQL-client selection below.
+ARG TARGETARCH
+
 # Runtime-only apt deps (NO compilers / -dev headers / node):
-#  - libaio1 + the mysql-5.7 community client (deliberately non-MariaDB, for MySQL-8
-#    virtual-generated-column import compat — see the original single-stage note).
+#  - libaio1 + a mysql client (provides the `mysql`/`mysqlimport` CLI binaries used by
+#    lib/tasks/update_tables_for_index_gen.rake at runtime — see the per-arch note below).
 #  - samtools shared libs (libncurses/libbz2/liblzma/zlib/libcurl/libdeflate).
 #  - libmariadb3: the mysql2 gem's native ext links libmysqlclient (built against
-#    default-libmysqlclient-dev = libmariadb-dev in builder).
-#  - python3 runtime (the app shells out to python/awscli).
+#    default-libmysqlclient-dev = libmariadb-dev in builder). Already multi-arch.
+#  - python3 runtime (the app shells out to python/awscli; awscli is pure-python pip,
+#    installed in builder, so it is arch-agnostic — no per-arch binary to fetch).
+#
+# #482 MySQL-client per-arch caveat: Oracle's MySQL-community APT repo ships amd64 ONLY
+# (there is NO arm64 build of mysql-community-client anywhere in repo.mysql.com's pool).
+#  - amd64: keep today's EXACT mysql-5.7 community client .deb (byte-compatible, no
+#    regression; deliberately non-MariaDB for MySQL-8 virtual-generated-column import
+#    compat — see the original single-stage note).
+#  - arm64: fall back to Debian's default-mysql-client (MariaDB) so arm64 pods have the
+#    `mysql`/`mysqlimport` binaries and can boot + serve. CAVEAT: the MariaDB `mysqlimport`
+#    is what the community client was chosen to AVOID for the index-gen rake's virtual-
+#    generated-column import — so the taxon-index-gen rake (update_tables_for_index_gen)
+#    must keep running on an AMD64 node until that import path is validated on MariaDB.
+#    The web/request path does NOT use these binaries (it uses the mysql2 gem →
+#    libmariadb3, already multi-arch), so arm64 web pods are unaffected.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
   ca-certificates curl wget tzdata procps \
   libaio1 libatomic1 libnuma1 \
   libncurses6 libbz2-1.0 liblzma5 zlib1g libcurl4 libdeflate0 \
   libmariadb3 \
   python3 libyaml-0-2 \
-  && wget http://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_5.7.42-1debian10_amd64.deb \
-  && (dpkg -i mysql-community-client*.deb || apt-get install -f -y --no-install-recommends) \
-  && rm mysql-community-client*.deb \
+  && if [ "${TARGETARCH}" = "amd64" ]; then \
+       wget http://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/mysql-community-client_5.7.42-1debian10_amd64.deb \
+       && (dpkg -i mysql-community-client*.deb || apt-get install -f -y --no-install-recommends) \
+       && rm mysql-community-client*.deb ; \
+     else \
+       apt-get install -y --no-install-recommends default-mysql-client ; \
+     fi \
   && rm -rf /var/lib/apt/lists/*
 
 # Built artifacts from the builder stage.
