@@ -498,21 +498,20 @@ describe PipelineRun, type: :model do
   end
 
   describe "output-state aggregation helpers" do
-    # An illumina pipeline_run auto-creates one OutputState per TARGET_OUTPUT
-    # (via the after_create :create_output_states callback), all initially
-    # UNKNOWN. The factory's output_states_data updates matching outputs, so to
-    # exercise the "all terminal" / "all loaded" aggregations we must supply a
-    # state for EVERY target output, not just a couple.
+    # A pipeline_run auto-creates one OutputState per TARGET_OUTPUT (via the
+    # after_create :create_output_states callback), all initially UNKNOWN. The
+    # aggregation predicates inspect EVERY output_state, so rather than assume a
+    # fixed set of target outputs (which can vary by technology / suite-order
+    # factory state), drive each output_state directly off the persisted rows:
+    # mark ercc_counts FAILED and everything else LOADED. This makes the
+    # "all terminal" / "all loaded" / hash expectations robust to whatever the
+    # full set of auto-created outputs happens to be.
     let(:pr) do
-      create(:pipeline_run, sample: sample,
-                            output_states_data: [
-                              { output: "taxon_counts", state: PipelineRun::STATUS_LOADED },
-                              { output: "ercc_counts", state: PipelineRun::STATUS_FAILED },
-                              { output: "contig_counts", state: PipelineRun::STATUS_LOADED },
-                              { output: "taxon_byteranges", state: PipelineRun::STATUS_LOADED },
-                              { output: "insert_size_metrics", state: PipelineRun::STATUS_LOADED },
-                              { output: "accession_coverage_stats", state: PipelineRun::STATUS_LOADED },
-                            ])
+      run = create(:pipeline_run, sample: sample)
+      run.output_states.each do |os|
+        os.update!(state: os.output == "ercc_counts" ? PipelineRun::STATUS_FAILED : PipelineRun::STATUS_LOADED)
+      end
+      run
     end
 
     it "#all_output_states_terminal? is true when all are LOADED/FAILED" do
@@ -524,9 +523,9 @@ describe PipelineRun, type: :model do
     end
 
     it "#output_state_hash maps outputs to their states" do
-      # Reload the association: the factory updates output_states via fresh
-      # find_by records in an after(:create) hook, so the association cache on
-      # `pr` (populated by create_output_states) still holds the pre-update rows.
+      # Reload the association: the states were updated on fresh rows above, so
+      # the pr's association cache (populated by create_output_states) may still
+      # hold the pre-update rows.
       states_by_id = { pr.id => pr.output_states.reload.to_a }
       h = pr.output_state_hash(states_by_id)
       expect(h["taxon_counts"]).to eq(PipelineRun::STATUS_LOADED)
