@@ -59,6 +59,32 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+          {{- /*
+            Resilience (#467a): workers have no HTTP port, so a wedged worker was
+            previously never detected/restarted. Add an exec liveness probe that
+            confirms the worker's own process tree is alive (pgrep the args' command
+            word), so a crashed/hung supervisor gets the pod restarted. Per-worker
+            override via workers.<name>.livenessProbe; default is a process check on
+            the first arg (rake / shoryuken). Opt out with livenessProbe: null.
+          */}}
+          {{- $probeCmd := first $w.args }}
+          {{- if hasKey $w "livenessProbe" }}
+          {{- with $w.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- else if $root.Values.workerLivenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - {{ printf "pgrep -f %s > /dev/null" $probeCmd | quote }}
+            initialDelaySeconds: {{ $root.Values.workerLivenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $root.Values.workerLivenessProbe.periodSeconds }}
+            timeoutSeconds: {{ $root.Values.workerLivenessProbe.timeoutSeconds }}
+            failureThreshold: {{ $root.Values.workerLivenessProbe.failureThreshold }}
+          {{- end }}
           resources:
             {{- toYaml (default $root.Values.resources $w.resources) | nindent 12 }}
 {{- end }}
