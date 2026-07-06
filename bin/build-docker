@@ -35,8 +35,11 @@ set -euo pipefail
 ECR_REPO_NAMES="${ECR_REPO_NAMES:-idseq-web seqtoid-web}"
 REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-# #482: target platforms for the manifest list. Override via env for a single-arch local build.
-PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
+# #482: single-arch amd64. Multi-arch (arm64) was reverted — building arm64 under QEMU
+# emulation blew the build up ~40x (~70s cached -> 40+ min). arm64/Graviton will be redone
+# with NATIVE arm64 runners (matrix build + manifest combine), never emulation. Pods are
+# amd64-pinned today, so arm64 has no consumer yet. Override PLATFORMS via env if needed.
+PLATFORMS="${PLATFORMS:-linux/amd64}"
 # #485: cache lifecycle mode — `read` (weekday, cache-from only) or `refresh` (Sunday, +cache-to).
 CACHE_MODE="${CACHE_MODE:-read}"
 

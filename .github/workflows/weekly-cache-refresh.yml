@@ -50,10 +50,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      # #482: QEMU + buildx for the multi-arch (amd64+arm64) build so the refreshed cache covers
-      # BOTH arches.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3
+      # buildx for bin/build-docker's registry cache. (QEMU removed with the arm64 revert —
+      # the refreshed cache is amd64-only until arm64 is redone on native runners; #482.)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - name: configure aws credentials

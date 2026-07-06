@@ -64,11 +64,8 @@ jobs:
         with:
           path: ~/.cache
           key: ${{runner.os}}-cache
-      # #482: QEMU for cross-arch (arm64) layers + buildx (docker-container driver) for the
-      # multi-arch `--platform` fan-out and registry cache. bin/build-docker creates the
-      # named builder; these just make binfmt/buildx available on the runner.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3
+      # buildx (docker-container driver) for bin/build-docker's registry cache export/import.
+      # (QEMU removed with the arm64 revert — amd64 builds native, no emulation; #482.)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - name: configure aws credentials
