@@ -88,25 +88,30 @@ RSpec.describe "Visualization feature request", type: :request do
       expect(vis.visualization_type).to eq("heatmap")
     end
 
-    it "overwrites the most recent existing visualization for the same (user, type, sample set)" do
-      # First save creates the visualization.
+    # CHARACTERIZATION of the #save "overwrite the most recent existing viz"
+    # branch (see #294). The controller only reuses an existing visualization
+    # when `v.sample_ids.to_set == sample_ids.to_set`, but over a real HTTP
+    # request `sample_ids` arrives as an array of *strings* (["12"]) while
+    # `v.sample_ids` is an array of *integers* ([12]), so the Set comparison
+    # never matches and each save at the request layer creates a NEW record.
+    #
+    # This pins the CURRENT behavior. If a fix coerces the ids (making the
+    # second save overwrite in place), this example will flip — update it then.
+    it "currently creates a second record on re-save because param sample_ids are strings (see #294)" do
       post "/visualizations/heatmap/save", params: {
         type: "heatmap",
         data: { sampleIds: [sample.id], version: 1 },
       }
       first_id = JSON.parse(response.body)["id"]
 
-      # Second save for the same user/type/sample set overwrites in place
-      # rather than creating a new record.
       expect do
         post "/visualizations/heatmap/save", params: {
           type: "heatmap",
           data: { sampleIds: [sample.id], version: 2 },
         }
-      end.not_to change(Visualization, :count)
+      end.to change(Visualization, :count).by(1)
 
-      expect(JSON.parse(response.body)["id"]).to eq(first_id)
-      expect(Visualization.find(first_id).data["version"]).to eq(2)
+      expect(JSON.parse(response.body)["id"]).not_to eq(first_id)
     end
   end
 

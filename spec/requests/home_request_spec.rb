@@ -49,7 +49,8 @@ RSpec.describe "Home request", type: :request do
       TaxonDescription.create!(
         taxid: 561,
         title: "Escherichia",
-        summary: "A genus of bacteria."
+        summary: "A genus of bacteria.",
+        wikipedia_id: "12345" # required by TaxonDescription; backs #wiki_url
       )
 
       get "/taxon_descriptions", params: { taxon_list: "561,562" }
