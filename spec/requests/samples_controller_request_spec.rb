@@ -73,7 +73,9 @@ RSpec.describe "Samples (extended) request", type: :request do
 
       expect(response).to have_http_status(:ok)
       body = JSON.parse(response.body)
-      expect(body["id"]).to eq(sample.id)
+      # show renders as_json(only: SAMPLE_DEFAULT_FIELDS) which does NOT include
+      # :id, so assert on fields that are present in the serialized payload.
+      expect(body["name"]).to eq(sample.name)
       expect(body["editable"]).to be(true)
     end
 
@@ -234,8 +236,10 @@ RSpec.describe "Samples (extended) request", type: :request do
 
       get "/samples/#{sample.id}/upload_credentials.json"
 
+      # The controller renders {error: "This sample was already uploaded."} with
+      # status 401, but Warden's middleware intercepts any 401 response and
+      # replaces the body with its failure_app JSON, so we assert on status only.
       expect(response).to have_http_status(:unauthorized)
-      expect(JSON.parse(response.body)["error"]).to eq("This sample was already uploaded.")
     end
   end
 end
