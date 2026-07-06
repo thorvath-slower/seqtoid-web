@@ -52,9 +52,10 @@ jobs:
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
           echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
-      # #482: bin/build-docker builds multi-arch and pushes the manifest list directly (the old
-      # separate bin/push-docker step is gone). #485: CACHE_MODE=read (weekday, cache read-only).
-      - name: Build and push docker image (multi-arch)
+      # bin/build-docker builds amd64 and pushes to ECR directly (buildx). #485: CACHE_MODE=read —
+      # this reusable path is a cache CONSUMER (build-docker-image.yml on main is the single
+      # self-healing writer), so it reads the shared cache but never writes it.
+      - name: Build and push docker image
         env:
           CACHE_MODE: read
         run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"

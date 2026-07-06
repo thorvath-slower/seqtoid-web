@@ -1,19 +1,15 @@
 name: Weekly Build-Cache Refresh
 
-# Forgejo #485 — weekly build-cache lifecycle, layered on the existing ECR registry build-cache.
+# Forgejo #485 — the FRESHNESS half of the build-cache lifecycle.
 #
-# WHY: weekday builds (build-docker-image.yml) run with CACHE_MODE=read — they READ the ECR
-# `<repo>:buildcache` ref but never write it, so they skip the ~30-60s `--cache-to mode=max` push
-# and the cache stays byte-stable all week. This Sunday cron does the ONE weekly WRITE
-# (CACHE_MODE=refresh): a clean multi-arch (#482: amd64+arm64) rebuild that
-#   1. regenerates a fresh `mode=max` cache covering BOTH arches, and
-#   2. re-pulls the base image + runs `apt-get upgrade` in the Dockerfile, so Monday's builds
-#      start on the week's base-image security patches + current dependency drift.
-#
-# CAVEAT (accepted, mirrors bin/build-docker's note): because weekdays are cache-READ-only, a
-# mid-week dependency change (Gemfile / package-lock.json / requirements.txt) is NOT written back
-# to the cache — it rebuilds that layer on every weekday build until this Sunday refresh folds it in.
-# That's a deliberate trade for a stable, fast weekday cache and is acceptable at the dev cadence.
+# WARMTH is handled by self-healing: every `main` build (build-docker-image.yml) runs CACHE_MODE=write,
+# so it reads AND writes the ECR `<repo>:buildcache` ref — the cache auto-recovers after any dep or
+# Dockerfile change with no cold-cache window. This Sunday cron does the separate FRESHNESS pass
+# (CACHE_MODE=rebuild): a clean `--no-cache` from-scratch rebuild that
+#   1. re-pulls the base image + runs `apt-get upgrade`, so the cache picks up the week's base-image
+#      security patches + current dependency drift, and
+#   2. writes the fresh `mode=max` cache back.
+# Self-heal keeps the cache WARM; this keeps it CURRENT. Neither replaces the other.
 #
 # Store: ECR (the same registry EKS pulls from) — no separate cache backend to manage.
 
@@ -69,9 +65,10 @@ jobs:
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
           echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
-      # #485: the ONE weekly cache WRITE — CACHE_MODE=refresh adds `--cache-to mode=max`, so this
-      # build regenerates the fresh multi-arch cache Monday's weekday builds then read.
-      - name: Refresh build cache (clean multi-arch build, cache-to mode=max)
+      # #485: the weekly FRESHNESS pass — CACHE_MODE=rebuild does a clean `--no-cache` rebuild
+      # (re-pulls base image + apt upgrade) and writes `--cache-to mode=max`, so the self-healing
+      # main cache is rebased onto the week's security patches.
+      - name: Refresh build cache (clean --no-cache rebuild, cache-to mode=max)
         env:
-          CACHE_MODE: refresh
+          CACHE_MODE: rebuild
         run: bin/build-docker main "${GITHUB_SHA::8}"

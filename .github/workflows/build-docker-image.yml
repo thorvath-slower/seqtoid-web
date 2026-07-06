@@ -88,14 +88,15 @@ jobs:
           # exact tag), so Trivy/cosign/GHCR must reference `sha-<sha8>` or they scan a tag that was
           # never built (fails "MANIFEST_UNKNOWN" / "No such image").
           echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:sha-${GITHUB_SHA::8}" >> "$GITHUB_ENV"
-      # #482: bin/build-docker now builds linux/amd64+linux/arm64 and pushes the manifest list
-      # DIRECTLY to ECR (a multi-arch image cannot be --load'ed into the local single-arch daemon,
-      # so buildx pushes it). That means the separate bin/push-docker step is gone — the build IS
-      # the push. #485: CACHE_MODE=read (weekday) reads the cache but does NOT write it; the Sunday
-      # weekly-cache-refresh.yml cron regenerates it (CACHE_MODE=refresh).
-      - name: Build and push docker image (multi-arch)
+      # bin/build-docker builds amd64 and pushes to ECR directly (buildx docker-container driver +
+      # registry cache => push, not local --load). #485: SELF-HEALING cache — a `main` build uses
+      # CACHE_MODE=write (reads AND writes the cache back, so it auto-recovers after any dep/Dockerfile
+      # change); an on-demand feature build (workflow_dispatch off a branch) stays CACHE_MODE=read so
+      # it can't pollute the shared main cache. The Sunday weekly-cache-refresh.yml cron does the clean
+      # --no-cache rebuild (CACHE_MODE=rebuild) for base-image patches.
+      - name: Build and push docker image
         env:
-          CACHE_MODE: read
+          CACHE_MODE: ${{ github.ref == 'refs/heads/main' && 'write' || 'read' }}
         run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
       # CZID-75: scan the built image BEFORE it ships — fail the release on HIGH/CRITICAL CVEs.
       # The image is already in ECR (build pushed it); Trivy pulls IMAGE_REF (the amd64 child of
