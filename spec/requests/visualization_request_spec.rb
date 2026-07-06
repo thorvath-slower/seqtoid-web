@@ -106,22 +106,21 @@ RSpec.describe "Visualizations request", type: :request do
       expect(mine.reload.name).to eq("Renamed By Owner")
     end
 
-    # SECURITY / AUTHORIZATION BOUNDARY (see #294):
-    # VisualizationsController#update calls the UNSCOPED `Visualization.find(id)`
-    # rather than `current_power.visualizations.find(id)` (as #show does). That
-    # means any authenticated user can rename ANY visualization by id — an IDOR.
-    #
-    # This example documents the CURRENT behavior so that a fix (scoping the
-    # lookup) flips it. If it starts failing because the rename was rejected,
-    # that is the bug being fixed — update the expectation then.
-    it "currently ALLOWS a non-owner to rename another user's private visualization (IDOR — see #294)" do
+    # SECURITY / AUTHORIZATION BOUNDARY (see #157):
+    # VisualizationsController#update scopes the lookup through
+    # `current_power.visualizations.find(id)` (Visualization.viewable), mirroring
+    # #visualization. A non-owner cannot resolve another user's private
+    # visualization, so the lookup raises RecordNotFound and the record is left
+    # untouched — closing the IDOR.
+    it "does not let a non-owner rename another user's private visualization (IDOR — see #157)" do
       other_owner_vis = build_visualization.call(owner: @admin, public_access: 0, name: "Admin Private Viz")
 
-      put "/visualizations/#{other_owner_vis.id}", params: { name: "Hijacked" }
+      expect do
+        put "/visualizations/#{other_owner_vis.id}", params: { name: "Hijacked" }
+      end.to raise_error(ActiveRecord::RecordNotFound)
 
-      expect(response).to have_http_status(:ok)
-      # Demonstrates the missing authorization check: the rename went through.
-      expect(other_owner_vis.reload.name).to eq("Hijacked")
+      # The authorization check held: the rename did not go through.
+      expect(other_owner_vis.reload.name).to eq("Admin Private Viz")
     end
   end
 end
