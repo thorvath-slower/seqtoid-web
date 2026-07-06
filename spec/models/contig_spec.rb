@@ -72,22 +72,22 @@ RSpec.describe Contig, type: :model do
   end
 
   context "#middle_n_base_pairs" do
-    # NOTE (reported to #294): the model comment says "If n > sequence.length, the
-    # sequence is returned", but the slice arithmetic produces a negative start
-    # offset for large n, so String#slice actually returns nil. This test pins the
-    # ACTUAL current behavior; it documents the mismatch rather than the intent.
-    it "returns nil when n greatly exceeds the sequence length (documents current behavior)" do
+    it "returns the whole sequence when n exceeds the sequence length" do
       contig = build(:contig, pipeline_run: pipeline_run, sequence: "GATTACA")
-      expect(contig.middle_n_base_pairs(100)).to be_nil
+      expect(contig.middle_n_base_pairs(100)).to eq("GATTACA")
     end
 
-    it "returns a substring of the sequence for n smaller than the sequence length" do
+    it "returns the whole sequence when n equals the sequence length" do
       contig = build(:contig, pipeline_run: pipeline_run, sequence: "GATTACA")
-      # Derived from the model's slice arithmetic, not hardcoded intent.
+      expect(contig.middle_n_base_pairs("GATTACA".length)).to eq("GATTACA")
+    end
+
+    it "returns the middle n base pairs for n smaller than the sequence length" do
+      contig = build(:contig, pipeline_run: pipeline_run, sequence: "GATTACA")
       result = contig.middle_n_base_pairs(3)
-      expect(result).to be_a(String)
+      expect(result).to eq("TTA")
+      expect(result.length).to eq(3)
       expect("GATTACA").to include(result)
-      expect(result.length).to be <= "GATTACA".length
     end
   end
 end

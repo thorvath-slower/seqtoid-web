@@ -30,10 +30,13 @@ class Contig < ApplicationRecord
   end
 
   # Returns the middle n base pairs of a sequence
-  # If n > sequence.length, the sequence is returned
+  # If n >= sequence.length, the whole sequence is returned
   def middle_n_base_pairs(n)
-    difference = sequence.length - n
+    return sequence if n >= sequence.length
 
-    sequence.slice((difference + 1) / 2, sequence.length - (difference + 1 / 2))
+    difference = sequence.length - n
+    front_offset = (difference + 1) / 2
+
+    sequence.slice(front_offset, n)
   end
 end
