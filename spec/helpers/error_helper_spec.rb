@@ -165,7 +165,10 @@ RSpec.describe ErrorHelper, type: :helper do
       end
 
       it "returns a generic error when force_options is not set" do
-        field.force_options = 0
+        # NOTE: get_field_error branches on `if field.force_options`, so only a
+        # nil/false value reaches this branch. An integer 0 is truthy in Ruby and
+        # would instead hit the options branch (and raise on nil options).
+        field.force_options = nil
         expect(helper.get_field_error(field)).to eq("There was an error. Please contact us for help.")
       end
     end
