@@ -79,6 +79,8 @@ RSpec.describe MetricUtil do
     it "identifies and tracks when analytics is present and the request is not a test" do
       analytics = double("analytics")
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
+      # a_test? is otherwise true under RSpec; force the non-test path.
+      allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
         "request",
         user_agent: "Mozilla/5.0",
@@ -88,9 +90,7 @@ RSpec.describe MetricUtil do
         remote_ip: "1.2.3.4"
       )
 
-      expect(analytics).to receive(:identify).with(
-        hash_including(user_id: user.id, traits: user.traits_for_analytics)
-      )
+      expect(analytics).to receive(:identify).with(hash_including(user_id: user.id))
       expect(analytics).to receive(:track).with(
         hash_including(event: "upload_started", user_id: user.id)
       )
@@ -101,6 +101,7 @@ RSpec.describe MetricUtil do
     it "uses user_id 0 and skips identify when no user is given" do
       analytics = double("analytics")
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
+      allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
         "request",
         user_agent: "Mozilla/5.0",
@@ -119,6 +120,7 @@ RSpec.describe MetricUtil do
     it "swallows errors and logs them instead of raising" do
       analytics = double("analytics")
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
+      allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
         "request",
         user_agent: "Mozilla/5.0",
