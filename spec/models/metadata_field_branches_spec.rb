@@ -37,7 +37,7 @@ describe MetadataField, type: :model do
   describe "#field_info" do
     it "parses options and examples when present" do
       field = create(:metadata_field, base_type: MetadataField::STRING_TYPE,
-                                       options: '["DNA","RNA"]', examples: '{"all":["e1"]}')
+                                      options: '["DNA","RNA"]', examples: '{"all":["e1"]}')
       info = field.field_info
       expect(info[:options]).to eq(%w[DNA RNA])
       expect(info[:examples]).to eq("all" => ["e1"])
@@ -46,7 +46,7 @@ describe MetadataField, type: :model do
 
     it "leaves options and examples nil when absent" do
       field = create(:metadata_field, base_type: MetadataField::STRING_TYPE,
-                                       options: nil, examples: nil)
+                                      options: nil, examples: nil)
       info = field.field_info
       expect(info[:options]).to be_nil
       expect(info[:examples]).to be_nil

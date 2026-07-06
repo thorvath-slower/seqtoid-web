@@ -2,7 +2,7 @@ require 'rails_helper'
 
 # Coverage Wave 2 (branch): exercises the *opposite* branches of Location's
 # class-method conditionals that location_spec.rb / location_coverage_spec.rb
-# leave untaken — the location_api_request success/rescue split, the three-way
+# leave untaken: the location_api_request success/rescue split, the three-way
 # find_or_new_by_fields dispatch, specificity_valid? true path, and
 # check_and_fetch_parents' missing-parent geosearch loop. External LocationIQ
 # HTTP is stubbed at the location_api_request / geosearch_by_levels seams.

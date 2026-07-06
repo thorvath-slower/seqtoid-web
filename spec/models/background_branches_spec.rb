@@ -14,7 +14,7 @@ RSpec.describe Background, type: :model do
   def taxon_result(mass: false)
     r = { tax_id: 1, count_type: "NT", tax_level: 1,
           sum_rpm: 10.0, sum_rpm2: 60.0, rpm_list: [1.0, 2.0],
-          rel_abundance_list_mass_normalized: [0.1, 0.2] }
+          rel_abundance_list_mass_normalized: [0.1, 0.2], }
     if mass
       r[:sum_mass_norm_count] = 4.0
       r[:sum_mass_norm_count2] = 10.0
