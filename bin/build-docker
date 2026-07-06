@@ -16,19 +16,21 @@
 # pushes the manifest list directly (`--push`) under every tag — this script now OWNS the push (the
 # old bin/push-docker `docker push` step is a no-op for multi-arch and is skipped by the workflow).
 #
-# #485 (weekly build-cache lifecycle): the ECR registry build-cache is now written ONCE A WEEK, not
-# every build. Controlled by CACHE_MODE:
-#   - CACHE_MODE=read  (DEFAULT, weekday builds): `--cache-from` ONLY. Skips the ~30-60s cache PUSH
-#     (`--cache-to mode=max`), so weekday builds are faster AND the cache ref stays byte-stable all
-#     week (no churn / no partial-write races).
-#   - CACHE_MODE=refresh (the Sunday cron, weekly-cache-refresh.yml): `--cache-from` + `--cache-to
-#     mode=max`. A clean weekly rebuild that (a) regenerates a fresh cache for BOTH arches, and
-#     (b) re-pulls the base image + `apt-get upgrade` so Monday starts on the week's security patches
-#     and current deps.
-#   CAVEAT (accepted): with read-only weekday caching, a mid-week dependency change (Gemfile /
-#   package-lock / requirements.txt) is NOT written back to the cache — it rebuilds that layer on
-#   every subsequent weekday build until the Sunday refresh folds it into the cache. That's a
-#   deliberate trade (stable, fast weekday cache) and is fine for the dev cadence.
+# #485 (build-cache lifecycle, redesigned for SELF-HEALING): warmth and freshness are SEPARATE
+# concerns, so they're separate modes and compose — neither replaces the other:
+#   - CACHE_MODE=write   (main builds): `--cache-from` + `--cache-to mode=max`. SELF-HEALING — every
+#     main build writes its updated layers back, so the cache always reflects the latest state and
+#     auto-recovers after any Gemfile / package-lock / requirements / Dockerfile change (no cold-cache
+#     window). cache-to is content-addressed: unchanged layers aren't re-uploaded (a fast manifest
+#     update), so the push cost is paid only when layers actually changed — exactly when it's useful.
+#   - CACHE_MODE=read    (feature / on-demand builds): `--cache-from` ONLY. Reads the shared cache but
+#     never writes it, so branch-specific layers don't pollute the main cache. (DEFAULT — safe.)
+#   - CACHE_MODE=rebuild (the Sunday cron, weekly-cache-refresh.yml): `--no-cache` + `--cache-to
+#     mode=max`. A clean from-scratch rebuild that re-pulls the base image + `apt-get upgrade`, so the
+#     cache picks up the week's security patches + dep drift. This is the FRESHNESS pass — self-heal
+#     keeps the cache WARM, this keeps it CURRENT.
+# Single writer: only main builds (write) + the Sunday cron (rebuild) write the cache; the main
+# build workflow's concurrency guard prevents overlapping writes.
 set -euo pipefail
 
 # Space-separated ECR repo names to tag (transition: dual-push legacy + go-forward). Override via env.
@@ -40,7 +42,8 @@ REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 # with NATIVE arm64 runners (matrix build + manifest combine), never emulation. Pods are
 # amd64-pinned today, so arm64 has no consumer yet. Override PLATFORMS via env if needed.
 PLATFORMS="${PLATFORMS:-linux/amd64}"
-# #485: cache lifecycle mode — `read` (weekday, cache-from only) or `refresh` (Sunday, +cache-to).
+# #485: cache mode — `write` (main, self-heal), `read` (feature, cache-from only), `rebuild` (Sunday
+# clean --no-cache + cache-to). Default `read` is the safe non-writing choice for ad-hoc builds.
 CACHE_MODE="${CACHE_MODE:-read}"
 
 BRANCH="$1"
@@ -77,9 +80,8 @@ echo "Asset SRC_HASH $SRC_HASH"
 # on a fresh cache ref cache-misses gracefully and populates it.
 CACHE_REF="$PRIMARY_REPO:buildcache"
 
-# The docker-container driver is REQUIRED for multi-arch (`--platform` fan-out) AND for
-# registry cache export/import. (The default `docker` driver can do neither.) QEMU emulation
-# for the non-native arch is provided by tonistiigi/binfmt on the CI runner.
+# The docker-container driver is REQUIRED for registry cache export/import (the default `docker`
+# driver can't do it). Single-arch amd64 (#482 revert), so no QEMU/binfmt needed.
 docker buildx inspect seqtoid-cache-builder >/dev/null 2>&1 \
   || docker buildx create --name seqtoid-cache-builder --driver docker-container --use
 docker buildx use seqtoid-cache-builder
@@ -95,17 +97,25 @@ for NAME in $ECR_REPO_NAMES; do
     fi
 done
 
-# #485: only the refresh (Sunday) build WRITES the cache; weekday builds read-only.
-CACHE_ARGS=(--cache-from "type=registry,ref=$CACHE_REF")
-if [ "$CACHE_MODE" == "refresh" ]; then
-    echo "CACHE_MODE=refresh -> writing a fresh cache to $CACHE_REF (mode=max)"
-    CACHE_ARGS+=(--cache-to "type=registry,ref=$CACHE_REF,mode=max,image-manifest=true,oci-mediatypes=true")
-else
-    echo "CACHE_MODE=$CACHE_MODE -> cache is read-only (no --cache-to); Sunday cron refreshes it"
-fi
+# #485: self-heal on main (write), read-only for feature builds, weekly clean rebuild (rebuild).
+CACHE_TO="type=registry,ref=$CACHE_REF,mode=max,image-manifest=true,oci-mediatypes=true"
+case "$CACHE_MODE" in
+  write)
+    echo "CACHE_MODE=write -> self-healing: read $CACHE_REF AND write it back (mode=max)"
+    CACHE_ARGS=(--cache-from "type=registry,ref=$CACHE_REF" --cache-to "$CACHE_TO")
+    ;;
+  rebuild)
+    echo "CACHE_MODE=rebuild -> clean --no-cache rebuild (base-image patches) + write cache (mode=max)"
+    CACHE_ARGS=(--no-cache --cache-to "$CACHE_TO")
+    ;;
+  *)
+    echo "CACHE_MODE=read -> read-only $CACHE_REF (no --cache-to); feature/on-demand build"
+    CACHE_ARGS=(--cache-from "type=registry,ref=$CACHE_REF")
+    ;;
+esac
 
-# #482: `--platform` (multi-arch) forces `--push` (a manifest list cannot be `--load`ed into the
-# local single-arch daemon). buildx builds every platform and pushes ALL tags as one manifest list.
+# `--push` (not `--load`): the docker-container builder builds off-daemon and the registry cache
+# needs a registry target. buildx builds linux/amd64 and pushes all tags.
 docker buildx build \
     --platform "$PLATFORMS" \
     --push \
