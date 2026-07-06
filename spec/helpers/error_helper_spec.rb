@@ -164,11 +164,12 @@ RSpec.describe ErrorHelper, type: :helper do
         expect(helper.get_field_error(field)).to eq("The valid options are A, B.")
       end
 
-      it "returns a generic error when force_options is not set" do
-        # NOTE: get_field_error branches on `if field.force_options`, so only a
-        # nil/false value reaches this branch. An integer 0 is truthy in Ruby and
-        # would instead hit the options branch (and raise on nil options).
-        field.force_options = nil
+      it "returns a generic error when force_options is not set (0, the DB default)" do
+        # get_field_error branches on `if field.force_options == 1`, matching the
+        # model's own semantics (force_options is an integer column in [0, 1]).
+        # Integer 0 is truthy in Ruby, so the previous `if field.force_options`
+        # check wrongly hit the options branch for the default value (#294).
+        field.force_options = 0
         expect(helper.get_field_error(field)).to eq("There was an error. Please contact us for help.")
       end
     end
