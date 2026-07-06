@@ -86,14 +86,25 @@ and the GraphQL endpoint together; hitting 3001 directly can 500 on data pages.
 
 - **BuildKit is on** for every build — the `Makefile` exports `DOCKER_BUILDKIT=1` and
   `COMPOSE_DOCKER_CLI_BUILD=1`. You get layer caching for free; an unchanged
-  `Gemfile.lock` / `package-lock.json` layer is reused.
+  `Gemfile.lock` / `package-lock.json` layer is reused (no re-install at all).
+- **Cache-mounts for the case where deps *do* change (#463)** — the Dockerfile
+  (`# syntax=docker/dockerfile:1`) mounts the npm download store (`/root/.npm`) and the
+  bundler download cache (`/usr/local/bundle/cache`) as persistent BuildKit caches. So a
+  `package-lock` / `Gemfile.lock` bump re-downloads **only the new** tarballs/gems instead
+  of the whole set — the biggest win right after a dependency change. Build-time only:
+  installed `node_modules` + gems (`/usr/local/bundle/gems`) are still baked into the image;
+  only the download caches are mount-excluded.
 - **`cache_from` the last ECR image** — `docker-compose.yml` sets
   `web.build.cache_from: …/idseq-web:latest`, so a fresh clone / cold cache seeds its
   layers from the last pushed image instead of building from scratch. `make local-build`
   runs `local-ecr-login` first so the pull works.
-- **CI reuses a warm bundle volume** — `docker-compose.ci.yml` mounts a named
-  `bundle-cache` volume at `/app/vendor/bundle`, so repeated `make ci-local` runs don't
-  re-`bundle install`.
+
+> **Why no local `vendor/bundle` volume?** The image installs gems to the default
+> `/usr/local/bundle` (there's no `BUNDLE_PATH=vendor/bundle` override), so a
+> `bundle-cache:/app/vendor/bundle` volume like CI's would sit **empty** and just shadow
+> the image's gems — it wouldn't speed anything. The layer cache + download cache-mounts
+> above are the local gem-caching story; a persistent-installed-gems volume would need a
+> repo-wide `BUNDLE_PATH` change and is deliberately deferred on #463.
 
 The CI/build-server image build additionally uses an **ECR registry build-cache**
 (`--cache-from`/`--cache-to type=registry,mode=max`) and multi-arch — that's the

@@ -1,3 +1,11 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# The `# syntax` line above enables BuildKit `RUN --mount=type=cache` (#463): the
+# npm + bundler DOWNLOAD caches persist across local rebuilds so a Gemfile.lock /
+# package-lock change re-downloads only what changed instead of the whole set.
+# Build-time only — the cache dirs are NOT baked into the image (installed gems in
+# /usr/local/bundle/gems + node_modules ARE). Needs DOCKER_BUILDKIT=1 (the Makefile
+# and buildx set it). In CI the mounts are empty per run (harmless); the win is local.
 # =============================================================================
 # Multi-stage build (EOL image hardening, #251-255/#346): compile everything in a
 # full-toolchain `builder` stage, then ship a slim `runtime` stage carrying ONLY
@@ -72,7 +80,9 @@ WORKDIR /app
 
 # .npmrc carries legacy-peer-deps=true (bug-#003) — must precede `npm ci`.
 COPY .npmrc package.json package-lock.json ./
-RUN npm ci --omit=optional
+# #463: cache npm's download store across builds so a package-lock change re-fetches
+# only new tarballs. node_modules is still installed fresh into the image.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci --omit=optional
 
 # Generate the app's static resources (webpack). 6GB heap for node.
 ENV NODE_OPTIONS="--max_old_space_size=6144"
@@ -87,7 +97,10 @@ RUN mkdir -p app/assets/dist && npm run build-img && ls -l app/assets/dist/
 COPY Gemfile Gemfile.lock .ruby-version ./
 RUN gem install bundler -v '2.5.22'
 RUN bundle config set force_ruby_platform true
-RUN bundle install --jobs 20 --retry 5
+# #463: cache the downloaded .gem archives (/usr/local/bundle/cache) across builds so
+# a Gemfile.lock change re-downloads only new gems. Installed gems still land in
+# /usr/local/bundle/gems (in the image); only the download cache is mount-excluded.
+RUN --mount=type=cache,target=/usr/local/bundle/cache,sharing=locked bundle install --jobs 20 --retry 5
 
 COPY . ./
 ARG GIT_COMMIT
