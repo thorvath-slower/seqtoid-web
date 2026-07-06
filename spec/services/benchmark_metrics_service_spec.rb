@@ -72,7 +72,8 @@ RSpec.describe BenchmarkMetricsService, type: :service do
         run = build_benchmark_run(workflow_benchmarked: WorkflowRun::WORKFLOW[:short_read_mngs])
 
         allow_any_instance_of(BenchmarkWorkflowRun).to receive(:output) do |_instance, key|
-          raise SfnExecution::OutputNotFoundError.new(key, "s3://bucket/description.json") if key =~ /correlation/
+          # OutputNotFoundError's second arg is available_keys (an Array it #joins).
+          raise SfnExecution::OutputNotFoundError.new(key, ["s3://bucket/other_output.json"]) if key =~ /correlation/
 
           nil
         end

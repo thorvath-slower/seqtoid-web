@@ -45,9 +45,9 @@ RSpec.describe TaxonCountsDataService, type: :service do
       result = TaxonCountsDataService.call(pipeline_run_ids: [@pipeline_run.id])
       nt_573 = result.find { |r| r[:tax_id] == 573 && r[:count_type] == "NT" }
 
-      # rpm = count / (total_reads * fraction_subsampled) * 1e6
-      # = 209 / (1000 * 1.0) * 1_000_000 = 209_000_000
-      expect(nt_573[:rpm]).to be_within(0.1).of(209_000_000.0)
+      # rpm = count / ((total_reads - total_ercc_reads) * fraction_subsampled) * 1e6
+      # = 209 / ((1000 - 0) * 1.0) * 1_000_000 = 209_000
+      expect(nt_573[:rpm]).to be_within(0.1).of(209_000.0)
     end
 
     context "when count_types filter is provided" do

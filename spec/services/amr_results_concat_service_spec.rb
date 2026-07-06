@@ -23,6 +23,17 @@ RSpec.describe AmrResultsConcatService, type: :service do
     run.becomes(AmrWorkflowRun)
   end
 
+  before do
+    # The service resolves the report S3 path via SfnExecution#output_path, which
+    # would otherwise reach into a real (absent) SFN description and raise
+    # SfnDescriptionNotFoundError. Stub it so tests exercise the concat logic,
+    # not the SFN-path resolution.
+    allow_any_instance_of(AmrWorkflowRun)
+      .to receive(:output_path)
+      .with(AmrWorkflowRun::OUTPUT_REPORT)
+      .and_return("s3://fake-bucket/amr-report.tsv")
+  end
+
   describe "#call" do
     context "when a workflow run id does not exist" do
       it "raises WorkflowRunNotFoundError with the missing id" do
