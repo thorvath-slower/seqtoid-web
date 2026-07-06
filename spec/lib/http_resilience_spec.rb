@@ -18,7 +18,11 @@ RSpec.describe HttpResilience do
     fake_now[:t] += seconds
   end
 
-  after { described_class.reset! }
+  # NOTE: `described_class` is context-sensitive -- inside the nested
+  # `describe HttpResilience::CircuitBreaker` block it resolves to CircuitBreaker,
+  # not the HttpResilience module. So we reference the module explicitly here and
+  # in the registry/module-function specs rather than via described_class.
+  after { HttpResilience.reset! }
 
   describe HttpResilience::CircuitBreaker do
     subject(:breaker) do
@@ -276,8 +280,8 @@ RSpec.describe HttpResilience do
 
   describe "integration: breaker wrapping a flapping dependency" do
     it "opens after repeated real failures then fast-fails the wrapped block" do
-      breaker = described_class.new(:integration, failure_threshold: 2,
-                                                  reset_timeout: 5, clock: clock)
+      breaker = HttpResilience::CircuitBreaker.new(:integration, failure_threshold: 2,
+                                                                 reset_timeout: 5, clock: clock)
       attempts = 0
       failing = lambda do
         attempts += 1
