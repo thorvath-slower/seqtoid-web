@@ -77,7 +77,11 @@ RSpec.describe MetricUtil do
     end
 
     it "identifies and tracks when analytics is present and the request is not a test" do
-      analytics = instance_double("Segment::Analytics", identify: nil, track: nil)
+      # analytics-ruby 2.x forwards #identify/#track to an internal client, so
+      # they are not statically visible on Segment::Analytics for a verifying
+      # double. Use a plain double; the app contract (#identify/#track) is
+      # still fully asserted below via have_received.
+      analytics = double("Segment::Analytics", identify: nil, track: nil)
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
       # a_test? is otherwise true under RSpec; force the non-test path.
       allow(MetricUtil).to receive(:a_test?).and_return(false)
@@ -99,7 +103,7 @@ RSpec.describe MetricUtil do
     end
 
     it "uses user_id 0 and skips identify when no user is given" do
-      analytics = instance_double("Segment::Analytics", identify: nil, track: nil)
+      analytics = double("Segment::Analytics", identify: nil, track: nil)
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
       allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
@@ -118,7 +122,7 @@ RSpec.describe MetricUtil do
     end
 
     it "swallows errors and logs them instead of raising" do
-      analytics = instance_double("Segment::Analytics", track: nil)
+      analytics = double("Segment::Analytics", track: nil)
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
       allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
