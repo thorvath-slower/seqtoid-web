@@ -94,6 +94,10 @@ make local-start-webapp    # app + webpack dev server -> http://localhost:3001
 Other useful targets: `make local-migrate`, `make local-console` (bash in web container),
 `make local-railsc` (Rails console), `make local-dbconsole`. Full list: `make help` / `DEVELOPMENT.md`.
 
+For the **fast inner loop** (what needs a rebuild vs. what's live-mounted) and the
+**no-AWS `OFFLINE=1` harness** (run + test the app with no cloud creds), see
+[`docs/LOCAL-DEV.md`](docs/LOCAL-DEV.md).
+
 ## 6. Build, test & quality gates
 
 ```bash

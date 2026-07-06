@@ -69,10 +69,7 @@ local-init: ## Set up a local dev environment
 		$(MAKE) .env.localdev; \
 		$(MAKE) local-pull; \
 		. .env.localdev; \
-	fi 
-	exit
-
-	
+	fi
 	if [ "$$(uname -s)" == "Darwin" ]; then \
 		OFFLINE=$(OFFLINE) ./bin/setup-macos; \
 	else \
@@ -84,7 +81,7 @@ local-migrate: .env.localdev ## Run database schema and data migrations
 	$(docker_compose) run --rm web bin/rails db:migrate:with_data RAILS_ENV=development
 
 .PHONY: local-bundle
-local-bundle: .env.localdev ## Run database schema and data migrations
+local-bundle: .env.localdev ## Install Ruby gem dependencies (bundle install)
 	$(docker_compose) run --rm web bin/rails bundle install
 
 .PHONY: local-migrate-down
