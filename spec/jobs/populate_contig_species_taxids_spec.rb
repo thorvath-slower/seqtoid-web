@@ -18,24 +18,13 @@ RSpec.describe PopulateContigSpeciesTaxids, type: :job do
                species_taxid_nr: nil)
       end
 
-      # CHARACTERIZATION (app bug, not a spec bug): on MySQL this job does NOT
-      # populate the taxids. PopulateContigSpeciesTaxids#perform calls
-      # Contig.bulk_import(..., on_duplicate_key_update: { conflict_target: [...],
-      #   columns: [...] }). That hash form is PostgreSQL-only (the app comment even
-      # says "Hash form ... is portable to PostgreSQL"). On MySQL, activerecord-import
-      # emits `ON DUPLICATE KEY UPDATE conflict_target = VALUES(contigs.conflict_target)`,
-      # which raises `Mysql2::Error: Unknown column 'contigs.conflict_target'`. The job
-      # rescues StandardError at the top level and only logs it, so #perform returns
-      # normally while the upsert silently no-ops -- the contig's taxids stay nil.
-      # This branch targets MySQL 8, so the current (broken) behavior is pinned here.
-      # Fix tracked separately; do NOT change app code to make this pass.
-      it "does not populate taxids on MySQL (upsert conflict_target is Postgres-only)" do
+      it "populates the species and genus taxids from lineage_json" do
         PopulateContigSpeciesTaxids.perform
         contig.reload
-        expect(contig.species_taxid_nt).to be_nil
-        expect(contig.genus_taxid_nt).to be_nil
-        expect(contig.species_taxid_nr).to be_nil
-        expect(contig.genus_taxid_nr).to be_nil
+        expect(contig.species_taxid_nt).to eq(101)
+        expect(contig.genus_taxid_nt).to eq(201)
+        expect(contig.species_taxid_nr).to eq(102)
+        expect(contig.genus_taxid_nr).to eq(202)
       end
     end
 
