@@ -88,8 +88,12 @@ Am I unsure?                                             → Path A. It cannot d
 ```
 
 ## Notes
-- **Auto-deploy-on-push is intentionally OFF** for now — deploys are button/script-triggered while the platform is
-  being hardened. (`build-docker-image.yml`'s push trigger stays commented out.)
+- **Build-on-push is ON for `main`, but push does not deploy staging/prod.** Merges to `main` auto-build and push a
+  SHA-tagged image to ECR (`build-docker-image.yml`, #304/#482/#485). On **dev only**, a successful build then
+  auto-advances the image tag in the GitOps values via `gitops-advance-dev.yml` (#444), and Argo CD promotes it —
+  dev is hands-off. Feature branches are **not** auto-pushed (build one on demand via the workflow's `workflow_dispatch`).
+  **Staging and prod stay button/script-triggered** (Path A `deploy.yml` / the `deploy-promote.yml` chain) while the
+  platform is hardened — a `main` build never rolls staging or prod on its own.
 - **`bin/manual_deploy_scripts/deploy-web.sh` is retired** — it hand-toggled `db:drop` and the taxon/OpenSearch
   steps, which is exactly the foot-gun this two-path model removes. Do not resurrect it; use Path A or Path B.
 - Blue/green (Argo Rollouts) is a separate, later effort and not required for either path here.
