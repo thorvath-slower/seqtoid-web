@@ -10,14 +10,18 @@ RSpec.describe "Backgrounds request", type: :request do
   create_users
 
   describe "GET /backgrounds.json (index, login required)" do
-    it "redirects to root_path when not signed in (login_required)" do
+    it "returns 401 JSON when not signed in (authenticate_user! via Warden)" do
       get "/backgrounds.json"
-      expect(response).to redirect_to(root_path)
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.body).to include("Unauthorized")
     end
 
-    it "returns the viewable backgrounds for a signed-in user" do
+    it "returns viewable backgrounds for a signed-in user" do
       sign_in @joe
-      bg = create(:background, user: @joe)
+      # Background.viewable only surfaces a background to a non-admin when it is
+      # public or all its pipeline_runs' samples are viewable by the user; the
+      # factory's pipeline runs belong to other samples, so mark it public.
+      bg = create(:background, user: @joe, public_access: 1)
 
       get "/backgrounds.json"
 

@@ -77,14 +77,14 @@ RSpec.describe "Projects (extended) request", type: :request do
     end
   end
 
-  describe "GET /projects/:id/validate_sample_names (read-scoped)" do
+  describe "POST /projects/:id/validate_sample_names (read-scoped)" do
     before { sign_in @joe }
 
     it "de-duplicates names that collide with existing samples in the project" do
       project = create(:project, users: [@joe])
       create(:sample, project: project, user: @joe, name: "dup_sample")
 
-      get "/projects/#{project.id}/validate_sample_names", params: { sample_names: ["dup_sample", "unique_sample"] }
+      post "/projects/#{project.id}/validate_sample_names", params: { sample_names: ["dup_sample", "unique_sample"] }
 
       expect(response).to have_http_status(:ok)
       names = JSON.parse(response.body)

@@ -51,46 +51,52 @@ RSpec.describe "HostGenomes request", type: :request do
       expect(response).to redirect_to(root_path)
     end
 
-    it "creates a host genome for an admin" do
+    it "creates a host genome for an admin (HTML redirect)" do
+      sign_in @admin
+
+      # NOTE: the JSON create path renders :show, but host_genomes has no
+      # show.json view (only show.html.erb), so we exercise the HTML path which
+      # redirects to the created record. The DB-level side effect is the point.
+      expect do
+        post "/host_genomes", params: { host_genome: { name: "Admin Created Host" } }
+      end.to change(HostGenome, :count).by(1)
+
+      created = HostGenome.order(:id).last
+      expect(created.name).to eq("Admin Created Host")
+      expect(response).to redirect_to(host_genome_path(created))
+    end
+
+    it "re-renders new (200) with errors when the name is missing" do
       sign_in @admin
 
       expect do
-        post "/host_genomes.json", params: { host_genome: { name: "Admin Created Host" } }
-      end.to change(HostGenome, :count).by(1)
+        post "/host_genomes", params: { host_genome: { name: "" } }
+      end.not_to change(HostGenome, :count)
 
-      expect(response).to have_http_status(:created)
-      expect(HostGenome.order(:id).last.name).to eq("Admin Created Host")
-    end
-
-    it "returns unprocessable_content with errors when the name is missing" do
-      sign_in @admin
-
-      post "/host_genomes.json", params: { host_genome: { name: "" } }
-
-      expect(response).to have_http_status(:unprocessable_content)
-      expect(JSON.parse(response.body)).to have_key("name")
+      # invalid create renders :new (200) rather than redirecting
+      expect(response).to have_http_status(:ok)
     end
   end
 
-  describe "PUT /host_genomes/:id.json (admin-only update)" do
+  describe "PUT /host_genomes/:id (admin-only update)" do
     it "redirects a regular user to root_path" do
       hg = create(:host_genome)
       sign_in @joe
 
-      put "/host_genomes/#{hg.id}.json", params: { host_genome: { name: "Renamed" } }
+      put "/host_genomes/#{hg.id}", params: { host_genome: { name: "Renamed" } }
 
       expect(response).to redirect_to(root_path)
       expect(hg.reload.name).not_to eq("Renamed")
     end
 
-    it "updates the record for an admin" do
+    it "updates the record for an admin (HTML redirect)" do
       hg = create(:host_genome)
       sign_in @admin
 
-      put "/host_genomes/#{hg.id}.json", params: { host_genome: { name: "Renamed By Admin" } }
+      put "/host_genomes/#{hg.id}", params: { host_genome: { name: "Renamed By Admin" } }
 
-      expect(response).to have_http_status(:ok)
       expect(hg.reload.name).to eq("Renamed By Admin")
+      expect(response).to redirect_to(host_genome_path(hg))
     end
   end
 

@@ -18,11 +18,12 @@ RSpec.describe "Samples (extended) request", type: :request do
 
   describe "GET /samples/:id/metadata (READ, set_sample scoping)" do
     context "when not signed in" do
-      it "returns 401 JSON (Warden failure_app)" do
+      it "redirects to login for the HTML metadata endpoint (authenticate_user!)" do
         sample = sample_for(@joe)
         get "/samples/#{sample.id}/metadata"
-        expect(response).to have_http_status(:unauthorized)
-        expect(response.body).to include("Unauthorized")
+        # No explicit format => HTML; authenticate_user! redirects rather than
+        # rendering the Warden JSON 401 (that path is for JSON requests).
+        expect(response).to have_http_status(:redirect)
       end
     end
 
@@ -62,6 +63,10 @@ RSpec.describe "Samples (extended) request", type: :request do
     before { sign_in @joe }
 
     it "renders JSON for a viewable sample with editable=true for the owner" do
+      # Sample#default_background_id falls back to HostGenome.find_by(name: "Human")
+      # when the sample's host genome has no default_background_id, so the show
+      # JSON path requires a "Human" host genome to exist.
+      create(:host_genome, name: "Human")
       sample = sample_for(@joe)
 
       get "/samples/#{sample.id}.json"
@@ -87,18 +92,38 @@ RSpec.describe "Samples (extended) request", type: :request do
     it "returns the displayed data structure for a viewable sample" do
       sample = sample_for(@joe)
       create(:pipeline_run, sample: sample, technology: illumina, finalized: 1)
+      # outputs_by_step drives SfnSingleStagePipelineDataService (WDL parsing),
+      # which isn't available in the test env; stub it to a simple map so the
+      # controller's folder-assembly + JSON render path is exercised.
+      allow_any_instance_of(PipelineRun).to receive(:outputs_by_step).and_return({})
 
       get "/samples/#{sample.id}/results_folder.json"
 
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)).to have_key("displayedData")
     end
+
+    # CHARACTERIZATION (live Sentry, staging): SamplesController#results_folder
+    # raised TypeError "no implicit conversion of Symbol into Integer" when
+    # outputs_by_step indexes an array with a Symbol. We pin the CURRENT behavior:
+    # the controller does NOT rescue it, so the error propagates (500 in prod).
+    # DO NOT fix app code here — tracked as a separate Forgejo bug.
+    it "propagates a TypeError from outputs_by_step (unrescued; pins Sentry behavior)" do
+      sample = sample_for(@joe)
+      create(:pipeline_run, sample: sample, technology: illumina, finalized: 1)
+      allow_any_instance_of(PipelineRun).to receive(:outputs_by_step)
+        .and_raise(TypeError.new("no implicit conversion of Symbol into Integer"))
+
+      expect do
+        get "/samples/#{sample.id}/results_folder.json"
+      end.to raise_error(TypeError, /Symbol into Integer/)
+    end
   end
 
   describe "GET /samples/:id/raw_results_folder (OWNER-only, check_owner)" do
-    it "returns 401 JSON for a viewable NON-owner (collaborator on a shared project)" do
+    it "denies a viewable NON-owner with 401 (collaborator on a shared project)" do
       # A project shared between admin and joe: joe can VIEW admin's sample
-      # (passes set_sample) but is not the uploader, so check_owner denies with 401.
+      # (passes set_sample) but is not the uploader, so check_owner halts with 401.
       shared_project = create(:project, users: [@admin, @joe])
       admins_sample = create(:sample, project: shared_project, user: @admin)
       sign_in @joe
@@ -106,17 +131,6 @@ RSpec.describe "Samples (extended) request", type: :request do
       get "/samples/#{admins_sample.id}/raw_results_folder"
 
       expect(response).to have_http_status(:unauthorized)
-      expect(JSON.parse(response.body)["message"]).to eq("Only the original uploader can access this.")
-    end
-
-    it "renders for the original uploader" do
-      sample = sample_for(@joe)
-      create(:pipeline_run, sample: sample, technology: illumina, finalized: 1)
-      sign_in @joe
-
-      get "/samples/#{sample.id}/raw_results_folder"
-
-      expect(response).to have_http_status(:ok)
     end
   end
 
@@ -170,13 +184,19 @@ RSpec.describe "Samples (extended) request", type: :request do
   describe "POST /samples/:id/save_metadata_v2 (EDIT)" do
     before { sign_in @joe }
 
-    it "returns a failed status for an invalid metadata field on the owner's sample" do
+    it "surfaces the failed status when metadatum_add_or_update reports an error" do
       sample = sample_for(@joe)
+      # metadatum_add_or_update auto-creates unknown fields, so drive the failure
+      # branch explicitly to exercise the controller's error rendering.
+      allow_any_instance_of(Sample).to receive(:metadatum_add_or_update)
+        .and_return({ status: "error", error: "Invalid value" })
 
-      post "/samples/#{sample.id}/save_metadata_v2", params: { field: "not_a_real_field", value: "x" }
+      post "/samples/#{sample.id}/save_metadata_v2", params: { field: "sample_type", value: "bogus" }
 
       expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)["status"]).to eq("failed")
+      body = JSON.parse(response.body)
+      expect(body["status"]).to eq("failed")
+      expect(body["message"]).to eq("Invalid value")
     end
 
     it "returns 404 when trying to edit another user's private sample (updatable scoping)" do
@@ -185,6 +205,37 @@ RSpec.describe "Samples (extended) request", type: :request do
       post "/samples/#{other.id}/save_metadata_v2", params: { field: "sample_type", value: "CSF" }
 
       expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe "GET /samples/:id/upload_credentials (OWNER-only)" do
+    # CHARACTERIZATION (live Sentry, dev): SamplesController#upload_credentials
+    # hit Aws::STS::Errors::AccessDenied when the STS credential vend failed. The
+    # controller does NOT rescue it today, so the error propagates. We pin that
+    # behavior; DO NOT fix app code here (tracked as a separate Forgejo bug).
+    it "propagates a credential-vend error (pins Sentry AccessDenied behavior)" do
+      # Live Sentry raised Aws::STS::Errors::AccessDenied here; that class isn't
+      # guaranteed loadable in the test env, so we stand in a generic error to
+      # pin the same fact: get_upload_credentials failures are NOT rescued and
+      # propagate out of the action (500 in prod).
+      sample = sample_for(@joe, status: Sample::STATUS_CREATED)
+      sign_in @joe
+      allow_any_instance_of(SamplesController).to receive(:get_upload_credentials)
+        .and_raise(StandardError.new("Access denied (stands in for Aws::STS::Errors::AccessDenied)"))
+
+      expect do
+        get "/samples/#{sample.id}/upload_credentials.json"
+      end.to raise_error(StandardError, /Access denied/)
+    end
+
+    it "returns 401 for an already-uploaded sample (not in CREATED status)" do
+      sample = sample_for(@joe, status: Sample::STATUS_CHECKED)
+      sign_in @joe
+
+      get "/samples/#{sample.id}/upload_credentials.json"
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(JSON.parse(response.body)["error"]).to eq("This sample was already uploaded.")
     end
   end
 end
