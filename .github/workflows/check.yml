@@ -129,19 +129,15 @@ jobs:
       #   offers literally no customization and we want to pin our
       #   rubocop version.
       run: bundle exec rubocop
-    #  TODO: This should be re-enabled after ruby is upgraded to a more current version
-    # - name: Brakeman
-    #   run: |
-    #     # No High Confidence warnings.
-    #     bundle exec brakeman --no-pager -w3
-
-    #     # No new Medium Confidence warnings.
-    #     MAX_MEDIUM_WARNINGS=37
-    #     if [ $(bundle exec brakeman --no-pager -w2 -f json | jq '.scan_info.security_warnings') -gt $MAX_MEDIUM_WARNINGS ]
-    #     then
-    #       echo "No new Medium Confidence Brakeman warnings are allowed."
-    #       exit 1
-    #     fi
+    - name: Brakeman
+      # Re-enabled (CZID-462) now that the old blocker is resolved — Ruby is 3.3.6.
+      # The authoritative Brakeman gate runs on every PR in security-scan.yml
+      # (dedicated `brakeman` job). This step mirrors it so the manual full-check
+      # (workflow_dispatch) also covers it. w3 = zero tolerance; w2 = fail on NEW
+      # only, against the config/brakeman.ignore baseline (#294).
+      run: |
+        bundle exec brakeman --no-pager -w3 -z -q
+        bundle exec brakeman --no-pager -w2 -i config/brakeman.ignore -z -q
 
   javascript:
     name: Javascript
