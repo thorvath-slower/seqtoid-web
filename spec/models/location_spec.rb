@@ -33,6 +33,9 @@ RSpec.describe Location, type: :model do
       before do
         allow(ENV).to receive(:[]).and_return("test_env_var_val")
         allow(ENV).to receive(:[]).with('LOCATION_IQ_API_KEY').and_return("location_iq_api_key")
+        # The :location_iq circuit breaker is process-global; reset so a prior test's
+        # failures can't leave it open and short-circuit these examples.
+        HttpResilience.reset!
       end
 
       context "when location api request response is success" do
@@ -40,7 +43,10 @@ RSpec.describe Location, type: :model do
           resp = double("Net::HTTPSuccess")
           allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
           allow(resp).to receive(:body).and_return(api_geosearch_response.to_json)
-          allow(Net::HTTP).to receive(:start).and_return(resp)
+          # #467c: location_api_request now goes through HttpResilience.request (bounded
+          # timeouts + circuit breaker), which uses Net::HTTP.new(...).start (instance),
+          # not the class method Net::HTTP.start — so stub the resilience seam instead.
+          allow(HttpResilience).to receive(:request).and_return(resp)
         end
 
         it "receives a response from the location API" do
@@ -55,7 +61,10 @@ RSpec.describe Location, type: :model do
           allow(resp).to receive(:is_a?).with(Net::HTTPSuccess).and_return(false)
           allow(resp).to receive(:is_a?).with(Net::HTTPNotFound).and_return(true)
           allow(resp).to receive(:body).and_return({}.to_json)
-          allow(Net::HTTP).to receive(:start).and_return(resp)
+          # #467c: location_api_request now goes through HttpResilience.request (bounded
+          # timeouts + circuit breaker), which uses Net::HTTP.new(...).start (instance),
+          # not the class method Net::HTTP.start — so stub the resilience seam instead.
+          allow(HttpResilience).to receive(:request).and_return(resp)
         end
 
         it "receives a response from the location API" do
