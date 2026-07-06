@@ -29,6 +29,11 @@ class BulkDownload < ApplicationRecord
 
   attr_writer :params
 
+  # Raised when the shelled-out ECS/aegea kickoff command exits non-zero. Wraps
+  # the failure with a clean, human-readable message instead of re-raising the
+  # raw Python traceback that the subprocess emitted on stderr (see #532).
+  class KickoffError < StandardError; end
+
   validates :status, presence: true, inclusion: { in: [STATUS_WAITING, STATUS_RUNNING, STATUS_ERROR, STATUS_SUCCESS] }
   validate :params_checks
 
@@ -340,7 +345,14 @@ class BulkDownload < ApplicationRecord
       self.status = STATUS_ERROR
       self.error_message = BulkDownloadsHelper::KICKOFF_FAILURE
       save!
-      raise command_stderr
+      # Log the raw subprocess stderr (which may carry a Python traceback) for
+      # debugging, but raise a typed error with a clean, human-readable message
+      # rather than re-raising the raw traceback string (see #532).
+      LogUtil.log_error(
+        "BulkDownloadKickoffError: aegea ECS kickoff failed for bulk download #{id}: #{command_stderr}",
+        bulk_download_id: id
+      )
+      raise KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE
     end
   ensure
     if executable_file.present?
