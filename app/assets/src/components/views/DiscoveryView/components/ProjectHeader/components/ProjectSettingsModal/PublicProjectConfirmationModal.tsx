@@ -62,11 +62,11 @@ class PublicProjectConfirmationModal extends React.Component<
               </p>
               <p>
                 For more information, view our{" "}
-                <ExternalLink href={"http://czid.org/privacy"}>
+                <ExternalLink href={"/privacy"}>
                   privacy notice
                 </ExternalLink>{" "}
                 or{" "}
-                <ExternalLink href={"https://czid.org/terms"}>
+                <ExternalLink href={"/terms"}>
                   terms of service
                 </ExternalLink>
                 .
