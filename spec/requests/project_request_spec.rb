@@ -1,4 +1,5 @@
 require 'rails_helper'
+require 'warden/test/helpers'
 
 # Full-stack request specs for ProjectsController.
 #
@@ -9,6 +10,8 @@ require 'rails_helper'
 # landing in the DB. See app/controllers/projects_controller.rb and
 # app/models/power.rb (`power :projects` / `power :updatable_projects`).
 RSpec.describe "Projects request", type: :request do
+  include Warden::Test::Helpers
+
   create_users
 
   describe "GET /projects/:id.json (show)" do
@@ -16,8 +19,14 @@ RSpec.describe "Projects request", type: :request do
       it "returns 401 Not Authenticated for the JSON endpoint" do
         project = create(:project, users: [@joe])
         get "/projects/#{project.id}.json"
+        # Full-stack: the Warden failure_app (config/initializers/auth0.rb) renders
+        # {error: 'Unauthorized', code: 401} before the controller runs, so we get
+        # a 401 JSON response rather than ApplicationController's {errors: ['Not
+        # Authenticated']} (that branch is only reached in controller specs, which
+        # skip the middleware). Either way it's a 401, not a data leak.
         expect(response).to have_http_status(:unauthorized)
-        expect(JSON.parse(response.body)["errors"]).to include("Not Authenticated")
+        expect(response.media_type).to eq("application/json")
+        expect(response.body).to include("Unauthorized")
       end
     end
 
@@ -39,7 +48,13 @@ RSpec.describe "Projects request", type: :request do
       end
 
       it "returns a public project owned by another user" do
-        public_project = create(:public_project, users: [@admin])
+        # A project is viewable by a non-member only when it actually has a PUBLIC
+        # sample: Project.viewable scopes on Sample.public_samples (see
+        # app/models/project.rb#viewable), not merely on public_access. So the
+        # public project needs a sample old enough to have gone public
+        # (days_to_keep_sample_private has elapsed) — public_access: 1 alone is not
+        # enough. This mirrors how projects_controller_spec sets up public projects.
+        public_project = create(:public_project, users: [@admin], samples_data: [{ user: @admin, created_at: 1.year.ago }])
 
         get "/projects/#{public_project.id}.json"
 
@@ -65,14 +80,49 @@ RSpec.describe "Projects request", type: :request do
     end
 
     it "allows an admin" do
+      # GET /projects/new renders projects/_form.html.erb, whose first line calls
+      # current_user.admin?. The `sign_in` stub only stubs current_user on the
+      # ApplicationController instance; it does NOT reach the VIEW's current_user
+      # (ApplicationHelper#current_user => warden.user(:auth0_user)), which would be
+      # nil and raise "undefined method `admin?' for nil". So we ALSO establish a
+      # real Warden session for the view. `sign_in` still passes the auth0 token
+      # gate (authenticate_user!/admin_required) that a bare Warden login can't.
+      Warden.test_mode!
       sign_in @admin
+      login_as @admin, scope: :auth0_user
+
       get "/projects/new"
       expect(response).to have_http_status(:ok)
+    ensure
+      Warden.test_reset!
     end
   end
 
   describe "POST /projects (create)" do
-    before { sign_in @joe }
+    before do
+      sign_in @joe
+
+      # ProjectsController#create runs the real version-pinning side effects
+      # (pin_to_major_versions / pin_default_alignment_config /
+      # pin_latest_human_version). VersionPinningService writes a
+      # ProjectWorkflowVersion whose version_prefix is NOT NULL, so without these
+      # app_config/workflow_version rows the pin writes a nil version and the create
+      # raises a NOT NULL violation. This mirrors the setup in
+      # projects_controller_spec.rb (create_workflow_versions + the create block).
+      {
+        "consensus-genome" => "3.4.18",
+        "short-read-mngs" => "8.2.2",
+        "phylotree-ng" => "6.11.0",
+        "amr" => "1.2.5",
+        "long-read-mngs" => "0.7.3",
+      }.each do |workflow, version|
+        create(:app_config, key: "#{workflow}-version", value: version)
+        create(:workflow_version, workflow: workflow.underscore, version: version)
+      end
+      create(:app_config, key: AppConfig::DEFAULT_ALIGNMENT_CONFIG_NAME, value: "2021-01-22")
+      create(:workflow_version, workflow: HostGenome::HUMAN_HOST, version: "1")
+      create(:workflow_version, workflow: HostGenome::HUMAN_HOST, version: "2")
+    end
 
     it "creates a project owned by the current user" do
       expect do

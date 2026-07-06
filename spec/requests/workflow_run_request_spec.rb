@@ -15,7 +15,17 @@ RSpec.describe "WorkflowRuns request", type: :request do
   def workflow_run_for(user)
     project = create(:project, users: [user])
     sample = create(:sample, project: project, user: user)
-    create(:workflow_run, sample: sample, user: user, workflow: consensus_genome)
+    # WorkflowRunsController#workflow_runs_info does JSON.parse(inputs_json) on
+    # every viewable run, so a run must carry a real JSON inputs blob (the factory
+    # leaves inputs_json nil, which would raise TypeError). A consensus_genome run
+    # always has inputs recorded in practice, so this matches production shape.
+    create(
+      :workflow_run,
+      sample: sample,
+      user: user,
+      workflow: consensus_genome,
+      inputs_json: { taxon_name: "Klebsiella pneumoniae", creation_source: "Consensus Genome" }.to_json
+    )
   end
 
   describe "GET /workflow_runs/:id (show)" do

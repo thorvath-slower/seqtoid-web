@@ -16,8 +16,14 @@ RSpec.describe "BulkDownloads request", type: :request do
     context "when not signed in" do
       it "returns 401 Not Authenticated for the JSON endpoint (does not leak data)" do
         get "/bulk_downloads.json"
+        # Full-stack: the Warden failure_app (config/initializers/auth0.rb) renders
+        # {error: 'Unauthorized', code: 401} before the controller runs, so we get
+        # a 401 JSON response rather than ApplicationController's {errors: ['Not
+        # Authenticated']} (that branch is only hit in controller specs, which skip
+        # the middleware). The point of this spec — no data leak on 401 — holds.
         expect(response).to have_http_status(:unauthorized)
-        expect(JSON.parse(response.body)["errors"]).to include("Not Authenticated")
+        expect(response.media_type).to eq("application/json")
+        expect(response.body).to include("Unauthorized")
       end
     end
 
@@ -146,8 +152,14 @@ RSpec.describe "BulkDownloads request", type: :request do
       it "rejects an invalid token with 401 and does not mutate the record" do
         post "/bulk_downloads/#{bulk_download.id}/progress/wrong-token", params: { progress: 0.99 }
 
+        # The controller renders {error: INVALID_ACCESS_TOKEN} with status 401, but
+        # Warden::Manager (config/initializers/auth0.rb) intercepts EVERY 401
+        # response through the full middleware stack and substitutes its failure_app
+        # body ({error: 'Unauthorized', code: 401}). So the controller's specific
+        # error body isn't observable at the request layer — only the 401 status is.
+        # What matters for this spec still holds: rejected (401) and no mutation.
         expect(response).to have_http_status(:unauthorized)
-        expect(JSON.parse(response.body)["error"]).to eq(BulkDownloadsHelper::INVALID_ACCESS_TOKEN)
+        expect(response.body).to include("Unauthorized")
         expect(bulk_download.reload.progress).to be_nil
       end
 

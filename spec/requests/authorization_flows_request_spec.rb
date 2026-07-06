@@ -20,8 +20,17 @@ RSpec.describe "Authorization flows", type: :request do
     it "returns 401 JSON for an unauthenticated JSON API request" do
       get "/samples/stats.json", params: { domain: "my_data" }
 
+      # Through the FULL request/middleware stack (unlike a controller spec), an
+      # unauthenticated request is intercepted by the Warden failure_app wired up
+      # in config/initializers/auth0.rb, which renders {error: 'Unauthorized',
+      # code: 401} with a 401 status and Content-Type application/json. The
+      # ApplicationController#authenticate_user! JSON branch ({errors: ['Not
+      # Authenticated']}) is the controller-level fallback and is only reached
+      # when the request bypasses that middleware (controller specs); it does not
+      # run here. We pin the real behavior: a 401 JSON response, not a data leak.
       expect(response).to have_http_status(:unauthorized)
-      expect(JSON.parse(response.body)["errors"]).to include("Not Authenticated")
+      expect(response.media_type).to eq("application/json")
+      expect(response.body).to include("Unauthorized")
     end
 
     it "redirects an unauthenticated HTML request to the auth0 login flow" do

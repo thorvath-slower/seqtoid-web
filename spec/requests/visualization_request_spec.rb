@@ -30,8 +30,14 @@ RSpec.describe "Visualizations request", type: :request do
     context "when not signed in" do
       it "returns 401 Not Authenticated for the JSON endpoint instead of leaking data" do
         get "/visualizations.json", params: { domain: "my_data" }
+        # Full-stack: the Warden failure_app (config/initializers/auth0.rb) renders
+        # {error: 'Unauthorized', code: 401} before the controller runs, so we get
+        # a 401 JSON response rather than ApplicationController's {errors: ['Not
+        # Authenticated']} (that branch is only hit in controller specs, which skip
+        # the middleware). The point — a 401, no data leak — holds either way.
         expect(response).to have_http_status(:unauthorized)
-        expect(JSON.parse(response.body)["errors"]).to include("Not Authenticated")
+        expect(response.media_type).to eq("application/json")
+        expect(response.body).to include("Unauthorized")
       end
     end
 
