@@ -33,6 +33,11 @@ jobs:
         with:
           path: ~/.cache
           key: ${{runner.os}}-cache
+      # #482: QEMU + buildx for the multi-arch (amd64+arm64) build/push in bin/build-docker.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
       - name: Configure AWS Credentials
         id: configure_aws_credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
@@ -48,10 +53,12 @@ jobs:
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
           echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
-      - name: Build docker image
+      # #482: bin/build-docker builds multi-arch and pushes the manifest list directly (the old
+      # separate bin/push-docker step is gone). #485: CACHE_MODE=read (weekday, cache read-only).
+      - name: Build and push docker image (multi-arch)
+        env:
+          CACHE_MODE: read
         run: bin/build-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
-      - name: Push docker image
-        run: bin/push-docker "$(basename "$GITHUB_REF")" "${GITHUB_SHA::8}"
 
   build_prod_docker_image:
     runs-on: ubuntu-latest

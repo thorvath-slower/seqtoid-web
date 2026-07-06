@@ -1,0 +1,79 @@
+name: Weekly Build-Cache Refresh
+
+# Forgejo #485 — weekly build-cache lifecycle, layered on the existing ECR registry build-cache.
+#
+# WHY: weekday builds (build-docker-image.yml) run with CACHE_MODE=read — they READ the ECR
+# `<repo>:buildcache` ref but never write it, so they skip the ~30-60s `--cache-to mode=max` push
+# and the cache stays byte-stable all week. This Sunday cron does the ONE weekly WRITE
+# (CACHE_MODE=refresh): a clean multi-arch (#482: amd64+arm64) rebuild that
+#   1. regenerates a fresh `mode=max` cache covering BOTH arches, and
+#   2. re-pulls the base image + runs `apt-get upgrade` in the Dockerfile, so Monday's builds
+#      start on the week's base-image security patches + current dependency drift.
+#
+# CAVEAT (accepted, mirrors bin/build-docker's note): because weekdays are cache-READ-only, a
+# mid-week dependency change (Gemfile / package-lock.json / requirements.txt) is NOT written back
+# to the cache — it rebuilds that layer on every weekday build until this Sunday refresh folds it in.
+# That's a deliberate trade for a stable, fast weekday cache and is acceptable at the dev cadence.
+#
+# Store: ECR (the same registry EKS pulls from) — no separate cache backend to manage.
+
+on:
+  schedule:
+    # 07:00 UTC every Sunday (cron field order: minute hour day-of-month month day-of-week; 0 = Sun).
+    - cron: '0 7 * * 0'
+  # Manual trigger to force an out-of-band cache refresh (e.g. after a big dependency bump).
+  workflow_dispatch: {}
+
+env:
+  AWS_DEFAULT_OUTPUT: json
+  AWS_REGION: us-west-2
+  DEBIAN_FRONTEND: noninteractive
+  # Same rotatable CI identity as build-docker-image.yml (CZID-40 / dev account default).
+  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
+  GHA_ROLE: ${{ vars.GHA_ROLE || 'czid-dev-gh-actions-build' }}
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+# Never overlap two refreshes (a manual dispatch during the cron window, etc.).
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  refresh_build_cache:
+    runs-on: ubuntu-latest
+    permissions: # must be set for AWS OIDC auth
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      # #482: QEMU + buildx for the multi-arch (amd64+arm64) build so the refreshed cache covers
+      # BOTH arches.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+      - name: configure aws credentials
+        id: configure_aws_credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.CI_ACCOUNT_ID }}:role/${{ env.GHA_ROLE }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Login to ECR
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
+        with:
+          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/idseq-web
+      - name: Export variables
+        run: |
+          AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
+          echo "AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID" >> "$GITHUB_ENV"
+      # #485: the ONE weekly cache WRITE — CACHE_MODE=refresh adds `--cache-to mode=max`, so this
+      # build regenerates the fresh multi-arch cache Monday's weekday builds then read.
+      - name: Refresh build cache (clean multi-arch build, cache-to mode=max)
+        env:
+          CACHE_MODE: refresh
+        run: bin/build-docker main "${GITHUB_SHA::8}"
