@@ -27,7 +27,7 @@ the *same* image to both repos during the transition, then drop the legacy name 
 |---|---|---|
 | Argo CD / GitOps per-env values (`cypherid-web-infra`) | `czid-<env>/seqtoid-web` | ✅ resolves — dual-push publishes `seqtoid-web` |
 | Helm chart default (`deploy/charts/seqtoid-web/values.yaml`) | `seqtoid-web` | ✅ go-forward |
-| Legacy ECS deploy (`bin/deploy_automation/_global_vars.sh`, `bin/manual_deploy_scripts/czecs*.json`) | `idseq-web` | ✅ still resolves — legacy name kept, dual-push publishes it too |
+| Legacy ECS migrate (`bin/manual_deploy_scripts/czecs*.json` via `bin/deploy`; `bin/deploy_automation/` was removed #515) | `idseq-web` | ✅ still resolves — legacy name kept, dual-push publishes it too |
 
 ## Prerequisite (ops)
 
@@ -39,8 +39,8 @@ account-scoped `czid-<env>/seqtoid-web` repos referenced by the GitOps values mu
 
 Once every consumer references `seqtoid-web` and the `seqtoid-web` repo is confirmed populated across envs:
 
-1. Repoint the legacy ECS path — `ECR_REPOSITORY_NAME` in `bin/deploy_automation/_global_vars.sh` and the
-   image refs in `bin/manual_deploy_scripts/czecs*.json` — to `seqtoid-web`.
+1. Repoint the legacy ECS path — the image refs in `bin/manual_deploy_scripts/czecs*.json` — to `seqtoid-web`.
+   (`bin/deploy_automation/` was removed in #515, so its `ECR_REPOSITORY_NAME` no longer applies.)
 2. Drop `idseq-web` from `ECR_REPO_NAMES` in `bin/build-docker` / `bin/push-docker` (single-push go-forward).
 3. Leave the `idseq-web` repo in place (frozen) or apply an ECR lifecycle policy — do not delete/rename it
    while any historical tag may still be referenced.
