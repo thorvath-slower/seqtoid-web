@@ -1,27 +1,303 @@
 {
   "ignored_warnings": [
     {
-      "warning_type": "File Access",
-      "warning_code": 16,
-      "fingerprint": "415f387f9b709a2ebe146a7ffc4884ad89798b04139ab3b60cbe25dd6b21d29f",
-      "check_name": "FileAccess",
-      "message": "Model attribute used in file name",
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "81578335b21dc00e5c310d66089abda9dabca9c889b93dafdb4da9836499b1d9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/projects_discovery.rb",
+      "line": 73,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"BIT_OR(CASE WHEN users.id=#{current_user.id} OR #{current_user.admin?} THEN 1 ELSE 0 END) AS editable\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "ProjectsDiscovery",
+        "method": "format_discovery_projects"
+      },
+      "user_input": "current_user.admin?",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "Mass Assignment",
+      "warning_code": 105,
+      "fingerprint": "ac8b34ab93cfdad7ec386eab04d8095190a5ca6988beed2fba236a2fa712d205",
+      "check_name": "PermitAttributes",
+      "message": "Potentially dangerous key allowed for mass assignment",
+      "file": "app/controllers/users_controller.rb",
+      "line": 198,
+      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
+      "code": "params.require(:user).permit(:role, :email, :institution, :name, :send_activation, :segments, :archetypes, :profile_form_version, :project_ids => ([]))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "UsersController",
+        "method": "user_params"
+      },
+      "user_input": ":role",
+      "confidence": "Medium",
+      "cwe_id": [
+        915
+      ],
+      "note": "Safe (re-triaged CZID-48, 2026-06-17). user_params (which permits :role) is only called by #create and #update, both gated by `before_action :admin_required` (they are not in the action's `except:` list). Non-admin self-service (#update_user_data) uses user_params_for_nonadmin, which does NOT permit :role. So :role cannot be mass-assigned by a non-admin."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "d9f5bd40673bed5374e192d9daf45258ac3fbd8408297fb81bd513b1d5be8ed6",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/heatmap_helper.rb",
+      "line": 295,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.connection.select_all(\"\\n      SELECT\\n        taxon_counts.pipeline_run_id          AS  pipeline_run_id,\\n        taxon_counts.tax_id                   AS  tax_id,\\n        taxon_counts.count_type               AS  count_type,\\n        taxon_counts.tax_level                AS  tax_level,\\n        taxon_counts.genus_taxid              AS  genus_taxid,\\n        taxon_counts.family_taxid             AS  family_taxid,\\n        taxon_counts.name                     AS  name,\\n        taxon_lineages.genus_name             AS  genus_name,\\n        taxon_counts.superkingdom_taxid       AS  superkingdom_taxid,\\n        taxon_counts.is_phage                 AS  is_phage,\\n        taxon_counts.count                    AS  r,\\n        taxon_summaries.stdev                 AS  stdev,\\n        taxon_summaries.mean                  AS  mean,\\n        taxon_summaries.stdev_mass_normalized AS  stdev_mass_normalized,\\n        taxon_summaries.mean_mass_normalized  AS  mean_mass_normalized,\\n        taxon_counts.percent_identity         AS  percentidentity,\\n        taxon_counts.alignment_length         AS  alignmentlength,\\n        CASE WHEN taxon_counts.e_value IS NOT NULL\\n          THEN taxon_counts.e_value\\n          ELSE #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}\\n        END                                   AS  logevalue\\n      FROM taxon_counts\\n      JOIN taxon_lineages ON taxon_counts.tax_id = taxon_lineages.taxid\\n      LEFT OUTER JOIN taxon_summaries ON\\n        #{background_id.to_i}   = taxon_summaries.background_id   AND\\n        taxon_counts.count_type = taxon_summaries.count_type      AND\\n        taxon_counts.tax_level  = taxon_summaries.tax_level       AND\\n        taxon_counts.tax_id     = taxon_summaries.tax_id\\n      WHERE\\n        pipeline_run_id IN (#{pr_id_to_sample_id.keys.join(\",\")})\\n        AND taxon_counts.genus_taxid != #{TaxonLineage::BLACKLIST_GENUS_ID}\\n        AND taxon_counts.count_type IN ('NT', 'NR')\\n        AND (taxon_counts.tax_id IN (#{taxon_ids.join(\",\")})\\n        #{parent_ids_clause}\\n        OR taxon_counts.genus_taxid IN (#{taxon_ids.join(\",\")}))\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HeatmapHelper",
+        "method": "s(:self).samples_taxons_counts_query"
+      },
+      "user_input": "pr_id_to_sample_id.keys.join(\",\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "47844114059fdba89c9e0ec8c2644bdfda0953e0d36c94ddc7d2f005b398a733",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/heatmap_helper.rb",
+      "line": 323,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.connection.select_all(\"\\n      SELECT\\n        taxon_counts.pipeline_run_id          AS  pipeline_run_id,\\n        taxon_counts.tax_id                   AS  tax_id,\\n        taxon_counts.count_type               AS  count_type,\\n        taxon_counts.tax_level                AS  tax_level,\\n        taxon_counts.count                    AS  r,\\n        taxon_summaries.stdev_mass_normalized AS  stdev_mass_normalized,\\n        taxon_summaries.mean_mass_normalized  AS  mean_mass_normalized,\\n        taxon_summaries.stdev                 AS  stdev,\\n        taxon_summaries.mean                  AS  mean\\n      FROM taxon_counts\\n      LEFT OUTER JOIN taxon_summaries ON\\n        #{background_id.to_i}   = taxon_summaries.background_id   AND\\n        taxon_counts.count_type = taxon_summaries.count_type      AND\\n        taxon_counts.tax_level  = taxon_summaries.tax_level       AND\\n        taxon_counts.tax_id     = taxon_summaries.tax_id\\n      WHERE\\n        pipeline_run_id IN (#{pr_id_to_sample_id.keys.join(\",\")})\\n        AND taxon_counts.genus_taxid != #{TaxonLineage::BLACKLIST_GENUS_ID}\\n        AND taxon_counts.count_type IN ('NT', 'NR')\\n        AND (taxon_counts.tax_id IN (#{taxon_ids.join(\",\")}))\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HeatmapHelper",
+        "method": "s(:self).background_metrics_query"
+      },
+      "user_input": "pr_id_to_sample_id.keys.join(\",\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "8b3c7eaf76950c422a1914df8e5c804e137619dc1329d5f7b50eada1bf272aab",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/location_helper.rb",
+      "line": 124,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "samples_with_metadata.includes(:metadata => :location).where(\"metadata.string_validated_value IN (?) OR #{Location.where(:name => query).pluck(:id, :geo_level).group_by do\n geo_level\n end.map do\n [field, values.map do\n id[0]\n end]\n end.to_h.keys.map do\n \"locations.#{k}_id IN (?)\"\n end.join(\" OR \")}\", query, *Location.where(:name => query).pluck(:id, :geo_level).group_by do\n geo_level\n end.map do\n [field, values.map do\n id[0]\n end]\n end.to_h.values)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "LocationHelper",
+        "method": "s(:self).filter_by_name"
+      },
+      "user_input": "Location.where(:name => query).pluck(:id, :geo_level)",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "25be8d7c1a97ab58842679913ebaef5ce53654b99fd0b6df354fb65383170e58",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/samples_helper.rb",
+      "line": 586,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime(\"%Y-%m-%d\")}' THEN 1 ELSE 0 END AS public\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "SamplesHelper",
+        "method": "get_visibility_by_sample_id"
+      },
+      "user_input": "Time.current.strftime(\"%Y-%m-%d\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "9d4f11869a5da26ecc639692fcaa0b9fecf36007495c9edf0fba5040a6ada1b1",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/samples_helper.rb",
+      "line": 597,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime(\"%Y-%m-%d\")}' THEN 1 ELSE 0 END AS public\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "SamplesHelper",
+        "method": "get_visibility_by_sample_id_and_current_power"
+      },
+      "user_input": "Time.current.strftime(\"%Y-%m-%d\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "7873603b15a3ebd096180c0a916a8d123d88e41a60e26667488de29c92f76ca6",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/samples_helper.rb",
+      "line": 981,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Contig.where(:pipeline_run_id => nil, :\"#{\"#{level}_taxid_#{type}\"}\" => ((nil or nil))).select(\"DISTINCT pipeline_run_id, #{\"#{level}_taxid_#{type}\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "SamplesHelper",
+        "method": "add_sample_count_to_taxa_with_contigs"
+      },
+      "user_input": "level",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "1c2e23db9b6f8f638a731b4d9dc916a1c22aaf784b1a55e7af4b1d709142a7e4",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/background.rb",
+      "line": 168,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "ActiveRecord::Base.connection.execute(\"        INSERT INTO taxon_summaries (#{chunk.first.keys.join(\",\")}) VALUES #{chunk.map do\n hash.values.map do\n ActiveRecord::Base.connection.quote(value)\n end\n end.map do\n \"(#{values.join(\",\")})\"\n end.join(\", \")}\\n\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Background",
+        "method": "store_summary"
+      },
+      "user_input": "chunk.first.keys.join(\",\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "c927a31ec02d1cba0a2392906d1254047724023ad735d751c9caf51ffef3233e",
+      "check_name": "Execute",
+      "message": "Possible command injection",
       "file": "app/models/pipeline_run.rb",
-      "line": 720,
-      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
-      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3))",
+      "line": 442,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"ls\", \"#{host_filter_output_s3_path}/#{ercc_output_path}\")",
       "render_path": null,
       "location": {
         "type": "method",
         "class": "PipelineRun",
-        "method": "db_load_contigs"
+        "method": "db_load_ercc_counts"
       },
-      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3)",
+      "user_input": "host_filter_output_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing Command Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "dc9ff7c06118bd264d4206475a859f654f06401e5134a6661e8e398fb78aa082",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "app/models/pipeline_run.rb",
+      "line": 482,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"ls\", \"#{host_filter_output_s3_path}/#{\"picard_insert_metrics.txt\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_insert_size_metrics"
+      },
+      "user_input": "host_filter_output_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing Command Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "f1726efbe55738943735cdd4cd7a2c942a24032beb22948f2e554a58235022da",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 626,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.open(PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{m8_file}\", \"#{\"/tmp/results_json\"}/#{id}\", 2), \"r\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "get_m8_mapping"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{m8_file}\", \"#{\"/tmp/results_json\"}/#{id}\", 2)",
       "confidence": "Medium",
       "cwe_id": [
         22
       ],
-      "note": "False positive (re-triaged CZID-48, 2026-06-17). download_file_with_retries fetches the S3 object to the fixed local dir /tmp/results_json and returns that local path; File.read reads the system-controlled local temp file, not a user-supplied path. The S3 key (s3_file_for) is derived server-side from the pipeline run, and the local filename uses the integer pipeline-run id, so no path traversal is possible."
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing File Access finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "df01f04c1bc5f5d617d4cbe6ba0b41eacde6cc91509b6c7ff3fcd1de827a4525",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 695,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contig_counts\"), \"/tmp/results_json\", 3))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_contig_counts"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contig_counts\"), \"/tmp/results_json\", 3)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing File Access finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
     },
     {
       "warning_type": "File Access",
@@ -47,29 +323,224 @@
       "note": "False positive (re-triaged CZID-48, 2026-06-17). Same pattern as the contig_bases read: download_file_with_retries fetches the S3 object to the fixed local dir /tmp/results_json and returns that local path; File.read reads the system-controlled local temp file. The S3 key is derived server-side and the local filename uses the integer pipeline-run id, so no path traversal is possible."
     },
     {
-      "warning_type": "Mass Assignment",
-      "warning_code": 105,
-      "fingerprint": "ac8b34ab93cfdad7ec386eab04d8095190a5ca6988beed2fba236a2fa712d205",
-      "check_name": "PermitAttributes",
-      "message": "Potentially dangerous key allowed for mass assignment",
-      "file": "app/controllers/users_controller.rb",
-      "line": 198,
-      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
-      "code": "params.require(:user).permit(:role, :email, :institution, :name, :send_activation, :segments, :archetypes, :profile_form_version, :project_ids => ([]))",
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "415f387f9b709a2ebe146a7ffc4884ad89798b04139ab3b60cbe25dd6b21d29f",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 720,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3))",
       "render_path": null,
       "location": {
         "type": "method",
-        "class": "UsersController",
-        "method": "user_params"
+        "class": "PipelineRun",
+        "method": "db_load_contigs"
       },
-      "user_input": ":role",
+      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3)",
       "confidence": "Medium",
       "cwe_id": [
-        915
+        22
       ],
-      "note": "Safe (re-triaged CZID-48, 2026-06-17). user_params (which permits :role) is only called by #create and #update, both gated by `before_action :admin_required` (they are not in the action's `except:` list). Non-admin self-service (#update_user_data) uses user_params_for_nonadmin, which does NOT permit :role. So :role cannot be mass-assigned by a non-admin."
+      "note": "False positive (re-triaged CZID-48, 2026-06-17). download_file_with_retries fetches the S3 object to the fixed local dir /tmp/results_json and returns that local path; File.read reads the system-controlled local temp file, not a user-supplied path. The S3 key (s3_file_for) is derived server-side from the pipeline run, and the local filename uses the integer pipeline-run id, so no path traversal is possible."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "b3e3d154a2d72440a804ea518bad7f5b8f9363f7ecaf451cdcb73c9c2ef75938",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 756,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.open(PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{\"contigs.fasta\"}\", \"/tmp/results_json\", 3), \"r\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_contigs"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{\"contigs.fasta\"}\", \"/tmp/results_json\", 3)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing File Access finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "f689ae38c51a880055ffb8d6a3855369f8a9c233e339656fa2c8ed10962ec8d8",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/pipeline_run.rb",
+      "line": 1484,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.connection.execute(\"REPLACE INTO taxon_counts(pipeline_run_id, tax_id, name,\\n                                tax_level, count_type, count,\\n                                percent_identity, alignment_length, e_value,\\n                                species_total_concordant, genus_total_concordant, family_total_concordant,\\n                                percent_concordant, created_at, updated_at)\\n       SELECT #{id},\\n              IF(\\n                taxon_lineages.#{tax_level_name}_taxid IS NOT NULL,\\n                taxon_lineages.#{tax_level_name}_taxid,\\n                #{TaxonLineage::MISSING_LINEAGE_ID.fetch(tax_level_name.to_sym, -9999)}\\n              ),\\n              IF(\\n                taxon_lineages.#{tax_level_name}_taxid IS NOT NULL,\\n                taxon_lineages.#{tax_level_name}_name,\\n                '#{\"Uncategorizable as a #{tax_level_name}\"}'\\n              ),\\n              #{TaxonCount::NAME_2_LEVEL[tax_level_name]},\\n              taxon_counts.count_type,\\n              sum(taxon_counts.count),\\n              sum(taxon_counts.percent_identity * taxon_counts.count) / sum(taxon_counts.count),\\n              sum(taxon_counts.alignment_length * taxon_counts.count) / sum(taxon_counts.count),\\n              sum(taxon_counts.e_value * taxon_counts.count) / sum(taxon_counts.count),\\n              /* We use AVG below because an aggregation function is needed, but all the entries being grouped are the same */\\n              AVG(species_total_concordant),\\n              AVG(genus_total_concordant),\\n              AVG(family_total_concordant),\\n              CASE #{TaxonCount::NAME_2_LEVEL[tax_level_name]}\\n                WHEN #{TaxonCount::TAX_LEVEL_SPECIES} THEN AVG(100.0 * taxon_counts.species_total_concordant) / sum(taxon_counts.count)\\n                WHEN #{TaxonCount::TAX_LEVEL_GENUS} THEN AVG(100.0 * taxon_counts.genus_total_concordant) / sum(taxon_counts.count)\\n                WHEN #{TaxonCount::TAX_LEVEL_FAMILY} THEN AVG(100.0 * taxon_counts.family_total_concordant) / sum(taxon_counts.count)\\n              END,\\n              '#{Time.now.utc.to_s(:db)}',\\n              '#{Time.now.utc.to_s(:db)}'\\n       FROM  taxon_lineages, taxon_counts\\n       WHERE (#{alignment_config.lineage_version} BETWEEN taxon_lineages.version_start AND taxon_lineages.version_end) AND\\n             taxon_lineages.taxid = taxon_counts.tax_id AND\\n             taxon_counts.pipeline_run_id = #{id} AND\\n             taxon_counts.tax_level = #{TaxonCount::TAX_LEVEL_SPECIES}\\n      GROUP BY 1,2,3,4,5\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "generate_aggregate_counts"
+      },
+      "user_input": "tax_level_name",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "61a2a72ea28e39760b3a217e2eedbde81156d6b3987be32be4c813c78ff887fe",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "app/models/sample.rb",
+      "line": 434,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"cp\", File.join(File.dirname(input_file.source.to_s), \"total_reads.json\"), \"#{sample_input_s3_path}/#{\"total_reads.json\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Sample",
+        "method": "initiate_fastq_files_s3_cp"
+      },
+      "user_input": "sample_input_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing Command Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "61a2a72ea28e39760b3a217e2eedbde81156d6b3987be32be4c813c78ff887fe",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "app/models/sample.rb",
+      "line": 439,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"cp\", File.join(File.dirname(input_file.source.to_s), \"total_reads.json\"), \"#{sample_input_s3_path}/#{\"total_reads.json\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Sample",
+        "method": "initiate_fastq_files_s3_cp"
+      },
+      "user_input": "sample_input_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing Command Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "f8885c750bb15c63b626ef1be9fb2f37e11677fc264b69b00650147d604a95a9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/pipeline_report_service.rb",
+      "line": 494,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.joins(\"LEFT OUTER JOIN taxon_summaries ON taxon_counts.count_type = taxon_summaries.count_type AND taxon_counts.tax_level = taxon_summaries.tax_level AND taxon_counts.tax_id = taxon_summaries.tax_id AND taxon_summaries.background_id = #{background_id}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineReportService",
+        "method": "fetch_taxon_counts"
+      },
+      "user_input": "background_id",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "3c459cf529c3afa12af4dc7fc6804f7bfebf35cf5e9882df425f0c1ea270d976",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/pipeline_report_service.rb",
+      "line": 546,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonSummary.joins(\"LEFT OUTER JOIN taxon_counts ON taxon_counts.count_type = taxon_summaries.count_type AND taxon_counts.tax_level = taxon_summaries.tax_level AND taxon_counts.tax_id = taxon_summaries.tax_id AND taxon_counts.pipeline_run_id = #{pipeline_run_id}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineReportService",
+        "method": "fetch_taxons_absent_from_sample"
+      },
+      "user_input": "pipeline_run_id",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "71de6685840f4ac5d7cc404cf4447ac284ae440edc379a096f9efeac3a7963e9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/taxon_counts_data_service.rb",
+      "line": 77,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.joins(:pipeline_run).joins(\"LEFT JOIN taxon_summaries ON taxon_counts.count_type = taxon_summaries.count_type AND taxon_counts.tax_level = taxon_summaries.tax_level AND taxon_counts.tax_id = taxon_summaries.tax_id AND taxon_summaries.background_id = #{background_id}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "TaxonCountsDataService",
+        "method": "generate"
+      },
+      "user_input": "background_id",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "4d281039bcaebf31f4052faf2de381d8c7a995dc0797b55fe800fb3025d58222",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped model attribute",
+      "file": "app/views/home/snapshot.html.erb",
+      "line": 7,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "SnapshotLink.find_by(:share_id => snapshot_links_params[:share_id]).project_id",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SnapshotLinksController",
+          "method": "show",
+          "line": 21,
+          "file": "app/controllers/snapshot_links_controller.rb",
+          "rendered": {
+            "name": "home/snapshot",
+            "file": "app/views/home/snapshot.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "home/snapshot"
+      },
+      "user_input": null,
+      "confidence": "Medium",
+      "cwe_id": [
+        79
+      ],
+      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing Cross-Site Scripting finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
     }
   ],
-  "updated": "2026-06-17 00:00:00 -0800",
+  "updated": "2026-07-06 00:00:00 -0800",
   "brakeman_version": "6.1.2"
 }
