@@ -100,6 +100,10 @@ RSpec.describe "Upload -> S3 round-trip (persistence, not just call-assertion)",
   before do
     # Give the app a real (in-memory-backed) bucket to write to. Without this,
     # SAMPLES_BUCKET_NAME is blank in test and upload_to_s3 fails fast (CZID-296).
+    # NOTE: stub_const is auto-reverted by RSpec, but a raw ENV[]= is NOT — so we
+    # capture the original here and restore it in the after hook, or this spec
+    # leaks "round-trip-samples-bucket" into every later spec's ENV.
+    @orig_samples_bucket_env = ENV["SAMPLES_BUCKET_NAME"]
     stub_const("SAMPLES_BUCKET_NAME", "round-trip-samples-bucket")
     ENV["SAMPLES_BUCKET_NAME"] = "round-trip-samples-bucket"
 
@@ -112,6 +116,15 @@ RSpec.describe "Upload -> S3 round-trip (persistence, not just call-assertion)",
     # S3_CLIENT is a constant frozen at boot to AwsClient[:s3] (before this stub),
     # and InputFile#s3_presence_check reads it directly, so re-point it too.
     stub_const("S3_CLIENT", s3_client)
+  end
+
+  after do
+    # Restore the raw ENV mutation (stub_const reverts itself; ENV[]= does not).
+    if @orig_samples_bucket_env.nil?
+      ENV.delete("SAMPLES_BUCKET_NAME")
+    else
+      ENV["SAMPLES_BUCKET_NAME"] = @orig_samples_bucket_env
+    end
   end
 
   # A sample + its input file, using the REAL key the model derives. We do not
