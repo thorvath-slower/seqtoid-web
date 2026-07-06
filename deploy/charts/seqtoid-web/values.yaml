@@ -117,6 +117,19 @@ gracefulDrain:
   preStopSleepSeconds: 15
   terminationGracePeriodSeconds: 60
 
+# Resilience (#467a): default exec-based liveness probe for worker Deployments.
+# Workers have no HTTP port, so without this a hung/crashed worker supervisor is
+# never restarted. The probe pgreps the worker's own command word (first arg, e.g.
+# `rake` / `shoryuken`); if the process tree is gone the kubelet restarts the pod.
+# Per-worker override/opt-out via workers.<name>.livenessProbe (set to null to disable).
+# initialDelaySeconds is generous because rake worker boot (chamber + Rails) is slow.
+workerLivenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
 # Pre-sync migration (was the ECS run-task `rails db:migrate:with_data`).
 migrate:
   enabled: true
