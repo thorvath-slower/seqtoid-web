@@ -11,7 +11,9 @@ require "rails_helper"
 #                           "active token" branch of #background_refresh_values
 #   * request_password_reset -- account-found vs no-account branches
 #   * omniauth_failure -- login_required / unauthorized (known + default
-#                         explanation) / fall-through failure branches
+#                         explanation) / fall-through failure branches (invoked
+#                         via a temporary route since it is a Rack action, not a
+#                         routed endpoint)
 #   * callback        -- authenticated-but-missing-user and unauthenticated
 #                        branches
 #   * dev_login       -- runtime fail-closed 404 outside development
@@ -178,6 +180,74 @@ RSpec.describe "Auth0 request", type: :request do
         get "/auth0/dev_login"
         expect(response).to have_http_status(:not_found)
       end
+    end
+  end
+
+  # omniauth_failure has no entry in config/routes.rb -- it is invoked as a Rack
+  # action from OmniAuth's on_failure hook (see config/initializers/auth0.rb).
+  # with_routing draws a temporary route (and restores the real table afterward),
+  # including a root so the logout path's auth0_signout_url(root_url) resolves.
+  describe "omniauth_failure (error dispatch branches)" do
+    around do |example|
+      with_routing do |routes|
+        routes.draw do
+          root to: "home#landing"
+          get "auth0/omniauth_failure", to: "auth0#omniauth_failure"
+        end
+        example.run
+      end
+    end
+
+    it "logs out (redirects to signout) when the error is login_required" do
+      get "/auth0/omniauth_failure", params: { error: "login_required", error_description: "anything" }
+
+      expect(response).to be_redirect
+      expect(response.redirect_url).to include("/v2/logout")
+    end
+
+    it "renders the whitelisted explanation for a known unauthorized error_description" do
+      get "/auth0/omniauth_failure", params: { error: "unauthorized", error_description: "password_expired" }
+
+      expect(response).to have_http_status(:ok)
+      expect(assigns(:message)).to eq(Auth0Controller::ERROR_EXPLANATIONS[:password_expired])
+    end
+
+    it "falls back to the default explanation for an unknown unauthorized error_description" do
+      get "/auth0/omniauth_failure", params: { error: "unauthorized", error_description: "some_other_reason" }
+
+      expect(response).to have_http_status(:ok)
+      expect(assigns(:message)).to eq(Auth0Controller::ERROR_EXPLANATIONS[:default])
+    end
+
+    it "routes any other error type through failure -> logout" do
+      get "/auth0/omniauth_failure", params: { error: "access_denied", error_description: "nope" }
+
+      expect(response).to be_redirect
+      expect(response.redirect_url).to include("/v2/logout")
+    end
+
+    it "logs an error and renders the default message when error_description is missing" do
+      expect(LogUtil).to receive(:log_error).with(
+        "omniauth_failure called with missing error or error_description.",
+        hash_including(:error_type, :error_description)
+      )
+
+      get "/auth0/omniauth_failure", params: { error: "unauthorized" }
+
+      expect(response).to have_http_status(:ok)
+      expect(assigns(:message)).to eq(Auth0Controller::ERROR_EXPLANATIONS[:default])
+    end
+
+    it "logs an error and routes to failure when the error type is entirely missing" do
+      expect(LogUtil).to receive(:log_error).with(
+        "omniauth_failure called with missing error or error_description.",
+        hash_including(:error_type, :error_description)
+      )
+
+      get "/auth0/omniauth_failure"
+
+      expect(response).to be_redirect
+      expect(response.redirect_url).to include("/v2/logout")
     end
   end
 end
