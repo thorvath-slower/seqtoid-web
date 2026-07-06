@@ -250,6 +250,20 @@ RSpec.describe ErrorHelper, type: :helper do
         expect(aggregator.error_groups.first[:caption]).to include("The valid options are X, Y.")
       end
 
+      it "creates a generic string error group when force_options is 0" do
+        # force_options is an integer column (default 0); integer 0 is truthy in Ruby,
+        # so branching on the raw value would wrongly take the "valid options" branch
+        # and raise on JSON.parse(nil). It must land in the generic contact-us group.
+        field = build_field(MetadataField::STRING_TYPE, force_options: 0, options: nil)
+        expect do
+          key = aggregator.create_raw_value_error_group_for_metadata_field(field, 5, false)
+          aggregator.add_error(key, [1, "s1", "bad"])
+          caption = aggregator.error_groups.first[:caption]
+          expect(caption).to include("Please contact us for help.")
+          expect(caption).not_to include("The valid options are")
+        end.not_to raise_error
+      end
+
       it "is idempotent for a repeated field/column key" do
         field = build_field(MetadataField::NUMBER_TYPE)
         key1 = aggregator.create_raw_value_error_group_for_metadata_field(field, 4, false)
