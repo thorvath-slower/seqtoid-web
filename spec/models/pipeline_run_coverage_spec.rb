@@ -112,7 +112,16 @@ describe PipelineRun, type: :model do
     it "#taxon_byte_ranges_available? reflects presence of byteranges" do
       pr = create(:pipeline_run, sample: sample)
       expect(pr.taxon_byte_ranges_available?).to be(false)
-      create(:taxon_byterange, pipeline_run: pr)
+      # The :taxon_byterange factory defines self-referential attribute blocks
+      # (e.g. `taxid { taxid }`), so every attribute MUST be passed explicitly
+      # or FactoryBot recurses into a SystemStackError. This mirrors how the
+      # factory is used elsewhere (see phylo_tree_ngs_controller_spec).
+      create(:taxon_byterange,
+             pipeline_run: pr,
+             taxid: 1,
+             hit_type: TaxonCount::COUNT_TYPE_NT,
+             first_byte: 0,
+             last_byte: 70)
       expect(pr.reload.taxon_byte_ranges_available?).to be(true)
     end
   end
@@ -404,8 +413,10 @@ describe PipelineRun, type: :model do
       expect(pr.five_longest_reads_fasta_s3("nt.species.573")).to eq("#{pr.alignment_viz_output_s3_path}/nt.species.573.longest_5_reads.fasta")
     end
 
-    it "builds unidentified fasta path via version-2 branch" do
-      expect(pr.unidentified_fasta_s3_path).to eq("#{pr.output_s3_path_with_version}/#{PipelineRun::DAG_UNIDENTIFIED_FASTA_BASENAME}")
+    it "builds unidentified fasta path via the assembly branch" do
+      # pipeline_version 6.0.0 supports assembly, so unidentified_fasta_s3_path
+      # takes the first (assembly) branch: assembly_s3_path + ASSEMBLY_PREFIX + basename.
+      expect(pr.unidentified_fasta_s3_path).to eq("#{pr.assembly_s3_path}/#{PipelineRun::ASSEMBLY_PREFIX}#{PipelineRun::DAG_UNIDENTIFIED_FASTA_BASENAME}")
     end
 
     it "provides tax-level/hit-type byterange paths" do
@@ -487,11 +498,20 @@ describe PipelineRun, type: :model do
   end
 
   describe "output-state aggregation helpers" do
+    # An illumina pipeline_run auto-creates one OutputState per TARGET_OUTPUT
+    # (via the after_create :create_output_states callback), all initially
+    # UNKNOWN. The factory's output_states_data updates matching outputs, so to
+    # exercise the "all terminal" / "all loaded" aggregations we must supply a
+    # state for EVERY target output, not just a couple.
     let(:pr) do
       create(:pipeline_run, sample: sample,
                             output_states_data: [
                               { output: "taxon_counts", state: PipelineRun::STATUS_LOADED },
                               { output: "ercc_counts", state: PipelineRun::STATUS_FAILED },
+                              { output: "contig_counts", state: PipelineRun::STATUS_LOADED },
+                              { output: "taxon_byteranges", state: PipelineRun::STATUS_LOADED },
+                              { output: "insert_size_metrics", state: PipelineRun::STATUS_LOADED },
+                              { output: "accession_coverage_stats", state: PipelineRun::STATUS_LOADED },
                             ])
     end
 
@@ -504,7 +524,10 @@ describe PipelineRun, type: :model do
     end
 
     it "#output_state_hash maps outputs to their states" do
-      states_by_id = { pr.id => pr.output_states.to_a }
+      # Reload the association: the factory updates output_states via fresh
+      # find_by records in an after(:create) hook, so the association cache on
+      # `pr` (populated by create_output_states) still holds the pre-update rows.
+      states_by_id = { pr.id => pr.output_states.reload.to_a }
       h = pr.output_state_hash(states_by_id)
       expect(h["taxon_counts"]).to eq(PipelineRun::STATUS_LOADED)
       expect(h["ercc_counts"]).to eq(PipelineRun::STATUS_FAILED)
@@ -694,10 +717,22 @@ describe PipelineRun, type: :model do
   end
 
   describe "#sfn_error / #sfn_pipeline_error" do
-    it "returns nil when there is no sfn output path" do
+    it "returns nil/[nil, nil] when there is no sfn output path" do
       pr = build(:pipeline_run, sample: sample, sfn_execution_arn: nil)
       expect(pr.sfn_error).to be_nil
-      expect(pr.sfn_pipeline_error).to be_nil
+
+      # CHARACTERIZATION: with sfn_execution_arn nil, #sfn_output_path returns
+      # the empty string "" (not nil), which is truthy, so the
+      # `return unless sfn_output_path` guard in #sfn_pipeline_error does NOT
+      # short-circuit. It proceeds to destructure SfnExecution#pipeline_error
+      # (which is nil here) and unconditionally wraps the result, yielding
+      # [nil, nil] rather than a bare nil. #sfn_error happens to return nil
+      # because it returns the single value directly instead of an array.
+      # This asymmetry looks like a latent app bug (the guard arguably should be
+      # `sfn_output_path.present?`), but per task scope we pin the current
+      # behavior instead of changing app code. See app/models/pipeline_run.rb
+      # #sfn_pipeline_error / #sfn_output_path.
+      expect(pr.sfn_pipeline_error).to eq([nil, nil])
     end
 
     it "delegates to SfnExecution#error when there is an output path" do
