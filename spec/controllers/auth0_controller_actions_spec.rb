@@ -16,9 +16,12 @@ RSpec.describe Auth0Controller, type: :controller do
   end
 
   before do
+    # An anonymous subclass of a *named* controller keeps controller_path "auth0",
+    # so the test-only routes target auth0#... The route set here is isolated to
+    # this controller spec and does not touch the application route table.
     routes.draw do
-      get "dev_login" => "anonymous#dev_login"
-      get "omniauth_failure" => "anonymous#omniauth_failure"
+      get "dev_login" => "auth0#dev_login"
+      get "omniauth_failure" => "auth0#omniauth_failure"
     end
     # logout -> auth0_signout_url defaults its arg to root_url, which the
     # anonymous route table does not define. Stub the URL so the logout branches

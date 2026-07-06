@@ -77,7 +77,7 @@ RSpec.describe MetricUtil do
     end
 
     it "identifies and tracks when analytics is present and the request is not a test" do
-      analytics = double("analytics")
+      analytics = instance_double("Segment::Analytics", identify: nil, track: nil)
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
       # a_test? is otherwise true under RSpec; force the non-test path.
       allow(MetricUtil).to receive(:a_test?).and_return(false)
@@ -90,16 +90,16 @@ RSpec.describe MetricUtil do
         remote_ip: "1.2.3.4"
       )
 
-      expect(analytics).to receive(:identify).with(hash_including(user_id: user.id))
-      expect(analytics).to receive(:track).with(
+      MetricUtil.log_analytics_event("upload_started", user, { foo: "bar" }, request)
+
+      expect(analytics).to have_received(:identify).with(hash_including(user_id: user.id))
+      expect(analytics).to have_received(:track).with(
         hash_including(event: "upload_started", user_id: user.id)
       )
-
-      MetricUtil.log_analytics_event("upload_started", user, { foo: "bar" }, request)
     end
 
     it "uses user_id 0 and skips identify when no user is given" do
-      analytics = double("analytics")
+      analytics = instance_double("Segment::Analytics", identify: nil, track: nil)
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
       allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
@@ -111,14 +111,14 @@ RSpec.describe MetricUtil do
         remote_ip: "1.2.3.4"
       )
 
-      expect(analytics).not_to receive(:identify)
-      expect(analytics).to receive(:track).with(hash_including(user_id: 0))
-
       MetricUtil.log_analytics_event("anon_event", nil, {}, request)
+
+      expect(analytics).not_to have_received(:identify)
+      expect(analytics).to have_received(:track).with(hash_including(user_id: 0))
     end
 
     it "swallows errors and logs them instead of raising" do
-      analytics = double("analytics")
+      analytics = instance_double("Segment::Analytics", track: nil)
       stub_const("MetricUtil::SEGMENT_ANALYTICS", analytics)
       allow(MetricUtil).to receive(:a_test?).and_return(false)
       request = double(
