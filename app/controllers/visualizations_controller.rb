@@ -301,7 +301,7 @@ class VisualizationsController < ApplicationController
     id = visualization_params[:id]
     name = visualization_params[:name]
 
-    if Visualization.find(id).update(name: name)
+    if current_power.visualizations.find(id).update(name: name)
       render json: { id: id, name: name }, status: :ok
     else
       render json: { error: @visualization.errors.full_messages }, status: :internal_server_error
