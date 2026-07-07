@@ -32,6 +32,54 @@ task-definition path. This is the crux artifact of the ECS→EKS blue/green cuto
   in-cluster DB. `deploy/postgres/` is the separate appliance adapter.
 - **Logs**: `RAILS_LOG_TO_STDOUT=yes` → stdout (K8s-native); no `awslogs`.
 
+## Deploy resilience & abort → rollback (#467a / #494)
+
+The blueGreen rollout is **health-gated**, so a bad build cannot take live traffic:
+
+- **prePromotionAnalysis → `<fullname>-smoke`** runs the smoke Job against the
+  **preview** color *before* any traffic shift. A failing smoke **aborts** the rollout;
+  the **active (previous)** color keeps serving and the bad preview is scaled down after
+  `blueGreen.abortScaleDownDelaySeconds`. This holds even with `autoPromotionEnabled: true`
+  (dev/staging) — auto-promotion only fires once the analysis **passes**.
+- **postPromotionAnalysis** (opt-in per env via `blueGreen.analysis.postPromotion: true`,
+  intended for prod) re-runs smoke *after* promotion; a regression there **auto-aborts and
+  rolls back** to the prior ReplicaSet.
+- **Web pod**: readiness + liveness on `/health_check`; preStop drain
+  (`gracefulDrain.preStopSleepSeconds`) + `gracefulDrain.terminationGracePeriodSeconds`.
+- **Workers**: exec **liveness** probe (`workerLivenessProbe`, pgreps the worker's command
+  word) so a hung/crashed supervisor is restarted; **drain** via a longer, worker-specific
+  `workerDrain.terminationGracePeriodSeconds` (default 120s vs web's 60s) so an in-flight
+  job finishes on SIGTERM before SIGKILL — override per worker with
+  `workers.<name>.terminationGracePeriodSeconds` for long-running units of work.
+
+### Runbook — a rollout aborted (smoke failed)
+
+```sh
+ROLLOUT=czid-<env>-seqtoid-web        # e.g. czid-prod-seqtoid-web
+NS=czid-<env>
+
+kubectl argo rollouts get rollout "$ROLLOUT" -n "$NS"   # status shows "Degraded/Aborted"
+kubectl argo rollouts status  "$ROLLOUT" -n "$NS"
+```
+
+- The **active color is unchanged** — the app is still serving the last-good build; there
+  is no user-facing outage to firefight. Diagnose before acting.
+- Inspect the smoke AnalysisRun and its Job logs to see which path/status failed:
+  ```sh
+  kubectl get analysisrun -n "$NS" -l rollout=$ROLLOUT
+  kubectl logs -n "$NS" job/<smoke-job-name>
+  ```
+- **Fix forward** (preferred): push a corrected image; Argo syncs a new preview and the
+  smoke gate re-runs. Do **not** promote a failed preview.
+- **Retry** the same build after a transient failure:
+  `kubectl argo rollouts retry rollout "$ROLLOUT" -n "$NS"`.
+- **Post-promotion regression** (prod, `postPromotion: true`): the rollout auto-aborts and
+  the prior ReplicaSet is restored. Confirm with `kubectl argo rollouts get rollout`; if a
+  manual undo is needed use `kubectl argo rollouts undo "$ROLLOUT" -n "$NS"`.
+
+> Follow-up (#326): the smoke gate is a curl Job today; a Prometheus-backed error-rate /
+> latency metric will additionally abort a build that is *up but erroring*.
+
 ## Local validation
 
 ```sh
