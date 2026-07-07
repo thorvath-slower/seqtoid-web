@@ -16,14 +16,22 @@ Rails.application.routes.draw do
     mount GraphiQL::Rails::Engine, at: "/graphiql", graphql_path: "/graphql"
 
     # CZID-280 (#237) -- local-development sign-in without a live Auth0 tenant.
-    # This route is defined ONLY inside this `Rails.env.development?` guard, so it
-    # is entirely absent from the route table in every deployed environment
+    # This route is defined ONLY inside this `Rails.env.development?` guard AND
+    # only when the explicit `ALLOW_DIRECT_USER_LOGIN=true` opt-in flag is set, so
+    # it is entirely absent from the route table in every deployed environment
     # (staging/production never register it -- it cannot 404-vs-exist ambiguously,
-    # it simply does not exist). The action is additionally guarded at runtime.
-    # This deliberately does NOT reintroduce the removed /direct_user_login
-    # backdoor (CZID-319 / #276): it takes no arbitrary user_id, so it cannot be
-    # used to "become any user" -- it signs in a single fixed seeded dev user.
-    get "auth0/dev_login", to: "auth0#dev_login"
+    # it simply does not exist). The deployed dev cluster runs the development
+    # Rails env AND is internet-facing, so `Rails.env.development?` alone is NOT
+    # sufficient: the flag is set ONLY in local docker-compose (never in any
+    # deployed-env config), so the route is defined at boot ONLY for truly-local
+    # runs. The action is additionally guarded at runtime (auth0#dev_login re-checks
+    # the same flag and 404s otherwise). This deliberately does NOT reintroduce the
+    # removed /direct_user_login backdoor (CZID-319 / #276): it takes no arbitrary
+    # user_id, so it cannot be used to "become any user" -- it signs in a single
+    # fixed seeded dev user.
+    if ENV["ALLOW_DIRECT_USER_LOGIN"] == "true"
+      get "auth0/dev_login", to: "auth0#dev_login"
+    end
   end
   post "/graphql", to: "graphql#execute"
   # It's unclear what it would mean to update a background, so we disallow.

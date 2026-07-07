@@ -146,6 +146,12 @@ services:
       DB_PORT: "3306"
       DB_USERNAME: root
       OFFLINE: "1"
+      # LOCAL-ONLY: opt in to the dev-only offline Sign In (auth0#dev_login).
+      # This is set here in local docker-compose ONLY -- NEVER in any deployed-env
+      # config (helm/chart values, czecs/ECS task params, chamber/SSM, etc.). The
+      # deployed dev cluster runs the development Rails env and is internet-facing,
+      # so it must NOT set this flag. See Auth0Controller#direct_login_enabled?.
+      ALLOW_DIRECT_USER_LOGIN: "true"
     command: bash -c "rm -f tmp/pids/server.pid && rails server -b 0.0.0.0 -p 3001"
   resque:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:latest
