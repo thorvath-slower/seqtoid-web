@@ -68,7 +68,12 @@ namespace :taxon_lineage_slice do
     # both. (Whole-file in memory, as before — size the taxon-load Job's memory for the full
     # ~GB uncompressed set.)
     csv_data = Zlib::GzipReader.new(StringIO.new(csv_data)).read if TAXON_LINEAGE_FILE_KEY.end_with?(".gz")
-    total_rows = CSV.parse(csv_data, headers: true).count # Count rows for progress tracking
+    # Count data rows for the progress log WITHOUT materializing every CSV::Row. The full
+    # lineage is ~4.75M rows; `CSV.parse(csv_data).count` builds the entire array in memory
+    # just to count it — a multi-GB spike that can OOM the load (and OOM-ing *after* the
+    # delete step would leave the env with no taxon data). A newline count is close enough
+    # for a percentage (#528).
+    total_rows = [csv_data.count("\n") - 1, 1].max # Count rows for progress tracking
 
     # Process the CSV in chunks to avoid memory issues
     CSV.parse(csv_data, headers: true) do |row|
@@ -95,13 +100,32 @@ namespace :taxon_lineage_slice do
   end
 
   task remove_slice: :environment do
-    puts "Removing #{CURRENT_VERSION} taxon lineage slice"
-    # destroy_all on a large slice can outlive the DB connection ("Server has gone
-    # away"); reconnect+retry instead of raising ActiveRecord::StatementInvalid
-    # (Forgejo #388).
+    puts "Removing #{CURRENT_VERSION} taxon lineage rows"
+    # Use delete_all (single SQL DELETE), not destroy_all: TaxonLineage is reference data
+    # with no destroy callbacks, and destroy_all instantiates + deletes row-by-row — on a
+    # multi-million-row table that is pathologically slow and can outlive the DB connection.
+    # Wrapped in with_db_reconnect so a large single DELETE that trips "Server has gone away"
+    # reconnects + retries rather than raising (Forgejo #388/#528).
     with_db_reconnect("remove_slice") do
-      TaxonLineage.where(version_end: CURRENT_VERSION).destroy_all
+      TaxonLineage.where(version_end: CURRENT_VERSION).delete_all
     end
+  end
+
+  # One-command full reload (#528): clear the current version's rows, re-import from S3
+  # (gunzip-aware, honoring TAXON_LINEAGE_FILE_KEY), and rebuild the OpenSearch index from
+  # the freshly-loaded table. This is the clean, resumable path for the slice->full cutover
+  # and any future reference-data refresh — run it from a detached one-off Job, not a shell
+  # exec. See docs/TAXON-LINEAGE-FULL-CUTOVER.md.
+  desc "Full reload: delete current-version rows -> import from S3 (gunzip-aware) -> rebuild ES index"
+  task reload_from_s3: :environment do
+    puts "Reloading taxon lineage #{CURRENT_VERSION} from s3://#{S3_DATABASE_BUCKET}/#{TAXON_LINEAGE_FILE_KEY}"
+    puts "  step 1/3 - clearing current #{CURRENT_VERSION} rows"
+    Rake::Task["taxon_lineage_slice:remove_slice"].invoke
+    puts "  step 2/3 - importing from S3"
+    Rake::Task["taxon_lineage_slice:import_data_from_s3"].invoke
+    puts "  step 3/3 - rebuilding the OpenSearch index"
+    Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+    puts "Reload complete for #{CURRENT_VERSION} (#{TaxonLineage.where(version_start: CURRENT_VERSION).count} rows for this version_start)."
   end
 
   task create_taxon_lineage_slice_es_index: :environment do
