@@ -135,14 +135,12 @@ RSpec.describe PipelineRunStage, type: :model do
       expect(stage(job_description: nil).batch_job_status_url).to be_nil
     end
 
-    # CHARACTERIZATION (latent bug): the non-blank branch calls
-    # AwsUtil.get_batch_job_url, which AwsUtil does NOT define (only
-    # get_cloudwatch_url / get_sfn_execution_url exist). So an admin viewing a
-    # stage whose job_description carries a jobId hits a NoMethodError rather
-    # than getting a console link. Pinned as-is; see the run report.
-    it "raises NoMethodError because AwsUtil.get_batch_job_url is undefined (bug pin)" do
+    it "returns the AWS Batch console URL for the jobId" do
       s = stage(job_description: { jobId: "j1", jobQueue: "q1" }.to_json)
-      expect { s.batch_job_status_url }.to raise_error(NoMethodError, /get_batch_job_url/)
+      expect(s.batch_job_status_url).to eq(
+        "https://#{AwsUtil::AWS_REGION}.console.aws.amazon.com/batch/home" \
+        "?region=#{AwsUtil::AWS_REGION}#jobs/detail/j1"
+      )
     end
 
     it "returns nil early when the parsed job hash has no jobId" do

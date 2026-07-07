@@ -138,7 +138,7 @@ class PipelineRunStage < ApplicationRecord
 
     job_hash = JSON.parse(job_description)
     if job_hash && job_hash['jobId']
-      AwsUtil.get_batch_job_url(job_hash['jobQueue'], job_hash['jobId'])
+      AwsUtil.get_batch_job_url(job_hash['jobId'])
     end
   end
 
