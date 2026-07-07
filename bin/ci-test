@@ -32,12 +32,37 @@ mkdir -p app/assets/dist
 for f in main.bundle.min.css main.bundle.min.js vendors.bundle.min.css vendors.bundle.min.js; do echo foo > "app/assets/dist/$f"; done
 echo "::endgroup::"
 
-echo "::group::Create + load MySQL schema"
-# db:drop first so reloads start clean (MySQL force:cascade drops trip FK constraints
-# when tables already exist); idempotent on a fresh DB.
-bundle exec bin/rails db:drop db:create db:schema:load
-echo "::endgroup::"
+# Parallelism auto-scales to the box: CI's ubuntu-latest is 2-core, dev boxes have more.
+# parallel_tests shards the suite across N processes, each owning its own test DB
+# (idseq_test, idseq_test2, … — see config/database.yml + TEST_ENV_NUMBER) inside the
+# single MySQL service container. Falls back to a serial run if parallel_tests is absent
+# so local runs never hard-break.
+PARALLEL_N="$(command -v nproc >/dev/null 2>&1 && nproc || echo 2)"
 
-echo "::group::RSpec"
-SAMPLES_BUCKET_NAME=idseq-samples-development bundle exec rspec
-echo "::endgroup::"
+if bundle exec parallel_test --version >/dev/null 2>&1; then
+  echo "::group::Create + load ${PARALLEL_N} parallel MySQL schemas"
+  # parallel:drop first so reloads start clean (MySQL force:cascade drops trip FK
+  # constraints when tables already exist); idempotent on fresh DBs. load_schema mirrors
+  # today's db:schema:load (loads schema.rb, NOT migrations).
+  bundle exec rake "parallel:drop[${PARALLEL_N}]" \
+                   "parallel:create[${PARALLEL_N}]" \
+                   "parallel:load_schema[${PARALLEL_N}]"
+  echo "::endgroup::"
+
+  echo "::group::RSpec (parallel x${PARALLEL_N})"
+  # parallel_rspec prints per-process summaries then one final combined
+  # "N examples, M failures" line to stdout — the regression gate reads the last one.
+  SAMPLES_BUCKET_NAME=idseq-samples-development \
+    bundle exec parallel_rspec -n "${PARALLEL_N}"
+  echo "::endgroup::"
+else
+  echo "::group::Create + load MySQL schema (serial fallback)"
+  # db:drop first so reloads start clean (MySQL force:cascade drops trip FK constraints
+  # when tables already exist); idempotent on a fresh DB.
+  bundle exec bin/rails db:drop db:create db:schema:load
+  echo "::endgroup::"
+
+  echo "::group::RSpec (serial fallback)"
+  SAMPLES_BUCKET_NAME=idseq-samples-development bundle exec rspec
+  echo "::endgroup::"
+fi

@@ -147,7 +147,20 @@ RSpec.describe "Auth0 request", type: :request do
   end
 
   describe "GET /auth/auth0/callback (callback failure branches)" do
+    # OmniAuth test_mode is on globally (spec_helper); a mock :auth0 auth hash
+    # lets the request reach the controller instead of tripping OmniAuth's real
+    # OAuth2 CSRF/state check (csrf_detected -> 302). The email/uid maps to NO
+    # User so the controller exercises the failure branches under test.
+    let(:no_such_user_auth) do
+      OmniAuth::AuthHash.new(
+        provider: "auth0",
+        uid: "auth0|no-such-user",
+        info: { email: "no-such-user@example.com" }
+      )
+    end
+
     it "renders a bad_request when Auth0 authenticated but no matching user exists" do
+      OmniAuth.config.mock_auth[:auth0] = no_such_user_auth
       allow_any_instance_of(Auth0Helper).to receive(:auth0_authenticate_with_bearer_token).and_return(true)
       # current_user stays nil -> the "logged in on Auth0 but missing from db" branch.
       allow_any_instance_of(Auth0Controller).to receive(:current_user).and_return(nil)
@@ -159,6 +172,7 @@ RSpec.describe "Auth0 request", type: :request do
     end
 
     it "logs out (redirects to signout) when bearer-token authentication fails" do
+      OmniAuth.config.mock_auth[:auth0] = no_such_user_auth
       allow_any_instance_of(Auth0Helper).to receive(:auth0_authenticate_with_bearer_token).and_return(false)
 
       get "/auth/auth0/callback/"

@@ -25,4 +25,7 @@ sandbox:
   <<: *deployed
 test:
   <<: *default
-  database: idseq_test
+  # parallel_tests gives each worker its own DB via TEST_ENV_NUMBER (empty for
+  # process 1, "2","3",… for the rest) so N processes share the one MySQL container
+  # without stepping on each other. Serial runs (no TEST_ENV_NUMBER) stay idseq_test.
+  database: idseq_test<%= ENV['TEST_ENV_NUMBER'] %>

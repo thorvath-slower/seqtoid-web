@@ -150,6 +150,9 @@ group :development, :test do
   # Adds support for Capybara system testing and selenium driver
   gem 'capybara', '~> 2.17', '>= 2.17.0'
   gem 'guard', '~> 2.15'
+  # Runs the RSpec suite across multiple processes (one test DB per process) to cut
+  # CI wall-clock; each worker owns idseq_test<TEST_ENV_NUMBER>. See bin/ci-test.
+  gem 'parallel_tests', '~> 4.7'
   gem 'rspec-rails', '~> 6.1' # bug-#002: rspec-rails 6.x is the Rails 7.1-compatible line
   gem 'rubocop', '~> 0.92'
   gem "rubocop-graphql", "~> 0.14.5"
