@@ -75,9 +75,18 @@ namespace :taxon_lineage_slice do
     # for a percentage (#528).
     total_rows = [csv_data.count("\n") - 1, 1].max # Count rows for progress tracking
 
+    # The full versioned lineage export (#528) has some rows with an EMPTY created_at/updated_at
+    # (the slice had them populated). insert_all skips Rails' timestamp defaulting and both
+    # columns are NOT NULL, so a single blank one aborts the whole import with
+    # ActiveRecord::NotNullViolation — leaving the table empty after the remove step. Default
+    # any blank timestamp to load time.
+    now_ts = Time.now.utc.strftime("%Y-%m-%d %H:%M:%S")
     # Process the CSV in chunks to avoid memory issues
     CSV.parse(csv_data, headers: true) do |row|
-      rows << row.to_h.transform_values(&:to_s)
+      h = row.to_h.transform_values(&:to_s)
+      h["created_at"] = now_ts if h["created_at"].blank?
+      h["updated_at"] = now_ts if h["updated_at"].blank?
+      rows << h
       if rows.size >= chunk_size
         # Inserting in bulk for performance reasons
         # rubocop:disable Rails/SkipsModelValidations
