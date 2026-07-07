@@ -31,20 +31,16 @@ RSpec.describe PersistedBackground, type: :model do
 
   context "presence validations" do
     it "requires a project_id when the user is present" do
-      # user present avoids the nil-user crash in the read-access validator (see below).
       pb = build(:persisted_background, user_id: @user.id, project_id: nil)
       expect(pb).not_to be_valid
       expect(pb.errors[:project_id]).to be_present
     end
 
-    # NOTE (reported to #294): the create-context read-access validator calls
-    # Project.viewable(record.user) / Background.viewable(record.user) without
-    # guarding against a nil user, so validating with a nil user raises
-    # NoMethodError ("undefined method `admin?' for nil") instead of surfacing a
-    # clean "user can't be blank" validation error. This pins the current behavior.
-    it "raises on create validation when the user is nil (documents current fragility)" do
+    it "surfaces a clean presence error (not NoMethodError) when the user is nil" do
       pb = PersistedBackground.new(user_id: nil, project_id: @project.id)
-      expect { pb.valid?(:create) }.to raise_error(NoMethodError, /admin\?/)
+      expect { pb.valid?(:create) }.not_to raise_error
+      expect(pb.valid?(:create)).to be(false)
+      expect(pb.errors[:user_id]).to be_present
     end
   end
 
