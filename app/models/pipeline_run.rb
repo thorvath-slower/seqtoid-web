@@ -970,7 +970,7 @@ class PipelineRun < ApplicationRecord
   end
 
   def sfn_pipeline_error
-    return unless sfn_output_path
+    return unless sfn_output_path.present?
 
     error_type, error_cause = SfnExecution.new(execution_arn: sfn_execution_arn, s3_path: sfn_output_path).pipeline_error
     return [error_type, error_cause]

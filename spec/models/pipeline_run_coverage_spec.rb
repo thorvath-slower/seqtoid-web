@@ -716,22 +716,16 @@ describe PipelineRun, type: :model do
   end
 
   describe "#sfn_error / #sfn_pipeline_error" do
-    it "returns nil/[nil, nil] when there is no sfn output path" do
+    it "returns nil when there is no sfn output path" do
       pr = build(:pipeline_run, sample: sample, sfn_execution_arn: nil)
       expect(pr.sfn_error).to be_nil
 
-      # CHARACTERIZATION: with sfn_execution_arn nil, #sfn_output_path returns
-      # the empty string "" (not nil), which is truthy, so the
-      # `return unless sfn_output_path` guard in #sfn_pipeline_error does NOT
-      # short-circuit. It proceeds to destructure SfnExecution#pipeline_error
-      # (which is nil here) and unconditionally wraps the result, yielding
-      # [nil, nil] rather than a bare nil. #sfn_error happens to return nil
-      # because it returns the single value directly instead of an array.
-      # This asymmetry looks like a latent app bug (the guard arguably should be
-      # `sfn_output_path.present?`), but per task scope we pin the current
-      # behavior instead of changing app code. See app/models/pipeline_run.rb
+      # With sfn_execution_arn nil, #sfn_output_path returns the empty string
+      # "" (not nil). The `return unless sfn_output_path.present?` guard in
+      # #sfn_pipeline_error correctly treats "" as absent and short-circuits to
+      # a bare nil, consistent with #sfn_error. See app/models/pipeline_run.rb
       # #sfn_pipeline_error / #sfn_output_path.
-      expect(pr.sfn_pipeline_error).to eq([nil, nil])
+      expect(pr.sfn_pipeline_error).to be_nil
     end
 
     it "delegates to SfnExecution#error when there is an output path" do
