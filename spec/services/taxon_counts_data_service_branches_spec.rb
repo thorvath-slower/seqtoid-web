@@ -32,8 +32,8 @@ RSpec.describe TaxonCountsDataService, type: :service do
         pipeline_run_ids: [@pipeline_run.id],
         background_id: background.id
       )
-      nt_573 = result.find { |r| r[:tax_id] == 573 }
-      expect(nt_573).to have_key(:z_score)
+      nt_result = result.find { |r| r[:tax_id] == 573 }
+      expect(nt_result).to have_key(:z_score)
     end
   end
 

@@ -8,7 +8,7 @@ require "rails_helper"
 # INPUT_ERRORS match, create_visualization's already-exists else, and
 # cleanup_s3's blank-prefix early return.
 RSpec.describe PhyloTreeNg, type: :model do
-  let(:arn) { "fake:sfn:execution:arn:x".freeze }
+  let(:arn) { "fake:sfn:execution:arn:x" }
 
   before do
     project = create(:project)
