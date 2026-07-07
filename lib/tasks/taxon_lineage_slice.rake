@@ -1,8 +1,19 @@
 namespace :taxon_lineage_slice do
-  CURRENT_VERSION = "2024-02-06".freeze
+  # Version + source file are ENV-overridable so an environment can load the FULL taxon
+  # lineage (all ~3M rows) instead of the dev/test *slice*, WITHOUT a code change (Forgejo
+  # #528 — the slice omits taxid 694009 and ~20k other taxa, surfacing as
+  # TaxonLineage::LineageNotFoundError + taxon-indexing lambda failures). Defaults preserve
+  # the historical slice behavior exactly; to switch an env to the full lineage, set in its
+  # web-params:
+  #   TAXON_LINEAGE_FILE_KEY = ncbi-indexes-prod/2024-02-06/index-generation-2/<full-lineage>.csv
+  #   (optionally TAXON_LINEAGE_VERSION if the full file is a different lineage version)
+  # then run the one-time replace: taxon_lineage_slice:remove_slice -> import_data_from_s3 ->
+  # create_taxon_lineage_slice_es_index (rebuilds MySQL + OpenSearch from the full table).
+  # See docs/TAXON-LINEAGE-FULL-CUTOVER.md.
+  CURRENT_VERSION = (ENV["TAXON_LINEAGE_VERSION"].presence || "2024-02-06").freeze
   SLICE_NAME = "taxon_lineages_2024_slice.csv".freeze
   INDEXES_PREFIX = "ncbi-indexes-prod/#{CURRENT_VERSION}/index-generation-2".freeze
-  TAXON_LINEAGE_FILE_KEY = "#{INDEXES_PREFIX}/#{SLICE_NAME}".freeze
+  TAXON_LINEAGE_FILE_KEY = (ENV["TAXON_LINEAGE_FILE_KEY"].presence || "#{INDEXES_PREFIX}/#{SLICE_NAME}").freeze
 
   # These are long-running offline jobs. Their DB connection can be dropped by the
   # server ("Server has gone away") between chunks, surfacing as
