@@ -75,17 +75,17 @@ namespace :taxon_lineage_slice do
     # for a percentage (#528).
     total_rows = [csv_data.count("\n") - 1, 1].max # Count rows for progress tracking
 
-    # The full versioned lineage export (#528) has some rows with an EMPTY created_at/updated_at
-    # (the slice had them populated). insert_all skips Rails' timestamp defaulting and both
-    # columns are NOT NULL, so a single blank one aborts the whole import with
-    # ActiveRecord::NotNullViolation — leaving the table empty after the remove step. Default
-    # any blank timestamp to load time.
+    # The full versioned lineage export (#528) ships invalid created_at values — some blank,
+    # many the MySQL zero-date "0000-00-00 00:00:00" (the slice had real timestamps). insert_all
+    # skips Rails' timestamp defaulting, ActiveRecord type-casts a zero-date to nil, and both
+    # columns are NOT NULL — so one bad row aborts the whole import with NotNullViolation,
+    # leaving the table empty after the remove step. Keep only real YYYY-MM-DD timestamps;
+    # default anything else (blank / 0000- / garbage) to load time.
     now_ts = Time.now.utc.strftime("%Y-%m-%d %H:%M:%S")
     # Process the CSV in chunks to avoid memory issues
     CSV.parse(csv_data, headers: true) do |row|
       h = row.to_h.transform_values(&:to_s)
-      h["created_at"] = now_ts if h["created_at"].blank?
-      h["updated_at"] = now_ts if h["updated_at"].blank?
+      %w[created_at updated_at].each { |c| h[c] = now_ts unless h[c].to_s.match?(/\A[12]\d{3}-\d{2}-\d{2}/) }
       rows << h
       if rows.size >= chunk_size
         # Inserting in bulk for performance reasons

@@ -34,13 +34,14 @@ namespace :reference_data do
       rows = []
       counter = 0
 
-      # Default blank created_at/updated_at (the full versioned export leaves some empty) —
-      # both are NOT NULL and insert_all skips Rails' timestamp defaulting (#528).
+      # The full export ships invalid created_at (blank or MySQL zero-date "0000-00-00 …");
+      # AR type-casts a zero-date to nil, both columns are NOT NULL, and insert_all skips
+      # timestamp defaulting → NotNullViolation. Keep only real YYYY-MM-DD timestamps;
+      # default anything else to load time (#528).
       now_ts = Time.now.utc.strftime("%Y-%m-%d %H:%M:%S")
       CSV.parse(csv_data, headers: true) do |row|
         h = row.to_h.transform_values(&:to_s)
-        h["created_at"] = now_ts if h["created_at"].blank?
-        h["updated_at"] = now_ts if h["updated_at"].blank?
+        %w[created_at updated_at].each { |c| h[c] = now_ts unless h[c].to_s.match?(/\A[12]\d{3}-\d{2}-\d{2}/) }
         rows << h
         next if rows.size < chunk_size
 
