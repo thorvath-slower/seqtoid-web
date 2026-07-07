@@ -7,8 +7,21 @@ name: Nightly test suite (rspec + jest)
 #
 # What runs here:
 #   - rspec (MySQL 8)  — same bin/ci-test SSOT script as the PR gate (ci-test-mysql8.yml),
-#                        so nightly can't drift from PR.
-#   - jest (JS/TS)     — the client unit/component suite with coverage.
+#                        so nightly can't drift from PR. SimpleCov (.simplecov) writes
+#                        coverage/.last_run.json (line + branch %).
+#   - jest (JS/TS)     — the client unit/component suite with coverage. jest.config.js
+#                        writes client-coverage/coverage-summary.json (lines/branches/
+#                        functions/statements %).
+#
+# Coverage tracking (the point of #498): each suite's coverage % is extracted into the
+# job summary and uploaded as an artifact, and the aggregate `report` job tabulates both
+# so the 90/90 coverage goal (CZID-462) can be tracked on a nightly cadence.
+#
+# CAVEAT — the Jest number is a biased slice: jest.config.js has NO `collectCoverageFrom`,
+# so only files a test imports are counted (untested modules are invisible, inflating the
+# %). Fixing that is a separate config ticket; until it lands, read the nightly JS number
+# as a floor, not the true repo-wide %. The RSpec number (SimpleCov 'rails' profile) is
+# whole-app.
 #
 # NOT yet wired here (tracked separately, HELD on env access):
 #   - Playwright e2e smoke  -> #500 (needs deployed staging secrets; lives in
@@ -34,6 +47,9 @@ jobs:
     name: RSpec (MySQL 8)
     runs-on: ubuntu-latest
     container: ruby:3.3.6
+    outputs:
+      line: ${{ steps.coverage.outputs.line }}
+      branch: ${{ steps.coverage.outputs.branch }}
     env:
       AUTH_TOKEN_SECRET: 'GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ=' # dummy — test only
       DB_USERNAME: root
@@ -82,9 +98,55 @@ jobs:
           set -o pipefail
           bash bin/ci-test 2>&1 | tee "$RUNNER_TEMP/suite.log"
 
+      - name: Extract RSpec coverage (SimpleCov)
+        id: coverage
+        # Always run so a failing suite still surfaces whatever coverage was recorded.
+        # SimpleCov (.simplecov, 'rails' profile) writes coverage/.last_run.json:
+        #   {"result": {"line": <pct>, "branch": <pct>}}
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          f=coverage/.last_run.json
+          if [ ! -f "$f" ]; then
+            echo "No $f (suite may have failed before writing coverage)."
+            {
+              echo "line=n/a"
+              echo "branch=n/a"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # ruby is present (this is the ruby:3.3.6 container) — parse without jq.
+          line=$(ruby -rjson -e 'puts JSON.parse(File.read("coverage/.last_run.json"))["result"]["line"]')
+          branch=$(ruby -rjson -e 'r=JSON.parse(File.read("coverage/.last_run.json"))["result"]; puts r.fetch("branch","n/a")')
+          {
+            echo "line=$line"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### RSpec coverage (SimpleCov, whole-app)"
+            echo ""
+            echo "| Metric | Coverage % |"
+            echo "| --- | --- |"
+            echo "| Line | $line |"
+            echo "| Branch | $branch |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload RSpec coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rspec-coverage
+          path: coverage/
+          if-no-files-found: warn
+
   jest:
     name: Jest (JS/TS)
     runs-on: ubuntu-latest
+    outputs:
+      lines: ${{ steps.coverage.outputs.lines }}
+      statements: ${{ steps.coverage.outputs.statements }}
+      branches: ${{ steps.coverage.outputs.branches }}
+      functions: ${{ steps.coverage.outputs.functions }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -106,9 +168,58 @@ jobs:
       - name: Install Dependencies
         run: npm ci
       - name: Jest (with coverage)
-        run: npx jest --coverage --ci
+        # Append json-summary on the CLI (jest.config.js only sets text-summary/json/html)
+        # so we get client-coverage/coverage-summary.json with the {total:{...pct}} totals.
+        # NOTE: config has no collectCoverageFrom, so this % counts only test-imported files
+        # (a floor, not the repo-wide %). Config fix is a separate ticket.
+        run: npx jest --coverage --ci --coverageReporters=text-summary --coverageReporters=json --coverageReporters=html --coverageReporters=json-summary
         env:
           CI: true
+
+      - name: Extract Jest coverage
+        id: coverage
+        # Always run: even when a threshold trips (nonzero exit) we still want the number.
+        if: ${{ always() }}
+        run: |
+          f=client-coverage/coverage-summary.json
+          if [ ! -f "$f" ]; then
+            echo "No $f (jest may have failed before writing coverage)."
+            {
+              echo "lines=n/a"
+              echo "statements=n/a"
+              echo "branches=n/a"
+              echo "functions=n/a"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          lines=$(node -p "require('./$f').total.lines.pct")
+          statements=$(node -p "require('./$f').total.statements.pct")
+          branches=$(node -p "require('./$f').total.branches.pct")
+          functions=$(node -p "require('./$f').total.functions.pct")
+          {
+            echo "lines=$lines"
+            echo "statements=$statements"
+            echo "branches=$branches"
+            echo "functions=$functions"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Jest coverage (test-imported files only — see caveat)"
+            echo ""
+            echo "| Metric | Coverage % |"
+            echo "| --- | --- |"
+            echo "| Lines | $lines |"
+            echo "| Statements | $statements |"
+            echo "| Branches | $branches |"
+            echo "| Functions | $functions |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Jest coverage report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage
+          path: client-coverage/
+          if-no-files-found: warn
 
   report:
     name: Nightly result summary
@@ -118,9 +229,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Summarize
+        env:
+          RSPEC: ${{ needs.rspec_mysql8.result }}
+          JEST: ${{ needs.jest.result }}
+          RSPEC_LINE: ${{ needs.rspec_mysql8.outputs.line }}
+          RSPEC_BRANCH: ${{ needs.rspec_mysql8.outputs.branch }}
+          JEST_LINES: ${{ needs.jest.outputs.lines }}
+          JEST_STATEMENTS: ${{ needs.jest.outputs.statements }}
+          JEST_BRANCHES: ${{ needs.jest.outputs.branches }}
+          JEST_FUNCTIONS: ${{ needs.jest.outputs.functions }}
         run: |
-          RSPEC='${{ needs.rspec_mysql8.result }}'
-          JEST='${{ needs.jest.result }}'
           {
             echo "# Nightly test suite"
             echo ""
@@ -128,6 +246,19 @@ jobs:
             echo "| --- | --- |"
             echo "| RSpec (MySQL 8) | $RSPEC |"
             echo "| Jest (JS/TS) | $JEST |"
+            echo ""
+            echo "## Coverage (tracking the 90/90 goal — CZID-462)"
+            echo ""
+            echo "| Suite | Line/Statement % | Branch % | Function % |"
+            echo "| --- | --- | --- | --- |"
+            echo "| RSpec (whole-app) | ${RSPEC_LINE:-n/a} | ${RSPEC_BRANCH:-n/a} | — |"
+            echo "| Jest (test-imported files only*) | ${JEST_STATEMENTS:-n/a} | ${JEST_BRANCHES:-n/a} | ${JEST_FUNCTIONS:-n/a} |"
+            echo ""
+            echo "\\* Jest coverage counts only files a test imports (jest.config.js has no"
+            echo "\`collectCoverageFrom\`), so it is a floor, not the repo-wide %. Config fix"
+            echo "is tracked separately. RSpec is whole-app (SimpleCov 'rails' profile)."
+            echo ""
+            echo "Full HTML reports are attached as the \`rspec-coverage\` / \`jest-coverage\` artifacts."
           } >> "$GITHUB_STEP_SUMMARY"
           # TODO(#502): emit structured report + alert-on-red (Slack/PagerDuty) here.
           # TODO(#500): add Playwright e2e smoke to `needs` once staging secrets land.
