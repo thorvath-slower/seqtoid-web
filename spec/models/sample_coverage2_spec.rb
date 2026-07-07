@@ -89,7 +89,8 @@ RSpec.describe Sample, type: :model do
   describe "#pipeline_run_by_version" do
     it "returns a run with taxon_counts when one exists" do
       sample = sample_with
-      pr = create(:pipeline_run, sample: sample, pipeline_version: "3.0", taxon_counts_data: [{ tax_level: 1, taxon_name: "x" }])
+      pr = create(:pipeline_run, sample: sample, pipeline_version: "3.0")
+      create(:taxon_count, pipeline_run: pr) # no taxon_name -> no TaxonLineage lookup
       expect(sample.pipeline_run_by_version("3.0")).to eq(pr)
     end
 
@@ -159,22 +160,33 @@ RSpec.describe Sample, type: :model do
   end
 
   describe "#metadatum_add_or_update" do
-    it "returns ok and persists a valid custom field value" do
-      sample = sample_with
-      result = sample.metadatum_add_or_update("sample_type", "CSF")
+    # Attach a metadata field of the given base_type to both the sample's project
+    # and its host genome so get_available_matching_field finds it.
+    def sample_with_field(base_type)
+      hg = create(:host_genome)
+      sample = sample_with(host_genome: hg)
+      field = create(:metadata_field, name: "cov2_field", base_type: base_type)
+      sample.project.metadata_fields << field
+      hg.metadata_fields << field
+      sample
+    end
+
+    it "returns ok and persists a valid string field value" do
+      sample = sample_with_field(MetadataField::STRING_TYPE)
+      result = sample.metadatum_add_or_update("cov2_field", "some text")
       expect(result[:status]).to eq("ok")
+      expect(sample.get_existing_metadatum("cov2_field")).to be_present
     end
 
     it "returns ok status with a blank value (no-op create branch)" do
-      sample = sample_with
-      result = sample.metadatum_add_or_update("sample_type", "")
+      sample = sample_with_field(MetadataField::STRING_TYPE)
+      result = sample.metadatum_add_or_update("cov2_field", "")
       expect(result[:status]).to eq("ok")
     end
 
-    it "returns error when the metadatum fails validation" do
-      sample = sample_with(metadata_fields: { "host_age" => "10" })
-      # host_age is numeric; a non-numeric value should fail validation -> error arm.
-      result = sample.metadatum_add_or_update("host_age", "not-a-number")
+    it "returns error when the metadatum fails validation (numeric field, non-numeric value)" do
+      sample = sample_with_field(MetadataField::NUMBER_TYPE)
+      result = sample.metadatum_add_or_update("cov2_field", "not-a-number")
       expect(result[:status]).to eq("error")
       expect(result[:error]).to be_present
     end

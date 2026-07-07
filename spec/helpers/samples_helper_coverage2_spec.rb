@@ -4,7 +4,12 @@ require "rails_helper"
 # (COVERAGE-GAP-ANALYSIS-2026-07-07). Targets the previously-uncovered helper
 # methods and both arms of each conditional. Branch coverage is the priority.
 RSpec.describe SamplesHelper, type: :helper do
-  create_users
+  # UserMacros#create_users is not extended for `type: :helper`, so set up users
+  # inline (matching the existing spec/helpers/samples_helper_spec.rb pattern).
+  before do
+    @admin = create(:admin, role: 1)
+    @joe = create(:joe)
+  end
 
   describe "#get_samples_list_csv_attributes" do
     it "includes both host filtering attribute sets when versions span the boundary" do
