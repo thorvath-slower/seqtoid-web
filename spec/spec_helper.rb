@@ -100,23 +100,27 @@ RSpec.configure do |config|
 
   Aws.config.update(stub_responses: true)
 
-  # Clear the cache between tests since it is stateful (like the db)
+  # OmniAuth.config is process-global mutable state. sign_in_auth0 flips
+  # test_mode on (which bypasses OmniAuth's real OAuth2 CSRF/state check) and
+  # registers a :auth0 mock, but its Minitest-style `teardown` helper is never
+  # wired into an RSpec hook. So test_mode used to be turned on IMPLICITLY by
+  # whichever example ran sign_in_auth0 first and then leaked to the rest of
+  # the process. Serial ordering happened to leave it on before the callback
+  # specs; parallel_tests (and the future matrix shards) run a different
+  # per-process order, so those specs saw test_mode=false and tripped
+  # csrf_detected -> 302 instead of reaching the controller.
+  #
+  # Fix: make test_mode DETERMINISTIC (on from the start of every example, in
+  # every process) and reset only the per-test mock auth hash afterwards so no
+  # auth identity leaks between examples. test_mode stays on; the mock is
+  # per-example state. This removes the order-dependency the shards would hit.
   config.before(:each) do
     Rails.cache.clear
+    OmniAuth.config.test_mode = true
   end
 
-  # OmniAuth.config is process-global mutable state. sign_in_auth0 flips
-  # test_mode on and registers a :auth0 mock; its Minitest-style `teardown`
-  # helper is never wired into an RSpec hook, so that state used to leak to
-  # every later example in the same process. Under serial runs the ordering
-  # hid it; parallel_tests (and the future matrix shards) run examples in a
-  # different order per process and a leaked test_mode=true makes OmniAuth
-  # intercept /auth/auth0/callback and redirect instead of letting the
-  # controller render, breaking the callback specs. Reset globally after each
-  # example so every test starts from a clean, order-independent auth config.
   config.after(:each) do
     OmniAuth.config.mock_auth[:auth0] = nil
-    OmniAuth.config.test_mode = false
   end
 end
 
