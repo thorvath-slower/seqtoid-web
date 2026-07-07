@@ -88,16 +88,14 @@ RSpec.describe "Visualization feature request", type: :request do
       expect(vis.visualization_type).to eq("heatmap")
     end
 
-    # CHARACTERIZATION of the #save "overwrite the most recent existing viz"
-    # branch (see #294). The controller only reuses an existing visualization
-    # when `v.sample_ids.to_set == sample_ids.to_set`, but over a real HTTP
-    # request `sample_ids` arrives as an array of *strings* (["12"]) while
-    # `v.sample_ids` is an array of *integers* ([12]), so the Set comparison
-    # never matches and each save at the request layer creates a NEW record.
-    #
-    # This pins the CURRENT behavior. If a fix coerces the ids (making the
-    # second save overwrite in place), this example will flip — update it then.
-    it "currently creates a second record on re-save because param sample_ids are strings (see #294)" do
+    # The #save "overwrite the most recent existing viz" branch (see #294).
+    # The controller reuses an existing visualization when
+    # `v.sample_ids.to_set == sample_ids.to_set`. Over a real HTTP request the
+    # param `sampleIds` arrive as *strings* (["12"]) while `v.sample_ids` (from
+    # the samples join) are *integers* ([12]); the controller now coerces the
+    # param to integers before comparing, so a re-save with the same sample set
+    # overwrites the existing record in place rather than creating a duplicate.
+    it "reuses the existing record on re-save (param sample_ids are coerced to ints, see #294)" do
       post "/visualizations/heatmap/save", params: {
         type: "heatmap",
         data: { sampleIds: [sample.id], version: 1 },
@@ -109,9 +107,9 @@ RSpec.describe "Visualization feature request", type: :request do
           type: "heatmap",
           data: { sampleIds: [sample.id], version: 2 },
         }
-      end.to change(Visualization, :count).by(1)
+      end.not_to change(Visualization, :count)
 
-      expect(JSON.parse(response.body)["id"]).not_to eq(first_id)
+      expect(JSON.parse(response.body)["id"]).to eq(first_id)
     end
   end
 
