@@ -1,75 +1,74 @@
 # Taxon-lineage: cut over from the dev SLICE to the FULL lineage (Forgejo #528)
 
-## Problem
-The webapp's MySQL `taxon_lineages` table **and** its OpenSearch index are loaded from a
-dev/test **slice** CSV (`ncbi-indexes-prod/2024-02-06/index-generation-2/taxon_lineages_2024_slice.csv`).
-The slice omits **taxid 694009 (coronavirus)** and **~20k other taxa**, which surfaces on dev as:
-- `TaxonLineage::LineageNotFoundError: Taxon lineage not found for taxid 694009` (639+ Sentry events), and
-- `taxon-indexing-concurrency-manager-dev` lambda failures (`elasticsearch_query_helper#call_lambda`,
-  `VisualizationsController#samples_taxons`).
+## Problem — two distinct issues
+The webapp's MySQL `taxon_lineages` table **and** its OpenSearch index are loaded from a dev/test
+**slice** CSV (`ncbi-indexes-prod/2024-02-06/index-generation-2/taxon_lineages_2024_slice.csv`).
 
-The fix is to load the **full** lineage into both stores, not the slice.
+1. **Issue 1 — ~20,625 latent omissions.** The slice omits ~20k taxa the full `2024-02-06` reference
+   contains → any sample carrying one raises `TaxonLineage::LineageNotFoundError`. Sample-independent
+   latent blast radius. **Fix: load the FULL lineage, not the slice.**
+2. **Issue 2 — taxid 694009 on dev.** 694009 *is* in the slice, yet the dev lookup found no row → a
+   **partial/truncated import** that the old `exists?` guard permanently masked (it skipped re-import
+   once *any* row for the version existed). **Fix: reload + a row-count completeness guard.**
 
-> **Note on "full".** The *pipeline's* lineage is `taxid-lineages.marisa` (a binary marisa-trie,
-> per the `AlignmentConfig` seeds) — that is **not** what the webapp loads. The webapp loads a **CSV**
-> into MySQL. So the cutover needs a **full-lineage CSV** in `s3://seqtoid-public-references/…`. See
-> Prereqs.
+Both surface on dev Sentry as `LineageNotFoundError: taxid 694009` (639+ events) and
+`taxon-indexing-concurrency-manager-dev` lambda failures.
 
-## What changed in code (this PR)
-`lib/tasks/taxon_lineage_slice.rake` now reads the source key + version from ENV, defaulting to the
-current slice (behavior unchanged unless the env is set):
-- `TAXON_LINEAGE_FILE_KEY` — S3 key under `S3_DATABASE_BUCKET` (default: the slice CSV)
-- `TAXON_LINEAGE_VERSION`  — lineage version for the `exists?`/`version_start` guards (default `2024-02-06`)
+## The full source (confirmed in S3)
+`s3://seqtoid-public-references/ncbi-indexes-prod/2024-02-06/index-generation-2/` contains:
+- `taxon_lineages_2024_slice.csv` — 691 MB — the **slice** (loaded today)
+- **`versioned-taxid-lineages.csv.gz` — 99 MB gz — the FULL lineage** ← use this
+- `taxid-lineages.parquet` (full, Parquet) · `taxid-lineages.marisa` (pipeline binary)
 
-This makes the slice→full switch a **config + one-time reload**, no code change per env.
+The index-generation `README` states `versioned-taxid-lineages.csv` is the file "used to populate
+taxon_lineage database table" — i.e. the slice is a row-subset of it, **same schema**. (Spot-check the
+header matches the `taxon_lineages` columns on first load.)
 
-## Prereqs (BLOCKER — needs authenticated AWS)
-Confirm the full-lineage **CSV** exists and get its exact key (anonymous access is denied; needs a
-signed-in console or creds):
+## What changed in code (PR #199)
+`lib/tasks/taxon_lineage_slice.rake`:
+- **ENV-configurable source** — `TAXON_LINEAGE_FILE_KEY` / `TAXON_LINEAGE_VERSION` (default = the slice,
+  so behavior is unchanged until an env opts in).
+- **Gzip support** — transparently gunzips a `.gz` key (the full export is gzipped).
+- **Completeness guard (Issue 2)** — `load_slice_if_needed` now re-imports when the loaded row count is
+  below `TAXON_LINEAGE_MIN_ROWS` (clearing the partial rows first), instead of the presence-only
+  `exists?` that masked truncated loads. Unset → falls back to presence-only (unchanged).
+
+So the slice→full switch is **config + a one-time reload**; the ES index is rebuilt from the loaded
+table by the same task.
+
+## Cutover (DEV ONLY — staging/prod HELD for team approval)
+Set in the **dev** web-params:
 ```
-aws s3 ls s3://seqtoid-public-references/ncbi-indexes-prod/2024-02-06/index-generation-2/ | grep -i lineage
+TAXON_LINEAGE_FILE_KEY = ncbi-indexes-prod/2024-02-06/index-generation-2/versioned-taxid-lineages.csv.gz
+TAXON_LINEAGE_MIN_ROWS = <full row count>     # from: zcat versioned-taxid-lineages.csv.gz | wc -l  (minus header)
 ```
-- **If a full CSV exists** (e.g. `taxon_lineages.csv` / `taxon_lineages_2024.csv`) → use it below.
-- **If only `taxid-lineages.marisa` + the slice CSV exist** → we must first **generate a full CSV**
-  from the index-generation lineage (marisa → CSV with the same header/columns as the slice) and
-  upload it to that prefix. That is a separate, small data-gen step; do it before the cutover.
-
-## Cutover (dev only — staging/prod are HELD for team approval)
-The load **replaces**, it does not append — loading a same-version file on top of existing rows would
-create duplicate `version_start..version_end` rows and break `TaxonLineage.versioned_lineages`. So
-remove the old version's rows first.
-
-**Option A — one-off ECS/rake task (mirrors the Refresh Reference Data GHA):**
-Set `TAXON_LINEAGE_FILE_KEY=<full CSV key>` in the dev web-params, then run against the deployed task:
+Then run the one-time replace against the deployed dev task (load **replaces**, not appends — clear the
+old version first or you get duplicate `version_start..version_end` rows that break
+`TaxonLineage.versioned_lineages`):
 ```
-rake taxon_lineage_slice:remove_slice                    # clear the old 2024-02-06 rows
-rake taxon_lineage_slice:import_data_from_s3             # load the FULL CSV (from the ENV key)
+rake taxon_lineage_slice:remove_slice                          # clear old 2024-02-06 rows
+rake taxon_lineage_slice:import_data_from_s3                   # load FULL (gunzips the .gz)
 rake taxon_lineage_slice:create_taxon_lineage_slice_es_index   # rebuild OpenSearch from the full table
 ```
+Or the **Refresh Reference Data** GHA with `file_key=…/versioned-taxid-lineages.csv.gz` — but
+`reference_data:refresh` still appends and doesn't gunzip; run `remove_slice` first (follow-up: give it
+gunzip + replace-in-place parity with this task).
 
-**Option B — the Refresh Reference Data GHA** (`.github/workflows/refresh-reference-data.yml`,
-workflow_dispatch): run with `environment=dev`, `version=2024-02-06`, `file_key=<full CSV key>`.
-⚠️ `reference_data:refresh` currently `insert_all`s without a pre-remove — either run
-`taxon_lineage_slice:remove_slice` first, or add `REFERENCE_DATA_FORCE=1` **only after** a remove.
-(Follow-up: give `reference_data:refresh` an explicit replace-in-place mode so a single dispatch is
-safe.)
+Budget ~1–2 h (load ~3M rows) + ~53 min (OpenSearch rebuild; #476/#477 bulk-load tuning already applied).
+Size the taxon-load Job memory for the full uncompressed CSV (~GB, held in memory).
 
-Both take ~1–2 h to load ~3M rows + ~53 min for the OpenSearch rebuild (#476/#477 bulk-load tuning
-already applied in `create_taxon_lineage_slice_es_index`).
-
-## Verify
+## Verify (all must pass)
 - `TaxonLineage.where(taxid: 694009).exists?` → **true**
-- Orphan-taxid anti-join = 0 (taxon_counts referencing a taxid with no lineage row)
-- `TaxonLineage.count` ≈ full (~3M), not the slice's small count
-- OpenSearch `taxon_lineages` index doc-count **== `TaxonLineage.count`** (the deploy hook's #476
-  in-sync check)
-- Sentry: `LineageNotFoundError 694009` + the taxon-indexing-lambda issues stop; a benchmark run
-  passes (AUPR ≥ 0.98).
+- Orphan anti-join = 0 — `taxon_counts` referencing a taxid with no lineage row
+- `TaxonLineage.count` == the source row count (== `TAXON_LINEAGE_MIN_ROWS`); not the slice's smaller count
+- OpenSearch `taxon_lineages` doc-count **== `TaxonLineage.count`** (the deploy hook's #476 in-sync check)
+- Sentry: `LineageNotFoundError 694009` + the indexing-lambda issues stop; a benchmark run passes (AUPR ≥ 0.98)
 
 ## Rollback
-Repoint the env's `TAXON_LINEAGE_FILE_KEY` back to the slice key and re-run the three tasks.
+Repoint `TAXON_LINEAGE_FILE_KEY` to the slice key (unset `TAXON_LINEAGE_MIN_ROWS`) and re-run the three tasks.
 
-## Durable follow-up (staging/prod, when unheld)
-Set `TAXON_LINEAGE_FILE_KEY` to the full CSV in **all** envs' web-params so future fresh deploys load
-full via the `taxon_lineage_slice:load_slice_if_needed` PreSync hook (already idempotent + in-sync
-guarded). Keep it in SSOT env config, mirrored across dev/staging/prod/sandbox.
+## Durable follow-up (staging/prod, when unheld) + tracked separately (#528 plan)
+- Set `TAXON_LINEAGE_FILE_KEY` + `TAXON_LINEAGE_MIN_ROWS` in **all** envs' SSOT web-params so fresh
+  deploys load full via the idempotent `load_slice_if_needed` PreSync hook, mirrored dev/staging/prod/sandbox.
+- Separate PRs from the remediation plan: G2 `merged.dmp` taxid remap / newest-`version_end` fallback;
+  G3 throttle the per-contig `log_error` (639 events → 1); zero-orphan gate in `BenchmarkWorkflowRun`.
