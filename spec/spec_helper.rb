@@ -104,6 +104,20 @@ RSpec.configure do |config|
   config.before(:each) do
     Rails.cache.clear
   end
+
+  # OmniAuth.config is process-global mutable state. sign_in_auth0 flips
+  # test_mode on and registers a :auth0 mock; its Minitest-style `teardown`
+  # helper is never wired into an RSpec hook, so that state used to leak to
+  # every later example in the same process. Under serial runs the ordering
+  # hid it; parallel_tests (and the future matrix shards) run examples in a
+  # different order per process and a leaked test_mode=true makes OmniAuth
+  # intercept /auth/auth0/callback and redirect instead of letting the
+  # controller render, breaking the callback specs. Reset globally after each
+  # example so every test starts from a clean, order-independent auth config.
+  config.after(:each) do
+    OmniAuth.config.mock_auth[:auth0] = nil
+    OmniAuth.config.test_mode = false
+  end
 end
 
 require 'rspec/json_expectations'
