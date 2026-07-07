@@ -33,8 +33,9 @@ RSpec.describe "Metadata request", type: :request do
   describe "GET /metadata/instructions" do
     it "requires authentication" do
       get "/metadata/instructions"
-      # Warden failure_app rewrites the body; assert status only.
-      expect(response).to have_http_status(:unauthorized)
+      # HTML action: unauthenticated users are redirected to login (302 Found),
+      # not given a 401 JSON body.
+      expect(response).to have_http_status(:found)
     end
 
     it "renders for a signed-in user" do
@@ -47,7 +48,8 @@ RSpec.describe "Metadata request", type: :request do
   describe "GET /metadata/metadata_for_host_genome" do
     it "requires authentication" do
       get "/metadata/metadata_for_host_genome", params: { name: "Human" }
-      expect(response).to have_http_status(:unauthorized)
+      # Unauthenticated request is redirected to login (302 Found).
+      expect(response).to have_http_status(:found)
     end
 
     it "returns not_found when the host genome does not exist" do
@@ -76,13 +78,16 @@ RSpec.describe "Metadata request", type: :request do
       project = create(:project, users: [@joe])
       create(:host_genome, name: "Human")
 
+      # Send as JSON: the payload has nested arrays (metadata rows, samples),
+      # which only round-trip through JSON encoding. This mirrors the real
+      # frontend, which POSTs a JSON body.
       post "/metadata/validate_csv_for_new_samples", params: {
         metadata: {
           "headers" => ["sample_name", "Host Organism"],
           "rows" => [["sample_a", "Human"]],
         },
         samples: [{ "name" => "sample_a", "project_id" => project.id }],
-      }
+      }, as: :json
 
       expect(response).to have_http_status(:ok)
       json = JSON.parse(response.body)

@@ -12,8 +12,13 @@ RSpec.describe "PathogenLists request", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
-    it "renders for a versioned path as well" do
-      get "/pathogen_list/1.0.0"
+    # The route is `get 'pathogen_list(/:version)'`. The optional :version
+    # segment uses Rails' default constraint, which stops at a dot, so a
+    # dotted semantic version like "1.0.0" does not match this route (it
+    # raises ActionController::RoutingError). A non-dotted version segment
+    # is what the route actually accepts.
+    it "renders for a (non-dotted) versioned path as well" do
+      get "/pathogen_list/v1"
       expect(response).to have_http_status(:ok)
     end
   end

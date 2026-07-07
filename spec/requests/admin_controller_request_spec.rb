@@ -11,8 +11,9 @@ RSpec.describe "Admin request", type: :request do
   describe "GET /admin (index)" do
     it "requires authentication" do
       get "/admin"
-      # Warden failure_app rewrites the body; assert status only.
-      expect(response).to have_http_status(:unauthorized)
+      # This is an HTML controller: unauthenticated users are redirected to
+      # login (302 Found) rather than receiving a 401 JSON body.
+      expect(response).to have_http_status(:found)
     end
 
     it "redirects a signed-in non-admin to the root path" do
