@@ -134,7 +134,7 @@ module ErrorHelper
     end
 
     if field.base_type == MetadataField::STRING_TYPE
-      if field.force_options
+      if field.force_options == 1
         return "The valid options are #{JSON.parse(field.options).join(', ')}."
       else
         return "There was an error. Please contact us for help."
