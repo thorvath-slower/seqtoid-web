@@ -8,13 +8,24 @@ Bundler.require(*Rails.groups)
 
 module Czid
   class Application < Rails::Application
-    # Load configuration defaults from Rails 6.1.
-    # Some of these are overridden in new_framework_defaults_7_0.rb.
-    # There are a few more framework defaults to turn on to get to 7.0 that involve
-    # resetting the cache and locking in to Rails 7 that should be done after
-    # Rails 7 is stable in production.
+    # Load configuration defaults from Rails 6.1, then opt in to individual Rails 7.0
+    # framework defaults one at a time via config/initializers/new_framework_defaults_7_0.rb
+    # (the Rails-sanctioned staged-upgrade pattern). We deliberately keep
+    # `load_defaults 6.1` rather than flipping to 7.0 wholesale: a wholesale flip would
+    # silently enable the two still-commented digest-class changes in that file
+    # (`key_generator_hash_digest_class` / `hash_digest_class`), which invalidate all
+    # existing encrypted cookies and cache entries -- a deployed-behavior change we are not
+    # ready to make. Those get locked in only after Rails 7 is stable in production.
     config.load_defaults 6.1
-    # Note: `config.active_support.disable_to_s_conversion` was removed here — it is
+
+    # cache_format_version -- set explicitly to the supported 7.0 format. The Rails 6.1
+    # default (6.1) is deprecated under Rails 7.x and emits a boot-time deprecation warning
+    # (CZID-295). Rails still reads pre-existing older-format entries; only NEW entries use
+    # the 7.0 format. This app's caches are Redis (staging/prod/sandbox) or null_store
+    # (dev/test), so entries simply re-populate. Per the upgrade guide this MUST be set
+    # here in application.rb, not in the new_framework_defaults file.
+    config.active_support.cache_format_version = 7.0
+    # Note: `config.active_support.disable_to_s_conversion` was removed here -- it is
     # deprecated in Rails 7.1 and a no-op (the implicit Array/Hash #to_s conversion
     # was already removed in Rails 7.0), so the setting did nothing but emit a
     # deprecation warning. The `load_defaults 6.1 -> 7.x` advance is separate (CZID-127).
