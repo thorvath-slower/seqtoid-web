@@ -58,24 +58,14 @@ RSpec.describe SfnGenericDispatchService, type: :service do
         create(:app_config, key: AppConfig::SFN_SINGLE_WDL_ARN, value: fake_sfn_arn)
       end
 
-      # CHARACTERIZATION (pins current, buggy behavior — see app bug below).
-      #
-      # The intended behavior is to raise SfnVersionMissingError naming the
-      # workflow. In practice, the missing-version branch is never reached:
-      # app/services/sfn_generic_dispatch_service.rb:33 calls
-      #   AppConfigHelper.get_workflow_version(workflow_name)
-      # using a bare `workflow_name` (no `@`). No such local variable or method
-      # exists (the ivar is `@workflow_name`), so a NameError is raised before
-      # the version check. This spec pins that current behavior so the wave is
-      # green; the app bug is reported separately (do not fix app code here).
-      it "raises NameError from the bare `workflow_name` reference (app bug)" do
+      it "raises SfnVersionMissingError naming the workflow" do
         expect do
           SfnGenericDispatchService.new(
             workflow_run,
             inputs_json: inputs_json,
             output_prefix: output_prefix
           )
-        end.to raise_error(NameError, /workflow_name/)
+        end.to raise_error(SfnGenericDispatchService::SfnVersionMissingError, /#{cg_workflow}/)
       end
     end
 
@@ -182,17 +172,12 @@ RSpec.describe SfnGenericDispatchService, type: :service do
         @mock_aws_clients[:states].stub_responses(:start_execution, Aws::States::Errors::InvalidArn.new(nil, nil))
       end
 
-      # CHARACTERIZATION (pins current, buggy behavior — see app bug below).
-      #
-      # The intended behavior is to log and re-raise the original SFN error
-      # (Aws::States::Errors::InvalidArn). In practice the rescue block in
-      # app/services/sfn_generic_dispatch_service.rb:65 interpolates a bare
-      # `workflow_name` (no `@`) into the log message. No such local variable
-      # or method exists, so building the log message itself raises a
-      # NameError, which replaces (masks) the original InvalidArn. This spec
-      # pins that current behavior; the app bug is reported separately.
-      it "raises NameError while logging in the rescue block (app bug masks the original error)" do
-        expect { subject }.to raise_error(NameError, /workflow_name/)
+      it "logs and re-raises the original SFN error (Aws::States::Errors::InvalidArn)" do
+        expect(LogUtil).to receive(:log_error).with(
+          /Error starting SFN pipeline for #{cg_workflow} workflow/,
+          hash_including(exception: an_instance_of(Aws::States::Errors::InvalidArn))
+        )
+        expect { subject }.to raise_error(Aws::States::Errors::InvalidArn)
       end
     end
   end
