@@ -112,8 +112,12 @@ class Background < ApplicationRecord
       end
       taxon_result[:rpm_list] << row["rpm"].round(3)
     end
-    # addd the last result
-    result_list << summarize_taxon(taxon_result, n, date)
+    # add the last accumulated result, if any. When the background has no
+    # taxon_counts the loop never runs, so taxon_result stays {} and
+    # summarize_taxon would divide nil (taxon_result[:sum_rpm]) by n and raise
+    # NoMethodError. Guard on :tax_id so an empty background yields an empty
+    # summary instead.
+    result_list << summarize_taxon(taxon_result, n, date) if taxon_result[:tax_id]
 
     result_list
   end

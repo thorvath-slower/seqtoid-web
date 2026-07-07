@@ -144,4 +144,26 @@ RSpec.describe Background, type: :model do
       expect(bg.as_json).to have_key("alignment_config_names")
     end
   end
+
+  context "#summarize / #store_summary with no taxon_counts" do
+    # A background whose pipeline runs have no taxon_counts yields no rows, so
+    # #summarize never accumulates a taxon. Previously it still appended the
+    # empty {} to the result list and #summarize_taxon divided nil (:sum_rpm) by
+    # n, raising NoMethodError. It should instead return an empty summary.
+    let(:empty_background) do
+      create(:background, name: "Empty BG", user: @user,
+                          pipeline_run_ids: two_pipeline_run_ids(project: @project))
+    end
+
+    it "returns an empty summary instead of raising NoMethodError" do
+      expect { empty_background.summarize }.not_to raise_error
+      expect(empty_background.summarize).to eq([])
+    end
+
+    it "stores an empty summary and marks the background ready" do
+      expect { empty_background.store_summary }.not_to raise_error
+      expect(empty_background.reload.ready).to eq(1)
+      expect(TaxonSummary.where(background_id: empty_background.id)).to be_empty
+    end
+  end
 end
