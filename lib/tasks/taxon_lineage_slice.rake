@@ -133,7 +133,19 @@ namespace :taxon_lineage_slice do
     puts "  step 2/3 - importing from S3"
     Rake::Task["taxon_lineage_slice:import_data_from_s3"].invoke
     puts "  step 3/3 - rebuilding the OpenSearch index"
-    Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+    # The DB load above is already committed. The search-index rebuild is best-effort:
+    # skip it when OpenSearch is off, and never let an ES failure fail (and, with the
+    # remove step at the top, churn) an otherwise-successful data load (#549). Lineage
+    # lookups + pathogen flagging read MySQL, not OpenSearch.
+    if defined?(ELASTICSEARCH_ON) && ELASTICSEARCH_ON
+      begin
+        Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+      rescue StandardError => e
+        puts "  ⚠ OpenSearch rebuild failed (#{e.class}: #{e.message}). The DB load is committed + complete; rebuild the search index separately (#549/#550)."
+      end
+    else
+      puts "  ELASTICSEARCH_ON is off; skipping the OpenSearch rebuild. The DB load is complete."
+    end
     puts "Reload complete for #{CURRENT_VERSION} (#{TaxonLineage.where(version_start: CURRENT_VERSION).count} rows for this version_start)."
   end
 
@@ -156,7 +168,16 @@ namespace :taxon_lineage_slice do
     puts "Bulk-load tuning: refresh_interval=-1, number_of_replicas=0 during import; restoring #{restore} after."
     es.client.indices.put_settings(index: index, body: { index: { refresh_interval: -1, number_of_replicas: 0 } })
     begin
-      es.import(batch_size: 5000, refresh: false)
+      # elasticsearch-model 7.1.1's `import` delegates find_in_batches through a proxy that
+      # is NOT Ruby-3 keyword-safe (the app runs Ruby 3.3) — `es.import` raises
+      # ArgumentError "wrong number of arguments (given 1, expected 0)" (#550). Bulk-index
+      # directly via ActiveRecord find_in_batches + es.client.bulk, bypassing the broken
+      # proxy path entirely.
+      TaxonLineage.find_in_batches(batch_size: 5000) do |group|
+        body = group.map { |rec| { index: { _index: index, _id: rec.id, data: rec.__elasticsearch__.as_indexed_json } } }
+        resp = es.client.bulk(body: body)
+        puts "  ⚠ some docs failed to index in a batch" if resp && resp["errors"]
+      end
     ensure
       es.client.indices.put_settings(index: index, body: { index: restore })
       es.client.indices.refresh(index: index)
