@@ -256,19 +256,19 @@ module MetadataHelper
     # Require a header for every column.
     if metadata["headers"].include? ""
       errors.push(MetadataValidationErrors::MISSING_COLUMN_HEADER)
-      return { "errors" => errors, "warnings" => [] }
+      return { errors: errors, warnings: [] }
     end
 
     # Require sample_name or Sample Name column.
     if (metadata["headers"] & MetadataField::SAMPLE_NAME_SYNONYMS).blank?
       errors.push(MetadataValidationErrors::MISSING_SAMPLE_NAME_COLUMN)
-      return { "errors" => errors, "warnings" => [] }
+      return { errors: errors, warnings: [] }
     end
 
     # Require host_organism or Host Organism column.
     if extract_host_genome_from_metadata && (metadata["headers"] & MetadataField::HOST_GENOME_SYNONYMS).blank?
       errors.push(MetadataValidationErrors::MISSING_HOST_GENOME_COLUMN)
-      return { "errors" => errors, "warnings" => [] }
+      return { errors: errors, warnings: [] }
     end
 
     existing_fields = MetadataField.where(is_core: 1)
@@ -279,7 +279,7 @@ module MetadataHelper
 
     # If there are duplicate columns, abort and return with the errors.
     if metadata_csv_has_duplicate_columns(metadata["headers"], existing_fields, error_aggregator)
-      return { "errors" => errors + error_aggregator.error_groups, "warnings" => [] }
+      return { errors: errors + error_aggregator.error_groups, warnings: [] }
     end
 
     # Add a warning for each custom field that will be created.

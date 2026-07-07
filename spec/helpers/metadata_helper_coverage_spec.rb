@@ -30,7 +30,7 @@ RSpec.describe MetadataHelper, type: :helper do
       metadata = { "headers" => ["sample_name", ""], "rows" => [] }
 
       result = helper.validate_metadata_csv_for_project_samples([sample], metadata)
-      expect(result["errors"]).to include(ErrorHelper::MetadataValidationErrors::MISSING_COLUMN_HEADER)
+      expect(result[:errors]).to include(ErrorHelper::MetadataValidationErrors::MISSING_COLUMN_HEADER)
     end
 
     it "returns a missing-sample-name-column error when no sample name column exists" do
@@ -38,7 +38,7 @@ RSpec.describe MetadataHelper, type: :helper do
       metadata = { "headers" => %w[collection_date], "rows" => [] }
 
       result = helper.validate_metadata_csv_for_project_samples([sample], metadata)
-      expect(result["errors"]).to include(ErrorHelper::MetadataValidationErrors::MISSING_SAMPLE_NAME_COLUMN)
+      expect(result[:errors]).to include(ErrorHelper::MetadataValidationErrors::MISSING_SAMPLE_NAME_COLUMN)
     end
 
     it "validates a well-formed row against an existing sample with no errors" do
@@ -100,10 +100,9 @@ RSpec.describe MetadataHelper, type: :helper do
       metadata = { "headers" => %w[sample_name], "rows" => [] }
 
       issues, new_host_genomes = helper.validate_metadata_csv_for_new_samples([sample], metadata)
-      # The early-return path uses STRING keys ({ "errors" => ... }); the normal
-      # completion path uses symbol keys ({ errors: ... }). This missing-column
-      # bail-out hits the string-keyed variant.
-      expect(issues["errors"]).to include(ErrorHelper::MetadataValidationErrors::MISSING_HOST_GENOME_COLUMN)
+      # Both the early-return bail-out and the normal completion path now use
+      # symbol keys ({ errors: ... }), consistent with what the callers key on.
+      expect(issues[:errors]).to include(ErrorHelper::MetadataValidationErrors::MISSING_HOST_GENOME_COLUMN)
       expect(new_host_genomes).to eq([])
     end
 
