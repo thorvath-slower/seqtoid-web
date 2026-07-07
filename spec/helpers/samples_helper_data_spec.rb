@@ -154,13 +154,12 @@ RSpec.describe SamplesHelper, type: :helper do
       expect(name).to eq("benchmark_alpha_vs_beta")
     end
 
-    # CHARACTERIZATION (pins current behavior; see report): when a ground_truth_file
-    # is supplied, the helper appends the LITERAL string "ground_truth_file" rather
-    # than interpolating the file value. This looks like a bug (missing #{...}), but
-    # is pinned here rather than fixed, per the coverage-PR rules.
-    it "appends the literal token 'ground_truth_file' when a ground truth file is present" do
+    # When a ground_truth_file is supplied, the helper interpolates the file
+    # value into the sample name (previously it appended the literal token
+    # "ground_truth_file" due to a missing #{...}; fixed in #294).
+    it "interpolates the ground truth file value when one is present" do
       name = helper.generate_benchmark_sample_name([sample_a.id], project.id, "truth.tsv")
-      expect(name).to eq("benchmark_alpha_vs_ground_truth_file")
+      expect(name).to eq("benchmark_alpha_vs_truth.tsv")
     end
   end
 end

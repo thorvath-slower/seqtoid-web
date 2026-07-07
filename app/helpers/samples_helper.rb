@@ -669,7 +669,7 @@ module SamplesHelper
     separator = "_vs_"
     sample_names = Sample.where(id: sample_ids).pluck(:name)
     comparison = sample_names.join(separator)
-    comparison += "#{separator}ground_truth_file" if ground_truth_file.present?
+    comparison += "#{separator}#{ground_truth_file}" if ground_truth_file.present?
 
     existing_project_sample_names = Sample.where(project_id: project_id).pluck(:name)
     increment_sample_name("benchmark_#{comparison}", existing_project_sample_names)
