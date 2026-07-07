@@ -11,4 +11,9 @@ class AwsUtil
     "https://#{AWS_REGION}.console.aws.amazon.com/states/home?region=#{AWS_REGION}" \
       "#/executions/details/#{sfn_execution_arn}"
   end
+
+  def self.get_batch_job_url(job_id)
+    "https://#{AWS_REGION}.console.aws.amazon.com/batch/home?region=#{AWS_REGION}" \
+      "#jobs/detail/#{job_id}"
+  end
 end
