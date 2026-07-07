@@ -135,8 +135,11 @@ const SupportPortal = () => {
   };
 
   // Only show for authenticated users; the portal is part of the app shell but
-  // diagnostics/reporting only make sense in an authenticated session.
-  if (!userContext.userSignedIn) return null;
+  // diagnostics/reporting only make sense in an authenticated session. The
+  // portal can render in paths outside the UserContext provider tree, where
+  // `userContext` is undefined -- guard defensively so no read can throw
+  // (the #505 report/portal null-guard class).
+  if (!userContext?.userSignedIn) return null;
 
   return (
     <>
