@@ -117,6 +117,20 @@ gracefulDrain:
   preStopSleepSeconds: 15
   terminationGracePeriodSeconds: 60
 
+# Resilience (#467a): worker drain hardening. Web pods drain via a preStop sleep +
+# a 60s grace period, but workers are different — resque/shoryuken already trap
+# SIGTERM to stop pulling new jobs and finish the in-flight one, but an in-flight
+# job (e.g. a pipeline dispatch) can outlast the web-sized 60s grace period and get
+# SIGKILLed mid-flight. Give workers their own, longer grace period so the running
+# job completes before the pod dies. The kubelet sends SIGTERM directly to PID 1
+# (no preStop needed for the signal), so this is purely about the grace window.
+# Per-worker override via workers.<name>.terminationGracePeriodSeconds; a long-job
+# worker (pipeline-monitor/result-monitor) may want a larger value than the default.
+workerDrain:
+  # 120s: double the web grace so a mid-flight dispatch/monitor tick finishes. Bump
+  # per-worker (or globally) if a worker's unit of work legitimately runs longer.
+  terminationGracePeriodSeconds: 120
+
 # Resilience (#467a): default exec-based liveness probe for worker Deployments.
 # Workers have no HTTP port, so without this a hung/crashed worker supervisor is
 # never restarted. The probe pgreps the worker's own command word (first arg, e.g.

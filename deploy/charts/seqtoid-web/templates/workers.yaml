@@ -33,7 +33,10 @@ spec:
         seqtoid.io/worker: {{ $name }}
     spec:
       serviceAccountName: {{ include "seqtoid-web.serviceAccountName" $root }}
-      terminationGracePeriodSeconds: {{ $root.Values.gracefulDrain.terminationGracePeriodSeconds }}
+      # Resilience (#467a): worker drain. Prefer a per-worker override, then the
+      # worker-wide workerDrain default (longer than web's, so a long-running in-flight
+      # job finishes on SIGTERM before SIGKILL), falling back to the web grace period.
+      terminationGracePeriodSeconds: {{ $w.terminationGracePeriodSeconds | default $root.Values.workerDrain.terminationGracePeriodSeconds | default $root.Values.gracefulDrain.terminationGracePeriodSeconds }}
       {{- with $root.Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
