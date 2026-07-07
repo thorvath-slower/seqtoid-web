@@ -1,8 +1,22 @@
+require "zlib"
+require "stringio"
+
 namespace :taxon_lineage_slice do
-  CURRENT_VERSION = "2024-02-06".freeze
+  # Version + source file are ENV-overridable so an environment can load the FULL taxon
+  # lineage (all ~3M rows) instead of the dev/test *slice*, WITHOUT a code change (Forgejo
+  # #528 — the slice omits taxid 694009 and ~20k other taxa, surfacing as
+  # TaxonLineage::LineageNotFoundError + taxon-indexing lambda failures). Defaults preserve
+  # the historical slice behavior exactly; to switch an env to the full lineage, set in its
+  # web-params:
+  #   TAXON_LINEAGE_FILE_KEY = ncbi-indexes-prod/2024-02-06/index-generation-2/<full-lineage>.csv
+  #   (optionally TAXON_LINEAGE_VERSION if the full file is a different lineage version)
+  # then run the one-time replace: taxon_lineage_slice:remove_slice -> import_data_from_s3 ->
+  # create_taxon_lineage_slice_es_index (rebuilds MySQL + OpenSearch from the full table).
+  # See docs/TAXON-LINEAGE-FULL-CUTOVER.md.
+  CURRENT_VERSION = (ENV["TAXON_LINEAGE_VERSION"].presence || "2024-02-06").freeze
   SLICE_NAME = "taxon_lineages_2024_slice.csv".freeze
   INDEXES_PREFIX = "ncbi-indexes-prod/#{CURRENT_VERSION}/index-generation-2".freeze
-  TAXON_LINEAGE_FILE_KEY = "#{INDEXES_PREFIX}/#{SLICE_NAME}".freeze
+  TAXON_LINEAGE_FILE_KEY = (ENV["TAXON_LINEAGE_FILE_KEY"].presence || "#{INDEXES_PREFIX}/#{SLICE_NAME}").freeze
 
   # These are long-running offline jobs. Their DB connection can be dropped by the
   # server ("Server has gone away") between chunks, surfacing as
@@ -49,6 +63,11 @@ namespace :taxon_lineage_slice do
     counter = 0
 
     csv_data = response.body.read # Read the data once
+    # The FULL lineage export (versioned-taxid-lineages.csv.gz, #528) is gzipped; the dev
+    # slice is plain CSV. Transparently gunzip when the key is .gz so the same loader serves
+    # both. (Whole-file in memory, as before — size the taxon-load Job's memory for the full
+    # ~GB uncompressed set.)
+    csv_data = Zlib::GzipReader.new(StringIO.new(csv_data)).read if TAXON_LINEAGE_FILE_KEY.end_with?(".gz")
     total_rows = CSV.parse(csv_data, headers: true).count # Count rows for progress tracking
 
     # Process the CSV in chunks to avoid memory issues
@@ -128,10 +147,22 @@ namespace :taxon_lineage_slice do
   # run before web/workers come up.
   desc "Idempotently load the taxon lineage slice + build its ES index (deploy hook)"
   task load_slice_if_needed: :environment do
-    if TaxonLineage.exists?(version_start: CURRENT_VERSION)
-      puts "Taxon lineage slice #{CURRENT_VERSION} already present; skipping import."
+    # Completeness guard (#528, Issue 2). The old presence-only `exists?` check skipped
+    # re-import once ANY row for the version existed, so a partial/truncated import (e.g. a
+    # pod SIGTERM'd mid-load) was permanently masked — taxid 694009 went missing on dev for
+    # exactly this reason. When TAXON_LINEAGE_MIN_ROWS is set (recommended: the source row
+    # count for the full lineage), require the loaded count to meet it; a short load is
+    # treated as incomplete, its rows cleared, and re-imported. Falls back to presence-only
+    # when unset, so existing envs are unchanged until they opt in.
+    min_rows = ENV["TAXON_LINEAGE_MIN_ROWS"].to_i
+    loaded = TaxonLineage.where(version_start: CURRENT_VERSION).count
+    complete = min_rows.positive? ? (loaded >= min_rows) : loaded.positive?
+    if complete
+      puts "Taxon lineage #{CURRENT_VERSION} present with #{loaded} rows#{min_rows.positive? ? " (>= #{min_rows})" : ''}; skipping import."
     else
-      puts "Taxon lineage slice #{CURRENT_VERSION} not found; importing from S3."
+      puts "Taxon lineage #{CURRENT_VERSION} missing or incomplete (#{loaded} rows#{min_rows.positive? ? " < #{min_rows}" : ''}); importing from S3."
+      # A partial prior load leaves rows that would collide with the fresh import; clear them first.
+      Rake::Task["taxon_lineage_slice:remove_slice"].invoke if loaded.positive?
       Rake::Task["taxon_lineage_slice:import_data_from_s3"].invoke
     end
 
