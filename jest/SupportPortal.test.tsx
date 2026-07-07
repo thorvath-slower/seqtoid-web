@@ -53,6 +53,16 @@ describe("SupportPortal", () => {
     expect(container.textContent).toBe("");
   });
 
+  it("renders nothing (and does not throw) when userContext is undefined", () => {
+    // The portal can render in paths outside the UserContext provider tree,
+    // where `useContext(UserContext)` yields undefined (Sentry #505 class).
+    let container: HTMLElement | undefined;
+    expect(() => {
+      ({ container } = render(<SupportPortal />));
+    }).not.toThrow();
+    expect(container?.textContent).toBe("");
+  });
+
   it("opens the panel and shows only the minimal quick report (no raw diagnostics)", () => {
     renderWithContext(signedInContext);
     fireEvent.click(screen.getByTestId("support-portal-button"));
