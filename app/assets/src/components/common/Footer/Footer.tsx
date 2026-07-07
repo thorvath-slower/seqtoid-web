@@ -45,19 +45,19 @@ export const Footer = () => {
         <div className={cs.bottomNavMenu}>
           <div>
             <a
-              href="http://czid.org/privacy"
+              href="/privacy"
               aria-label="View the SeqtoID privacy notice (opens in new window)"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               Privacy
             </a>
             <span>|</span>
             <a
-              href="http://czid.org/terms"
+              href="/terms"
               aria-label="View the SeqtoID terms of use (opens in new window)"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               Terms
             </a>

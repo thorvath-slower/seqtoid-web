@@ -25,11 +25,11 @@ class TermsAgreement extends React.Component<TermsAgreementProps> {
                   "I agree that the data I am uploading to SeqtoID has been lawfully collected and that I have all the necessary consents, permissions, and authorizations needed to collect, share, and export data to SeqtoID as outlined in the "
                 }
               </span>
-              <ExternalLink href="https://czid.org/terms">
+              <ExternalLink href="/terms">
                 Terms of Service
               </ExternalLink>
               {" and "}
-              <ExternalLink href="https://czid.org/privacy">
+              <ExternalLink href="/privacy">
                 Privacy Policy
               </ExternalLink>
               .
