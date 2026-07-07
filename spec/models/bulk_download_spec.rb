@@ -782,7 +782,7 @@ describe BulkDownload, type: :model do
 
       expect do
         @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
-      end.to raise_error(StandardError, 'An error occurred')
+      end.to raise_error(BulkDownload::KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE)
 
       expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
       expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
@@ -812,9 +812,13 @@ describe BulkDownload, type: :model do
         ["", "An error occurred (AccessDenied): not authorized to perform ecs:RunTask", instance_double(Process::Status, exitstatus: 1, success?: false)]
       )
 
+      # The permanent stderr (AccessDenied) is logged for debugging, but the
+      # raised error carries the clean KICKOFF_FAILURE message, not the raw
+      # traceback (see #532).
+      expect(LogUtil).to receive(:log_error).with(a_string_matching(/AccessDenied/), hash_including(bulk_download_id: @bulk_download.id))
       expect do
         @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
-      end.to raise_error(StandardError, /AccessDenied/)
+      end.to raise_error(BulkDownload::KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE)
 
       expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
     end
@@ -827,9 +831,13 @@ describe BulkDownload, type: :model do
         ["", "Rate exceeded (ThrottlingException)", instance_double(Process::Status, exitstatus: 1, success?: false)]
       )
 
+      # The last stderr (Rate exceeded) is logged for debugging, but the raised
+      # error carries the clean KICKOFF_FAILURE message, not the raw traceback
+      # (see #532).
+      expect(LogUtil).to receive(:log_error).with(a_string_matching(/Rate exceeded/), hash_including(bulk_download_id: @bulk_download.id))
       expect do
         @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
-      end.to raise_error(StandardError, /Rate exceeded/)
+      end.to raise_error(BulkDownload::KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE)
 
       expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
       expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
