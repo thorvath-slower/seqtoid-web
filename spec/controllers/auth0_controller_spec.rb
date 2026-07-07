@@ -33,6 +33,20 @@ RSpec.describe Auth0Controller, type: :request do
       post destroy_user_session_path
       expect("https://#{ENV['AUTH0_DOMAIN']}/v2/logout").to eq(response.redirect_url.split("?").first)
     end
+
+    # Security hardening: auth0#login (the home-page "Sign In" target) hands off
+    # to the dev-only local sign-in ONLY when direct dev login is enabled
+    # (development env AND ALLOW_DIRECT_USER_LOGIN=true). In every non-development
+    # env (this test env, and deployed staging/production) it must still perform
+    # the unchanged Auth0 refresh_token redirect and never bounce to a dev login.
+    it "does not divert Sign In to the dev login path outside development" do
+      expect(Rails.env.development?).to be(false)
+      get new_user_session_path
+      expect(response).to redirect_to(
+        url_for(controller: :auth0, action: :refresh_token, params: { mode: "login" }, only_path: true)
+      )
+      expect(response.location).not_to include("dev_login")
+    end
   end
 
   context "Using auth0_management_client_double" do
@@ -92,10 +106,11 @@ RSpec.describe Auth0Controller, type: :request do
 
   # Guard for the CZID-280 (#237) local-dev sign-in path (auth0#dev_login).
   #
-  # The route is defined ONLY inside `if Rails.env.development?` in
-  # config/routes.rb, so under any non-development boot (the test env here, and
-  # every deployed env: staging/production) the dev-only route block never runs
-  # and /auth0/dev_login is NOT registered at all. Unlike the single-segment
+  # The route is defined ONLY inside `if Rails.env.development?` AND
+  # `if ENV["ALLOW_DIRECT_USER_LOGIN"] == "true"` in config/routes.rb, so under
+  # any non-development boot (the test env here, and every deployed env:
+  # staging/production) -- and even in development unless the flag is explicitly
+  # set -- the dev-only route is NOT registered at all. Unlike the single-segment
   # /direct_user_login (which the `get '/:id'` URL-shortener catch-all claims),
   # /auth0/dev_login is a two-segment path that no catch-all matches, so the
   # router raises a hard ActionController::RoutingError -- the strongest possible
