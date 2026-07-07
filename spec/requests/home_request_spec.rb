@@ -59,6 +59,11 @@ RSpec.describe "Home request", type: :request do
       body = JSON.parse(response.body)
       expect(body).to have_key("561")
       expect(body["561"]).to include("title" => "Escherichia")
+      # wiki_url is a computed method (not a column). It must be included in the
+      # payload; previously `slice` dropped it (#294).
+      expect(body["561"]).to include(
+        "wiki_url" => "https://en.wikipedia.org/wiki/index.html?curid=12345"
+      )
       # 562 has no description row, so it is simply absent (not an error).
       expect(body).not_to have_key("562")
     end
