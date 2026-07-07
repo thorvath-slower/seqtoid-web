@@ -3,6 +3,13 @@ SimpleCov.start 'rails' do
 
   enable_coverage :branch
 
+  # parallel_tests runs the suite across N processes; each writes a distinct result
+  # (command_name is set per-process below) and SimpleCov merges them into one final
+  # report so the coverage % matches a serial run (no double-count, no undercount).
+  # merge_timeout is generous so a long parallel run's earliest result isn't dropped.
+  use_merging true
+  merge_timeout 3600
+
   # Please add tests for new code so that we don't fall below the minimums!
   # To view report after running tests locally, go to 'coverage/index.html'.
   #

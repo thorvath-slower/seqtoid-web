@@ -111,7 +111,10 @@ require 'simplecov'
 require 'webmock/rspec'
 require "support/common_stub_constants"
 
-SimpleCov.command_name "RSpec"
+# Distinct name per parallel_tests worker (TEST_ENV_NUMBER is empty for process 1,
+# "2","3", etc. for the rest) so SimpleCov keeps each process's result separate and
+# merges them into one report. Serial runs get the plain "RSpec" command name.
+SimpleCov.command_name "RSpec#{ENV['TEST_ENV_NUMBER']}"
 
 WebMock.disable_net_connect!(allow_localhost: true)
 
