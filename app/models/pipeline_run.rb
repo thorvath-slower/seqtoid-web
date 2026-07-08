@@ -1937,8 +1937,12 @@ class PipelineRun < ApplicationRecord
         return File.join(s3_key, file.split("/")[-1])
       else
         # keep everything after bucket name, except trailing '/'
-        s3_key = dag["output_dir_s3"].chomp("/").split("/", 4)[3]
-        return File.join(s3_key, pipeline_version, file)
+        s3_key = dag["output_dir_s3"].to_s.chomp("/").split("/", 4)[3]
+        # Legacy DAG runs can have a nil pipeline_version, and a malformed output_dir_s3
+        # yields a nil s3_key; File.join raises TypeError on a nil arg (#529). Drop nils
+        # before joining -- an unmatched path is filtered out downstream by the
+        # "next unless file_info_for_output" guard, so healthy runs are unchanged.
+        return File.join(*[s3_key, pipeline_version, file].compact)
       end
     }
 
