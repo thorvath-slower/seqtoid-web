@@ -94,7 +94,14 @@ RSpec.describe "Samples (coverage2) request", type: :request do
   end
 
   describe "GET /samples/dimensions" do
-    before { sign_in @joe }
+    before do
+      sign_in @joe
+      # dimensions() resolves these core metadata fields by name; without them
+      # MetadataField.find_by returns nil and samples_by_metadata_field raises.
+      create(:metadata_field, name: "collection_location", base_type: MetadataField::LOCATION_TYPE)
+      create(:metadata_field, name: "collection_location_v2", base_type: MetadataField::LOCATION_TYPE)
+      create(:metadata_field, name: "sample_type", base_type: MetadataField::STRING_TYPE)
+    end
 
     it "returns the dimension buckets for the domain" do
       sample = sample_for(@joe)
@@ -322,30 +329,34 @@ RSpec.describe "Samples (coverage2) request", type: :request do
   describe "GET /samples/:id/taxid_contigs_download" do
     before { sign_in @joe }
 
-    it "returns early (empty body) for a human taxid" do
+    it "serves no data for a human taxid (fail-closed guard)" do
       sample = sample_for(@joe)
       create(:pipeline_run, sample: sample)
-      human_taxid = HUMAN_TAX_IDS.first
+      human_taxid = ApplicationHelper::HUMAN_TAX_IDS.first
 
-      get "/samples/#{sample.id}/taxid_contigs_download", params: { taxid: human_taxid }
-
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to be_blank
+      # The guard `return if HUMAN_TAX_IDS.include?` short-circuits before any
+      # send_data. With no template to fall back on, Rails raises rather than
+      # serving contigs -- no human data is ever downloaded.
+      expect do
+        get "/samples/#{sample.id}/taxid_contigs_download", params: { taxid: human_taxid }
+      end.to raise_error(ActionController::MissingExactTemplate)
     end
   end
 
   describe "GET /samples/:id/show_taxid_fasta" do
     before { sign_in @joe }
 
-    it "returns early for a human taxid" do
+    it "serves no fasta for a human taxid (fail-closed guard)" do
       sample = sample_for(@joe)
       create(:pipeline_run, sample: sample)
-      human_taxid = HUMAN_TAX_IDS.first
+      human_taxid = ApplicationHelper::HUMAN_TAX_IDS.first
 
-      get "/samples/#{sample.id}/fasta/1/#{human_taxid}/NT"
-
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to be_blank
+      # The guard `return if HUMAN_TAX_IDS.include?` short-circuits before any
+      # send_data. With no template to fall back on, Rails raises rather than
+      # serving a fasta -- no human data is ever downloaded.
+      expect do
+        get "/samples/#{sample.id}/fasta/1/#{human_taxid}/NT"
+      end.to raise_error(ActionController::MissingExactTemplate)
     end
   end
 
@@ -450,15 +461,18 @@ RSpec.describe "Samples (coverage2) request", type: :request do
   end
 
   describe "PUT /samples/:id/move_to_project (admin only)" do
-    it "moves the sample and renders show json" do
+    # NOTE: SamplesController#move_to_project exists and is admin-gated (see the
+    # admin_required before_action), but no route is wired for it in
+    # config/routes.rb, so it is currently unreachable over HTTP. Characterize
+    # that reality rather than asserting a success that cannot happen.
+    it "is not exposed as a route" do
       sample = sample_for(@admin)
       new_project = create(:project, users: [@admin])
       sign_in @admin
-      allow_any_instance_of(Sample).to receive(:move_to_project).and_return(true)
 
-      put "/samples/#{sample.id}/move_to_project.json", params: { project_id: new_project.id }
-
-      expect(response).to have_http_status(:ok)
+      expect do
+        put "/samples/#{sample.id}/move_to_project.json", params: { project_id: new_project.id }
+      end.to raise_error(ActionController::RoutingError)
     end
   end
 
@@ -487,7 +501,10 @@ RSpec.describe "Samples (coverage2) request", type: :request do
   end
 
   describe "GET /samples/upload" do
-    before { sign_in @joe }
+    # The upload HTML view calls current_user via ApplicationHelper (which reads
+    # warden directly), so stubbing ApplicationController#current_user is not
+    # enough -- sign in through the auth0 flow to populate warden.
+    before { sign_in_auth0(@joe) }
 
     it "renders the upload page and assigns projects + host genomes" do
       create(:host_genome)

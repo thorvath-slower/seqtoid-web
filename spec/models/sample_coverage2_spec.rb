@@ -175,6 +175,9 @@ RSpec.describe Sample, type: :model do
       sample = sample_with_field(MetadataField::STRING_TYPE)
       result = sample.metadatum_add_or_update("cov2_field", "some text")
       expect(result[:status]).to eq("ok")
+      # get_existing_metadatum reads the cached `metadata` association; reload so
+      # the just-saved metadatum is visible on the in-memory sample.
+      sample.reload
       expect(sample.get_existing_metadatum("cov2_field")).to be_present
     end
 

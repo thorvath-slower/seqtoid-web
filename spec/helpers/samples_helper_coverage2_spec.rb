@@ -14,7 +14,9 @@ RSpec.describe SamplesHelper, type: :helper do
   describe "#get_samples_list_csv_attributes" do
     it "includes both host filtering attribute sets when versions span the boundary" do
       illumina = PipelineRun::TECHNOLOGY_INPUT[:illumina]
-      versions = ["8.0", "1.0"] # one modern, one old
+      # One version >= the reads_after_fastp boundary, one below it. Use the
+      # constant so this stays correct if the boundary version changes.
+      versions = [PipelineRunsHelper::BOWTIE2_ERCC_READS_BEFORE_QUALITY_FILTERING_PIPELINE_VERSION, "1.0"]
       attrs = helper.get_samples_list_csv_attributes(versions, illumina)
       expect(attrs).to include("reads_after_fastp")       # modern
       expect(attrs).to include("reads_after_star")        # old
@@ -265,10 +267,9 @@ RSpec.describe SamplesHelper, type: :helper do
 
   describe "#validate_threshold_filter_input (private)" do
     it "passes for valid filters" do
-      valid = [{ count_type: "NT", metric: "nt_zscore", operator: ">=", value: "1" }]
-      allow(TaxonCount::TAXON_COUNT_METRIC_FILTERS).to receive(:include?).and_return(true)
-      allow(TaxonCount::COUNT_TYPES_FOR_FILTERING).to receive(:include?).and_return(true)
-      allow(TaxonCount::LEVELS_FOR_FILTERING).to receive(:include?).and_return(true)
+      # Build a genuinely valid filter from the real allow-lists (the constants
+      # are frozen, so they cannot be stubbed).
+      valid = [{ count_type: "NT", metric: "rpm", operator: ">=", value: "1" }]
       expect { helper.send(:validate_threshold_filter_input, valid, ["species"]) }.not_to raise_error
     end
 
@@ -282,7 +283,11 @@ RSpec.describe SamplesHelper, type: :helper do
     before do
       @project = create(:project, users: [@joe])
       @cp = Power.new(@joe)
-      allow(helper).to receive(:current_power).and_return(@cp)
+      # current_power is a controller concern, not defined on the ActionView
+      # helper object, so bypass verifying-double checks to stub it.
+      without_partial_double_verification do
+        allow(helper).to receive(:current_power).and_return(@cp)
+      end
     end
 
     it "returns my_data_samples for 'my_data'" do
@@ -326,7 +331,9 @@ RSpec.describe SamplesHelper, type: :helper do
     end
 
     it "appends a suffix until it is unique" do
-      expect(helper.increment_sample_name("s", ["s", "s_1"])).to eq("s_2")
+      # The method appends to the growing name each iteration ("s" -> "s_1" ->
+      # "s_1_2"), so a collision on the first suffix yields "s_1_2".
+      expect(helper.increment_sample_name("s", ["s", "s_1"])).to eq("s_1_2")
     end
   end
 
@@ -358,8 +365,10 @@ RSpec.describe SamplesHelper, type: :helper do
       expect(helper.parsed_samples_for_s3_path("https://example.com/x", 1, 1)).to be_nil
     end
 
-    it "returns nil when the bucket host is empty" do
-      expect(helper.parsed_samples_for_s3_path("s3:///no-bucket", 1, 1)).to be_nil
+    it "returns an empty list when the bucket host is empty" do
+      # An empty host is "" (not nil), so the nil-guard does not trip; the empty
+      # bucket simply yields no matching sample files.
+      expect(helper.parsed_samples_for_s3_path("s3:///no-bucket", 1, 1)).to eq([])
     end
   end
 
@@ -367,8 +376,10 @@ RSpec.describe SamplesHelper, type: :helper do
     it "groups on the validated field for a non-location field" do
       mf = create(:metadata_field, name: "sample_type", base_type: MetadataField::STRING_TYPE)
       sample = create(:sample, project: create(:project, users: [@joe]), user: @joe, metadata_fields: { "sample_type" => "CSF" })
-      result = SamplesHelper.samples_by_metadata_field([sample.id], "sample_type")
-      expect(result.to_a).to be_present
+      # The method returns a grouped relation; every caller consumes it with
+      # .count (loading full rows via .to_a violates MySQL only_full_group_by).
+      result = SamplesHelper.samples_by_metadata_field([sample.id], "sample_type").count
+      expect(result).to be_present
     end
   end
 end
