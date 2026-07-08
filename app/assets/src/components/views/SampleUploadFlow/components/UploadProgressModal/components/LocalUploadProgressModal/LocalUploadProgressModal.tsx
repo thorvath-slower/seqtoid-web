@@ -31,6 +31,13 @@ import {
   clearProjectByteCache,
 } from "~/components/views/SampleUploadFlow/components/UploadProgressModal/uploadByteCache";
 import {
+  clearFileHandle,
+  clearProjectFileHandles,
+  isFileHandlePersistenceSupported,
+  PersistableFileHandle,
+  persistFileHandle,
+} from "~/components/views/SampleUploadFlow/components/UploadProgressModal/uploadFileHandleStore";
+import {
   clearUploadResumeState,
   loadUploadResumeState,
   saveUploadResumeState,
@@ -346,6 +353,15 @@ export const LocalUploadProgressModal = ({
       void cacheUploadFile(project.id, s3Key, body);
     }
 
+    // Recovery Option C (Chrome/Edge): if this input file was selected through the File System
+    // Access picker it carries a FileSystemFileHandle; persist it (best-effort) so a resume after a
+    // page reload can re-read the file with a one-click permission re-grant, without caching bytes.
+    // No-ops when unsupported or when no handle is present (e.g. the drag-and-drop input path).
+    const fileHandle = (inputFile as { handle?: PersistableFileHandle }).handle;
+    if (fileHandle && isFileHandlePersistenceSupported()) {
+      void persistFileHandle(project.id, s3Key, fileHandle);
+    }
+
     const uploadParams = {
       Bucket: s3Bucket,
       Key: s3Key,
@@ -421,6 +437,8 @@ export const LocalUploadProgressModal = ({
 
     // This file is fully on S3 now, so drop its cached bytes (Option B) -- nothing left to recover.
     void clearCachedUploadFile(project.id, s3Key);
+    // ... and drop any persisted handle (Option C) -- nothing to recover for this file either.
+    void clearFileHandle(project.id, s3Key);
 
     setSampleFileCompleted(prevState => ({
       ...prevState,
@@ -564,6 +582,8 @@ export const LocalUploadProgressModal = ({
     clearUploadResumeState(project.id);
     // Drop any cached upload bytes for this project (Option B); recovery is no longer needed.
     void clearProjectByteCache(project.id);
+    // Drop any persisted file handles for this project (Option C); recovery is no longer needed.
+    void clearProjectFileHandles(project.id);
   };
 
   // Soft-pause every in-flight upload: parts already sent stay on S3 and the uploadIds are
