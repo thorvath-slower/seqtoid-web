@@ -58,7 +58,11 @@ class MultipleDropdown extends React.Component<
   static getDerivedStateFromProps(props: $TSFixMe, state: $TSFixMe) {
     if (props.value !== state.prevPropsValue) {
       return {
-        value: props.value,
+        // #545: default to [] (mirroring the constructor) so state.value is
+        // never null. A null `value` prop otherwise crashed handleOpen's
+        // `this.state.value.slice()` (onOpen -> "Cannot read properties of
+        // null (reading 'slice')", DEV-REACTJS-PROJECT-1A).
+        value: props.value || [],
         prevPropsValue: props.value,
       };
     }
