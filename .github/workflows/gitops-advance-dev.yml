@@ -62,6 +62,29 @@ jobs:
           echo "changed=true"  >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"       >> "$GITHUB_OUTPUT"
 
+      - name: Close stale dev tag-advance PRs (self-cleaning, #560)
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          INFRA_REPO: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          KEEP_BRANCH: gitops/advance-dev-${{ steps.advance.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Each build opens a fresh gitops/advance-dev-<tag> PR that edits dev.yaml. If an
+          # earlier advance never merged (red checks, or a human paused it), it lingers as an
+          # orphan branch whose dev.yaml edit now conflicts with every newer advance, and they
+          # pile up (#560). Before opening the current one, close any still-open advance PRs and
+          # delete their branches so at most one dev-advance PR exists at a time. The branch we
+          # are about to open (KEEP_BRANCH) is skipped defensively; it does not exist yet here.
+          gh pr list --repo "$INFRA_REPO" --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("gitops/advance-dev-")) | [.number, .headRefName] | @tsv' \
+          | while IFS="$(printf '\t')" read -r num br; do
+              [ "$br" = "$KEEP_BRANCH" ] && continue
+              echo "closing stale dev-advance PR #${num} (${br})"
+              gh pr close "$num" --repo "$INFRA_REPO" --delete-branch \
+                --comment "Superseded by a newer dev tag-advance; closing to prevent conflicting orphans (#560)."
+            done
+
       - name: Open the tag-advance PR
         if: steps.advance.outputs.changed == 'true'
         env:
