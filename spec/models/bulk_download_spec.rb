@@ -1389,8 +1389,8 @@ describe BulkDownload, type: :model do
     end
 
     it "correctly returns the execution type" do
-      expect(BulkDownloadTypesHelper).to receive(:bulk_download_type).with("FOOBAR").and_return(
-        type: "FOOBAR",
+      expect(BulkDownloadTypesHelper).to receive(:bulk_download_type).with(BulkDownloadTypesHelper::SAMPLE_OVERVIEW_BULK_DOWNLOAD_TYPE).and_return(
+        type: BulkDownloadTypesHelper::SAMPLE_OVERVIEW_BULK_DOWNLOAD_TYPE,
         display_name: "Sample Overviews",
         description: "Sample metadata and QC metrics",
         category: "report",
@@ -1399,7 +1399,7 @@ describe BulkDownload, type: :model do
       bulk_download = create(
         :bulk_download,
         user: @joe,
-        download_type: "FOOBAR",
+        download_type: BulkDownloadTypesHelper::SAMPLE_OVERVIEW_BULK_DOWNLOAD_TYPE,
         pipeline_run_ids: [@sample_one.first_pipeline_run.id]
       )
 
@@ -1407,8 +1407,8 @@ describe BulkDownload, type: :model do
     end
 
     it "correctly throws error if execution type missing" do
-      expect(BulkDownloadTypesHelper).to receive(:bulk_download_type).with("FOOBAR").and_return(
-        type: "FOOBAR",
+      expect(BulkDownloadTypesHelper).to receive(:bulk_download_type).with(BulkDownloadTypesHelper::SAMPLE_OVERVIEW_BULK_DOWNLOAD_TYPE).and_return(
+        type: BulkDownloadTypesHelper::SAMPLE_OVERVIEW_BULK_DOWNLOAD_TYPE,
         display_name: "Sample Overviews",
         description: "Sample metadata and QC metrics",
         category: "report"
@@ -1417,7 +1417,7 @@ describe BulkDownload, type: :model do
       bulk_download = create(
         :bulk_download,
         user: @joe,
-        download_type: "FOOBAR",
+        download_type: BulkDownloadTypesHelper::SAMPLE_OVERVIEW_BULK_DOWNLOAD_TYPE,
         pipeline_run_ids: [@sample_one.first_pipeline_run.id]
       )
 
