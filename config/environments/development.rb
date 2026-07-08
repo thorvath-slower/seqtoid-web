@@ -3,6 +3,12 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
+  # secret_key_base -- set explicitly here instead of the deprecated config/secrets.yml
+  # (Rails.application.secrets was deprecated in 7.1, removed in 7.2). Value is the same
+  # literal previously used for the `development` env in secrets.yml, so existing dev
+  # signed/encrypted cookies remain valid (no behavior change).
+  config.secret_key_base = "65a7f60b81e0becf08bff85b70a16768559e1737f37922d1807fe5d98ba45e9cf3b8ffcb64d313d0a4f8bae97e1b443c4020f5ea72c9d33984f822f4ccd4332e"
+
   # In the development environment your application's code is reloaded any time
   # it changes. This slows down response time but is perfect for development
   # since you don't have to restart the web server when you make code changes.

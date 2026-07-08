@@ -9,9 +9,12 @@ useDefault = true
 description = "Known dev/test fixtures + verified FPs (not real secrets)"
 regexTarget = "line"
 paths = [
-  # Dev/test secret_key_base fixtures. Prod/staging read SECRET_KEY_BASE from
-  # the environment; migrating the real key off this file is tracked in CZID-128.
-  '''config/secrets\.yml''',
+  # Dev/test secret_key_base fixtures. These are non-secret, dev/test-only signing
+  # keys; staging/prod/sandbox read SECRET_KEY_BASE from the environment.
+  # CZID-128 moved these off the deprecated config/secrets.yml (now deleted) and
+  # into the supported config.secret_key_base setting in the dev/test env files.
+  '''config/environments/development\.rb''',
+  '''config/environments/test\.rb''',
   # Test fixture signing key (deliberate, used by specs — not a prod secret). CZID-318.
   '''test/fixtures/.*\.pem''',
 ]

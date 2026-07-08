@@ -3,6 +3,13 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
+  # secret_key_base -- sourced from ENV instead of the deprecated config/secrets.yml
+  # (Rails.application.secrets was deprecated in 7.1, removed in 7.2). This is the same
+  # value the app already used: secrets.yml read `<%= ENV["SECRET_KEY_BASE"] %>`, and
+  # Rails already resolves ENV["SECRET_KEY_BASE"] ahead of secrets.yml -- no change to
+  # the deployed key, just off the deprecated path.
+  config.secret_key_base = ENV["SECRET_KEY_BASE"]
+
   # Code is not reloaded between requests.
   config.cache_classes = true
 
