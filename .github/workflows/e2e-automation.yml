@@ -70,6 +70,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: "./.node-version"
+          # Cache the e2e npm downloads keyed on its lockfile (#513). This was the only
+          # gem/node install step in CI still uncached; the app test jobs already cache
+          # vendor/bundle and ~/.npm.
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
 
       - name: Install dependencies
         run: |
