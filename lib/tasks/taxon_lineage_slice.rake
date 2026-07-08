@@ -22,18 +22,10 @@ namespace :taxon_lineage_slice do
   # server ("Server has gone away") between chunks, surfacing as
   # ActiveRecord::StatementInvalid / ConnectionNotEstablished (Forgejo #388).
   # Wrap the risky DB work so we reconnect once and retry before giving up.
-  def self.with_db_reconnect(context, max_retries: 2)
-    attempts = 0
-    begin
-      yield
-    rescue ActiveRecord::StatementInvalid, ActiveRecord::ConnectionNotEstablished => exception
-      attempts += 1
-      raise if attempts > max_retries
-
-      puts "DB connection lost during #{context} (#{exception.class}: #{exception.message}); reconnecting (attempt #{attempts}/#{max_retries})."
-      ActiveRecord::Base.connection.reconnect!
-      retry
-    end
+  # Delegates to the shared DbConnection helper (#496) so the reconnect-and-retry
+  # logic lives in one place; the call sites below are unchanged.
+  def self.with_db_reconnect(context, max_retries: 2, &block)
+    DbConnection.with_reconnect(context, max_retries: max_retries, &block)
   end
 
   # OpenSearch/ES rejects a sustained burst of `_bulk` writes with 429 ("Too Many
