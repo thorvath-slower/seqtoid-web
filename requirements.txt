@@ -4,10 +4,12 @@ aegea==4.5.3
 # transitively by aegea (<4 required awscli>=1.17.14); aegea 4.x dropped that
 # dependency, so it must be declared explicitly here or the binary disappears
 # from the prod image and CI. (CZID-146 follow-up.)
-awscli==1.45.31
+# #474: 1.45.31 -> 1.45.43 (pulls current secure botocore/s3transfer transitively).
+awscli==1.45.43
 pyOpenSSL>=19.1.0
 setuptools>=70
 miniwdl==1.14.2
 biom-format==2.1.17
-jwcrypto==1.5.7
-typing-extensions==4.15.0
+# #474: 1.5.7 -> 1.5.8 (latest patch on the CVE-2024-28102-fixed 1.5.x line).
+jwcrypto==1.5.8
+typing-extensions==4.16.0

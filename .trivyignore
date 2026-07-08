@@ -3,6 +3,16 @@
 # ACCEPT-CURRENT, GATE-ON-NEW: a NEW HIGH/CRITICAL not listed here still fails the build.
 # Remediate + empty this file: Forgejo #474 (npm/gem/python/chamber dep bumps).
 # Baselined 2026-07-04.
+#
+# #474 remediation in progress (branch fix-474-residual-image-cves): deps pulled
+# forward -- chamber v2.10.8 -> v3.1.5 (Go 1.25, clears the Go stdlib CVE-2022-*/
+# 2023-*/2024-24790/2024-34156 set); gems concurrent-ruby/crass/faraday/nokogiri/
+# websocket-driver bumped; @aws-sdk/client-s3 3.726.1 -> 3.1082.0 (drops the
+# vulnerable fast-xml-parser); awscli/jwcrypto/typing-extensions bumped.
+# These entries are NOT trimmed here on purpose: trimming is done AFTER a Trivy
+# re-scan on the rebuilt dev image confirms each CVE is actually gone (some IDs
+# above are deferred -- Rails 7.1->7.2, puma 6->7/8, jest 30, cssnano 4->8, and
+# the react-markdown/react-linkify ReDoS chain handled separately in #349/PR#222).
 
 CVE-2020-7753
 CVE-2021-3803
