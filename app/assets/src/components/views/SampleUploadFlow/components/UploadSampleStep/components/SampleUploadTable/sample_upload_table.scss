@@ -3,17 +3,24 @@
 @import "~@czi-sds/components/dist/variables";
 
 .sampleUploadTable {
-  // NOTE: keep `flex: 1 1 0` + `min-height: 400px`. The inner <Table> is
-  // react-virtualized and sizes its rows to this container's height via AutoSizer,
-  // so a definite height is REQUIRED — content-sizing it (a previous "shrink the gap"
-  // attempt, #132) starved AutoSizer to 0 and rendered zero rows (only the header
-  // showed). The empty-space-below-few-rows is cosmetic; fix it by driving the height
-  // from the sample count, not by removing the height (tracked separately).
-  flex: 1 1 0;
-  min-height: 400px;
+  // #492: the table height is now driven by the sample count (computed in
+  // SampleUploadTable.tsx and applied inline to .tableWrapper below), so a short
+  // list no longer reserves a big empty block. The inner <Table> is
+  // react-virtualized and sizes its rows to a definite container height via
+  // AutoSizer, so we still hand it a definite PIXEL height -- do NOT content-size
+  // the table itself (that starved AutoSizer to 0 rows in the earlier #132
+  // attempt, showing only the header). This outer wrapper is content-sized; the
+  // definite height lives on .tableWrapper.
   display: flex;
   flex-direction: column;
   margin-bottom: 20px;
+
+  .tableWrapper {
+    // Definite height set inline from the row count (see the component). Capped
+    // there so long lists scroll instead of growing without bound. flex: none so
+    // the wrapper keeps exactly that height inside the column flex parent.
+    flex: none;
+  }
 
   .detectedMsg {
     @include font-body-xs;
