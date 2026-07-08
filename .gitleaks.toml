@@ -17,6 +17,10 @@ paths = [
   '''config/environments/test\.rb''',
   # Test fixture signing key (deliberate, used by specs — not a prod secret). CZID-318.
   '''test/fixtures/.*\.pem''',
+  # Auto-generated RuboCop offense catalog (rubocop --auto-gen-config, CZID-557). Contains
+  # cop names + EnforcedStyle values (e.g. ruby19, hash_rockets) that the generic-api-key
+  # rule misfires on. Never a secret -- it is a lint config.
+  '''\.rubocop_todo\.yml''',
 ]
 regexes = [
   # Dummy, test-only AUTH_TOKEN_SECRET used in CI configs (ci-test-postgres.yml,

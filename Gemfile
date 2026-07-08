@@ -154,10 +154,10 @@ group :development, :test do
   # CI wall-clock; each worker owns idseq_test<TEST_ENV_NUMBER>. See bin/ci-test.
   gem 'parallel_tests', '~> 4.7'
   gem 'rspec-rails', '~> 6.1' # bug-#002: rspec-rails 6.x is the Rails 7.1-compatible line
-  gem 'rubocop', '~> 0.92'
-  gem "rubocop-graphql", "~> 0.14.5"
-  gem 'rubocop-performance'
-  gem 'rubocop-rails'
+  gem 'rubocop', '~> 1.88'
+  gem "rubocop-graphql", "~> 1.6"
+  gem 'rubocop-performance', '~> 1.26'
+  gem 'rubocop-rails', '~> 2.35'
   gem 'selenium-webdriver'
   gem 'simplecov', require: false
 end
