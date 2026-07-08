@@ -76,7 +76,9 @@ RUN pip3 install --upgrade pip
 # chamber — pulls secrets at boot (bin/entrypoint.sh); needed at runtime, copied below.
 # #482: chamber's release assets use Docker's arch token (`amd64`/`arm64`), so TARGETARCH
 # slots in directly.
-RUN curl -L "https://github.com/segmentio/chamber/releases/download/v2.10.8/chamber-v2.10.8-linux-${TARGETARCH}" -o /bin/chamber
+# #474: bumped v2.10.8 -> v3.1.5 (built on Go 1.25) to clear the residual Go stdlib
+# HIGH/CRITICAL CVEs that the old Go-1.18-era chamber binary contributed to the image.
+RUN curl -L "https://github.com/segmentio/chamber/releases/download/v3.1.5/chamber-v3.1.5-linux-${TARGETARCH}" -o /bin/chamber
 RUN chmod +x /bin/chamber
 
 COPY requirements.txt ./
