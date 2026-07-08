@@ -179,6 +179,25 @@ COPY --from=builder /app /app
 ARG GIT_COMMIT
 ENV GIT_VERSION=${GIT_COMMIT}
 
+# Non-root hardening (#64/CZID-64): run the container as an unprivileged user instead of
+# root so any RCE lands with a much smaller blast radius. The app listens on 3000 (a non-
+# privileged port), so nothing here needs root at runtime. We create appuser with a FIXED
+# uid/gid 10001 (stable, reproducible ownership across rebuilds) and hand it ownership of the
+# only paths Rails must write at runtime:
+#   - /app/tmp             : Rails cache, pids, sockets (rails server writes these on boot)
+#   - /app/log             : Rails logfiles
+#   - /app/app/assets/dist : webpack output (built in the builder stage); kept writable in
+#                            case the app touches it at boot.
+# The whole /app tree is chowned so the working tree is fully owned by appuser. Gems in
+# /usr/local/bundle and the chamber binary at /bin/chamber stay root-owned but are world-
+# readable / world-executable (COPY preserves the 0755 chmod from the builder), so appuser
+# can `bundle exec` and run `chamber` without ever needing to write there.
+RUN groupadd --gid 10001 appuser \
+  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin appuser \
+  && mkdir -p /app/tmp /app/log /app/app/assets/dist \
+  && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 3000
 ENTRYPOINT ["bin/entrypoint.sh"]
 CMD ["rails", "server", "-b", "0.0.0.0", "-p", "3000"]
