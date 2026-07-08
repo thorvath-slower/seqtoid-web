@@ -334,12 +334,13 @@ RSpec.describe "Samples (coverage2) request", type: :request do
       create(:pipeline_run, sample: sample)
       human_taxid = ApplicationHelper::HUMAN_TAX_IDS.first
 
-      # The guard `return if HUMAN_TAX_IDS.include?` short-circuits before any
-      # send_data. With no template to fall back on, Rails raises rather than
-      # serving contigs -- no human data is ever downloaded.
-      expect do
-        get "/samples/#{sample.id}/taxid_contigs_download", params: { taxid: human_taxid }
-      end.to raise_error(ActionController::MissingExactTemplate)
+      # #562: the guard fails closed on human taxids with a clean empty 200
+      # (head :ok) -- no contigs are ever served, and it no longer raises
+      # MissingExactTemplate from a bare return with no render.
+      get "/samples/#{sample.id}/taxid_contigs_download", params: { taxid: human_taxid }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to be_empty
     end
   end
 
@@ -351,12 +352,13 @@ RSpec.describe "Samples (coverage2) request", type: :request do
       create(:pipeline_run, sample: sample)
       human_taxid = ApplicationHelper::HUMAN_TAX_IDS.first
 
-      # The guard `return if HUMAN_TAX_IDS.include?` short-circuits before any
-      # send_data. With no template to fall back on, Rails raises rather than
-      # serving a fasta -- no human data is ever downloaded.
-      expect do
-        get "/samples/#{sample.id}/fasta/1/#{human_taxid}/NT"
-      end.to raise_error(ActionController::MissingExactTemplate)
+      # #562: the guard fails closed on human taxids with a clean empty 200
+      # (head :ok) -- no fasta is ever served, and it no longer raises
+      # MissingExactTemplate from a bare return with no render.
+      get "/samples/#{sample.id}/fasta/1/#{human_taxid}/NT"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to be_empty
     end
   end
 
