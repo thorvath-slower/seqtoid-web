@@ -11,7 +11,13 @@
 # association is dependent: :restrict_with_exception, not :destroy.
 class CreateExportControlClearances < ActiveRecord::Migration[7.0]
   def change
-    create_table :export_control_clearances do |t|
+    # if_not_exists makes this migration self-healing (#533). An earlier deploy created the
+    # table + the user_id index but then ABORTED on the 4-column index below (strong_migrations
+    # raises on non-unique >3-column indexes), so the migration was never recorded in
+    # schema_migrations -- and every subsequent `db:migrate:with_data` re-ran it and died with
+    # "Table 'export_control_clearances' already exists". With if_not_exists the re-run skips
+    # what's already present and completes cleanly (recording the migration).
+    create_table :export_control_clearances, if_not_exists: true do |t|
       t.bigint  :user_id, null: false
 
       # IDV / KYC outcome — verified / failed / pending. String (not boolean) so the record is explicit
@@ -47,11 +53,17 @@ class CreateExportControlClearances < ActiveRecord::Migration[7.0]
       # No updated_at: rows are append-only / immutable by intent (see class comment).
     end
 
-    add_index :export_control_clearances, :user_id
+    add_index :export_control_clearances, :user_id, if_not_exists: true
     # Fast "does this user have a current, affirmatively-passed clearance for version X?" lookup for the
-    # gate (CZID-285): verified IDV AND clear screening, current version.
-    add_index :export_control_clearances,
-              [:user_id, :clearance_version, :verification_status, :screening_result],
-              name: "idx_export_clearance_user_version_status"
+    # gate (CZID-285): verified IDV AND clear screening, current version. This composite covering index
+    # is deliberate and query-shaped; strong_migrations flags non-unique >3-column indexes as rarely
+    # useful, so assert it explicitly -- the RAISED check (not a real problem) is what aborted the whole
+    # migration mid-way and left it unrecorded (#533).
+    safety_assured do
+      add_index :export_control_clearances,
+                [:user_id, :clearance_version, :verification_status, :screening_result],
+                name: "idx_export_clearance_user_version_status",
+                if_not_exists: true
+    end
   end
 end
