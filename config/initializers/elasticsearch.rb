@@ -6,4 +6,7 @@ config = {
   host: ENV['ES_ADDRESS'],
   transport_options: { request: { timeout: 200 } },
 }
-Elasticsearch::Model.client = Elasticsearch::Client.new(config) unless Rails.env.test?
+# Wrap the search client in a circuit breaker (#496) so a hung ES domain fast-fails
+# the taxon/prefix search path instead of every request paying the 200s timeout.
+# OpensearchCircuit.wrap is a no-op passthrough when disabled (OPENSEARCH_BREAKER_ENABLED=0).
+Elasticsearch::Model.client = OpensearchCircuit.wrap(Elasticsearch::Client.new(config), name: :search_opensearch) unless Rails.env.test?
