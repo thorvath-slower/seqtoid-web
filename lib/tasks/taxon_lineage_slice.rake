@@ -185,19 +185,23 @@ namespace :taxon_lineage_slice do
     es = TaxonLineage.__elasticsearch__
     es.create_index!(force: true)
 
-    # Bulk-load tuning (#477): during the import, disable per-batch refresh and drop
-    # replicas so OpenSearch spends its I/O on ingest, not on refreshing segments and
-    # replicating every doc. Capture the index's original settings first and restore
-    # them in an `ensure` (so a failed import can't leave the index un-refreshed or
-    # under-replicated). Larger `batch_size` = fewer, bigger `_bulk` requests.
+    # Bulk-load tuning (#477): during the import, disable per-batch refresh, drop replicas,
+    # and set translog durability to async so OpenSearch spends its I/O on ingest, not on
+    # refreshing segments, replicating every doc, or fsync-ing the translog on every _bulk
+    # request. Capture the index's original settings first and restore them in an `ensure`
+    # (so a failed import can't leave the index un-refreshed, under-replicated, or on a
+    # weaker durability than it started with). Larger `batch_size` = fewer, bigger `_bulk`
+    # requests. translog.durability is not returned by get_settings when it is at its
+    # default, so default the restore value to "request" (the OpenSearch default).
     index = es.index_name
     current = es.client.indices.get_settings(index: index).values.first["settings"]["index"]
     restore = {
       refresh_interval: current["refresh_interval"] || "1s",
       number_of_replicas: current["number_of_replicas"] || "1",
+      "translog.durability": current.dig("translog", "durability") || "request",
     }
-    puts "Bulk-load tuning: refresh_interval=-1, number_of_replicas=0 during import; restoring #{restore} after."
-    es.client.indices.put_settings(index: index, body: { index: { refresh_interval: -1, number_of_replicas: 0 } })
+    puts "Bulk-load tuning: refresh_interval=-1, number_of_replicas=0, translog.durability=async during import; restoring #{restore} after."
+    es.client.indices.put_settings(index: index, body: { index: { refresh_interval: -1, number_of_replicas: 0, "translog.durability": "async" } })
     begin
       # elasticsearch-model 7.1.1's `import` delegates find_in_batches through a proxy that
       # is NOT Ruby-3 keyword-safe (the app runs Ruby 3.3) — `es.import` raises
