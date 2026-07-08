@@ -36,6 +36,37 @@ namespace :taxon_lineage_slice do
     end
   end
 
+  # OpenSearch/ES rejects a sustained burst of `_bulk` writes with 429 ("Too Many
+  # Requests" / rejected execution -- queue full) when the full ~4.75M-row lineage is
+  # indexed back-to-back against a small (e.g. single-node dev) domain (#551). Without a
+  # retry the whole rebuild aborts and leaves a half-built index. Retry the batch with
+  # exponential backoff (capped) so a transient rejection rides through. Matched by class
+  # name (string) so we don't depend on the transport gem's error classes being loaded.
+  ES_RETRYABLE_CLASSES = %w[
+    Elasticsearch::Transport::Transport::Errors::TooManyRequests
+    Elasticsearch::Transport::Transport::Errors::ServiceUnavailable
+    Elasticsearch::Transport::Transport::ServerError
+  ].freeze
+
+  def self.with_es_retry(context, max_retries: 5)
+    attempts = 0
+    begin
+      yield
+    rescue StandardError => exception
+      retryable = ES_RETRYABLE_CLASSES.include?(exception.class.name) ||
+                  exception.message.to_s.match?(/\b429\b|Too Many Requests|rejected execution/i)
+      raise unless retryable
+
+      attempts += 1
+      raise if attempts > max_retries
+
+      sleep_s = [2**(attempts - 1), 16].min
+      puts "  ES bulk rejected during #{context} (#{exception.class}: #{exception.message.to_s[0, 120]}); backoff #{sleep_s}s (attempt #{attempts}/#{max_retries})."
+      sleep(sleep_s)
+      retry
+    end
+  end
+
   desc "Seed 2024 taxon lineage data"
   task import_data_from_s3: :environment do
     # Long-running S3 import: on deploy/rollout the pod may be sent SIGTERM. Trap it
@@ -173,9 +204,12 @@ namespace :taxon_lineage_slice do
       # ArgumentError "wrong number of arguments (given 1, expected 0)" (#550). Bulk-index
       # directly via ActiveRecord find_in_batches + es.client.bulk, bypassing the broken
       # proxy path entirely.
-      TaxonLineage.find_in_batches(batch_size: 5000) do |group|
+      # Batch size is ENV-tunable (#551) so a constrained domain can throttle down; each
+      # batch's _bulk call retries on 429 with backoff instead of aborting the rebuild.
+      batch_size = (ENV["TAXON_ES_BULK_BATCH"].presence || 5000).to_i
+      TaxonLineage.find_in_batches(batch_size: batch_size) do |group|
         body = group.map { |rec| { index: { _index: index, _id: rec.id, data: rec.__elasticsearch__.as_indexed_json } } }
-        resp = es.client.bulk(body: body)
+        resp = with_es_retry("bulk index") { es.client.bulk(body: body) }
         puts "  ⚠ some docs failed to index in a batch" if resp && resp["errors"]
       end
     ensure
@@ -246,7 +280,16 @@ namespace :taxon_lineage_slice do
       puts "ES index #{es.index_name} already built and in sync with the DB (#{db_count} docs); skipping rebuild."
     else
       puts "ES index missing or out of sync with the DB; (re)building."
-      Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+      # Best-effort (#551): a search-index rebuild hiccup -- e.g. OpenSearch 429 under load,
+      # or the 429 exhausting the per-batch retries above -- must never fail this deploy hook
+      # or 500 the app. Lineage lookups + pathogen flagging read MySQL, which is already
+      # loaded; the search index can be rebuilt out-of-band via
+      # `rake taxon_lineage_slice:create_taxon_lineage_slice_es_index`. Log loudly and carry on.
+      begin
+        Rake::Task["taxon_lineage_slice:create_taxon_lineage_slice_es_index"].invoke
+      rescue StandardError => e
+        puts "  ⚠ ES index rebuild failed (#{e.class}: #{e.message}); DB data is intact, search index left as-is. Rebuild out-of-band. See #551/#549."
+      end
     end
     puts "Taxon lineage load complete."
   end
