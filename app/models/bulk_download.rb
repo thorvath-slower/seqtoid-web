@@ -579,7 +579,20 @@ class BulkDownload < ApplicationRecord
     PROGRESS_UPDATE_DELAY
   end
 
+  # Raised when the biom CLI conversion fails, so the failure surfaces as a typed error
+  # carrying the CLI stderr instead of a bare RuntimeError whose message is the raw Python
+  # biom traceback (#555).
+  class BiomConversionError < StandardError; end
+
   def create_biom_file(metrics_path, metadata_path, taxon_lineage_path)
+    # A header-only metrics file means no species-level taxa passed the selected filters;
+    # biom convert cannot build a 0-observation table, so fail fast with a clear message
+    # instead of shelling out to a guaranteed non-zero exit (#555).
+    if File.foreach(metrics_path).count <= 1
+      self.status = STATUS_ERROR
+      raise BiomConversionError, "No taxa matched the selected filters, so a BIOM file could not be generated."
+    end
+
     output_biom = "/tmp/#{id.to_s.shellescape}_output.biom"
     output_biom_metadata = "/tmp/#{id.to_s.shellescape}_output_metadata.biom"
     stdout, stderr, status = Open3.capture3("biom", "convert", "-i", metrics_path, "-o", output_biom.shellescape, '--table-type=OTU table', "--to-json")
@@ -594,12 +607,12 @@ class BulkDownload < ApplicationRecord
       else
         self.status = STATUS_ERROR
         LogUtil.log_error("biom add-metadata failed: #{stdout}, #{stderr}")
-        raise stderr
+        raise BiomConversionError, "biom add-metadata failed: #{stderr}"
       end
     else
       self.status = STATUS_ERROR
       LogUtil.log_error("biom convert failed: #{stdout}, #{stderr}")
-      raise stderr
+      raise BiomConversionError, "biom convert failed: #{stderr}"
     end
   end
 
