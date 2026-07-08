@@ -22,11 +22,16 @@ on:
 
 env:
   AWS_DEFAULT_OUTPUT: json
-  AWS_REGION: us-west-2
+  # CZID-83 (CICD-6): region from Actions variables (fallback preserves current behavior when unset).
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
   DEBIAN_FRONTEND: noninteractive
   # Same rotatable CI identity as build-docker-image.yml (CZID-40 / dev account default).
   CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
   GHA_ROLE: ${{ vars.GHA_ROLE || 'czid-dev-gh-actions-build' }}
+  # CZID-83 (CICD-6): ECR repo name parameterized; fallback = the LIVE dev repo 'idseq-web' (rebrand
+  # on hold -- no rename). Must match build-docker-image.yml's cache target. See the note there +
+  # TICKET-83-VAR-SET-COMMANDS.md before setting vars.ECR_REPO_NAME at repo level.
+  ECR_REPO_NAME: ${{ vars.ECR_REPO_NAME || 'idseq-web' }}
   LC_ALL: C.UTF-8
   LANG: C.UTF-8
 
@@ -60,7 +65,7 @@ jobs:
       - name: Login to ECR
         uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
-          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/idseq-web
+          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}
       - name: Export variables
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}

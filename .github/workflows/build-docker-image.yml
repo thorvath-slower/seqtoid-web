@@ -18,7 +18,8 @@ on:
 
 env:
   AWS_DEFAULT_OUTPUT: json
-  AWS_REGION: us-west-2
+  # CZID-83 (CICD-6): region from Actions variables (fallback preserves current behavior when unset).
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
   DEBIAN_FRONTEND: noninteractive
   # CZID-40 (CICD-6): drive the CI identity from repo/org Actions variables so it is rotatable and
   # not tied to a hardcoded account. Falls back to these defaults if the vars are unset.
@@ -28,6 +29,13 @@ env:
   # czid-dev-gh-actions-build is provisioned in dev/access-management (cypherid-web-infra).
   CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
   GHA_ROLE: ${{ vars.GHA_ROLE || 'czid-dev-gh-actions-build' }}
+  # CZID-83 (CICD-6): the ECR repository name, parameterized against the existing ECR_REPO_NAME var.
+  # Fallback = the LIVE dev ECR repo 'idseq-web' -- rebrand is on hold, so this does NOT rename the
+  # repo; it only makes the name settable. NOTE: this build path (dev account) writes to a DIFFERENT
+  # registry than promote-image.yml (CI account, default 'seqtoid-web'), so a single repo-level
+  # vars.ECR_REPO_NAME cannot serve both. Leave it UNSET (both keep their fallbacks) unless scoping
+  # it per-environment. See TICKET-83-VAR-SET-COMMANDS.md.
+  ECR_REPO_NAME: ${{ vars.ECR_REPO_NAME || 'idseq-web' }}
   LC_ALL: C.UTF-8
   LANG: C.UTF-8
   #GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
@@ -78,7 +86,7 @@ jobs:
       - name: Login to ECR
         uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
         with:
-          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/idseq-web
+          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}
       - name: Export variables
         run: |
           AWS_ACCOUNT_ID=${{ steps.configure_aws_credentials.outputs.aws-account-id }}
@@ -87,7 +95,7 @@ jobs:
           # bin/build-docker tags the local image `<repo>:sha-<sha8>` (and bin/push-docker pushes that
           # exact tag), so Trivy/cosign/GHCR must reference `sha-<sha8>` or they scan a tag that was
           # never built (fails "MANIFEST_UNKNOWN" / "No such image").
-          echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web:sha-${GITHUB_SHA::8}" >> "$GITHUB_ENV"
+          echo "IMAGE_REF=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}:sha-${GITHUB_SHA::8}" >> "$GITHUB_ENV"
       # bin/build-docker builds amd64 and pushes to ECR directly (buildx docker-container driver +
       # registry cache => push, not local --load). #485: SELF-HEALING cache — a `main` build uses
       # CACHE_MODE=write (reads AND writes the cache back, so it auto-recovers after any dep/Dockerfile

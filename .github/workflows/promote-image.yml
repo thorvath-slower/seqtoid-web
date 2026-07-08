@@ -47,7 +47,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: us-west-2
+  # CZID-83 (CICD-6): region from Actions variables (fallback preserves current behavior when unset).
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
   # The GHCR source-of-record repo (from #392). The digest resolved here is the promotion unit.
   GHCR_REPO: ghcr.io/${{ github.repository_owner }}/seqtoid-web
   CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '941377154785' }}
