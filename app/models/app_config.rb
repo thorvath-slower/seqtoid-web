@@ -82,6 +82,12 @@ class AppConfig < ApplicationRecord
   AUTO_DELETE_OLD_BULK_DOWNLOADS = "auto_delete_old_bulk_downloads".freeze
   # When this is "1", the user profile form will be saved locally
   LOCAL_USER_PROFILE = "local_user_profile".freeze
+  # CZID-523 -- JSON array of approved institutional email domains, e.g. ["ucsf.edu", "chanzuckerberg.com"].
+  # When set to a non-empty list, new/updated user accounts must have an email whose domain matches an
+  # entry (exact match or a subdomain of an entry). When unset/empty, domain enforcement is OFF and any
+  # email is accepted -- so this ships DARK and is opt-in per deployment (UCSF go-live sets the list).
+  # An ENV var ALLOWED_EMAIL_DOMAINS (comma-separated) is used as a fallback when this key is unset.
+  ALLOWED_EMAIL_DOMAINS = "allowed_email_domains".freeze
 
   after_save :clear_cached_record
 
