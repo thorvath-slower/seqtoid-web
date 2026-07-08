@@ -35,6 +35,13 @@ class BulkDownload < ApplicationRecord
   class KickoffError < StandardError; end
 
   validates :status, presence: true, inclusion: { in: [STATUS_WAITING, STATUS_RUNNING, STATUS_ERROR, STATUS_SUCCESS] }
+  # CZID-524 -- only catalogued (known, releasable) download types may be created. This is the single
+  # model-level choke point for the output allow-list: it covers both the /bulk_downloads/types listing
+  # and the /bulk_downloads create path (the latter previously did not re-validate the requested type).
+  # See docs/policy/ALLOWED-PIPELINE-OUTPUTS-POLICY.md.
+  validates :download_type,
+            inclusion: { in: BulkDownloadTypesHelper::VALID_BULK_DOWNLOAD_TYPES, message: "is not an allowed download type" },
+            allow_nil: true
   validate :params_checks
 
   # This is a wrapper around the params_json field that exposes params_json as a Hash via "params".

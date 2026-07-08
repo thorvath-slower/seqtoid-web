@@ -330,6 +330,20 @@ module BulkDownloadTypesHelper
     BULK_DOWNLOAD_TYPES.pluck(:type).zip(BULK_DOWNLOAD_TYPES)
   ]
 
+  # CZID-524 -- the allow-list of catalogued (known) bulk download types. This is the authoritative set
+  # of download types the app recognizes; anything outside it is not a valid, releasable output. Used by
+  # the BulkDownload model validation so a crafted create request cannot request an uncatalogued type.
+  VALID_BULK_DOWNLOAD_TYPES = BULK_DOWNLOAD_TYPE_NAME_TO_DATA.keys.freeze
+
+  # CZID-524 -- release-restricted download types: intermediate/non-released outputs that the output
+  # policy (docs/policy/ALLOWED-PIPELINE-OUTPUTS-POLICY.md) treats as NOT freely releasable. The
+  # AUTHORITATIVE restricted list is a counsel/product decision documented in that policy; this constant
+  # is the code integration point for it. It is seeded with the one explicitly-"intermediate" type and is
+  # meant to be extended when counsel finalizes the list.
+  RELEASE_RESTRICTED_BULK_DOWNLOAD_TYPES = [
+    CONSENSUS_GENOME_INTERMEDIATE_OUTPUT_FILES_BULK_DOWNLOAD_TYPE,
+  ].freeze
+
   def self.bulk_download_types
     BULK_DOWNLOAD_TYPES
   end
@@ -340,5 +354,15 @@ module BulkDownloadTypesHelper
 
   def self.bulk_download_type_display_name(type_name)
     BULK_DOWNLOAD_TYPE_NAME_TO_DATA[type_name][:display_name]
+  end
+
+  # CZID-524 -- true when type_name is a catalogued (recognized) bulk download type.
+  def self.valid_bulk_download_type?(type_name)
+    VALID_BULK_DOWNLOAD_TYPES.include?(type_name)
+  end
+
+  # CZID-524 -- true when the type is release-restricted per the output policy (intermediate output).
+  def self.release_restricted?(type_name)
+    RELEASE_RESTRICTED_BULK_DOWNLOAD_TYPES.include?(type_name)
   end
 end
