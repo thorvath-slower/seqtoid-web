@@ -25,6 +25,12 @@ import SecondaryButton from "~/components/ui/controls/buttons/SecondaryButton";
 import { logError } from "~/components/utils/logUtil";
 import { ResumableUpload } from "~/components/views/SampleUploadFlow/components/UploadProgressModal/resumableUpload";
 import {
+  cacheUploadFile,
+  canCacheFile,
+  clearCachedUploadFile,
+  clearProjectByteCache,
+} from "~/components/views/SampleUploadFlow/components/UploadProgressModal/uploadByteCache";
+import {
   clearUploadResumeState,
   loadUploadResumeState,
   saveUploadResumeState,
@@ -333,6 +339,13 @@ export const LocalUploadProgressModal = ({
       return;
     }
 
+    // Recovery Option B: best-effort cache the file bytes in IndexedDB (size-gated) so a resume
+    // after a page reload can recover the file where the File System Access API is unavailable
+    // (Firefox/Safari). No-ops for oversized files and when unsupported; never blocks the upload.
+    if (body && canCacheFile(body.size)) {
+      void cacheUploadFile(project.id, s3Key, body);
+    }
+
     const uploadParams = {
       Bucket: s3Bucket,
       Key: s3Key,
@@ -405,6 +418,9 @@ export const LocalUploadProgressModal = ({
 
     // prevent successfully uploaded files from being resumed if other files fail
     removeS3KeyFromUploadIds(s3Key);
+
+    // This file is fully on S3 now, so drop its cached bytes (Option B) -- nothing left to recover.
+    void clearCachedUploadFile(project.id, s3Key);
 
     setSampleFileCompleted(prevState => ({
       ...prevState,
@@ -546,6 +562,8 @@ export const LocalUploadProgressModal = ({
     setRetryingSampleUpload(false);
     // Upload finished successfully: no resume state to keep around.
     clearUploadResumeState(project.id);
+    // Drop any cached upload bytes for this project (Option B); recovery is no longer needed.
+    void clearProjectByteCache(project.id);
   };
 
   // Soft-pause every in-flight upload: parts already sent stay on S3 and the uploadIds are

@@ -95,7 +95,7 @@ common case (retry without leaving) everywhere.
 | **A** — retry-in-place (Retry primary on failure) | ✅ shipped |
 | **D** — multipart transfer resume on retry | ✅ shipped (was already wired: `resumableUpload.ts` + `uploadResumeState.ts`) |
 | **C** — persisted file handles (Chrome/Edge) | ⏳ ticketed follow-up |
-| **B** — IndexedDB byte cache (size-gated; Firefox/Safari fallback) | ⏳ ticketed follow-up |
+| **B** — IndexedDB byte cache (size-gated; Firefox/Safari fallback) | ✅ storage layer shipped (`uploadByteCache.ts`, size-gated at `MAX_CACHEABLE_BYTES`; bytes cached during upload and cleared on completion/project change). Reopen-on-reload orchestration is the remaining follow-up. |
 
 ## Recommended sequencing
 
