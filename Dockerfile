@@ -106,17 +106,12 @@ COPY . ./
 ARG GIT_COMMIT
 ENV GIT_VERSION=${GIT_COMMIT}
 
-# Sprockets asset precompile (#544). The webpack step above emits the CSS/JS bundles into
-# app/assets/dist; app/assets/stylesheets/application.css `//= require`s those bundles, and
-# the layout references `stylesheet_link_tag 'application'`. With NO sprockets precompile
-# there is no compiled application.css in public/assets, so — with unknown_asset_fallback
-# = false in the deployed envs — the app 500s on HomeController#landing ("Asset
-# `application.css` was not declared to be precompiled in production"). Precompile here:
-# the dist bundles are present (built above) and the full app + gems are in place. The
-# generated public/assets manifest ships to the runtime stage via `COPY --from=builder
-# /app /app`. Dummy SECRET_KEY_BASE so the precompile boot doesn't require a real secret.
-RUN SECRET_KEY_BASE=dummy RAILS_ENV=production bundle exec rake assets:precompile \
-  && ls -l public/assets/.sprockets-manifest-*.json
+# NOTE (#544): a `rake assets:precompile` step was added here and REVERTED because it broke
+# the build -- it booted with RAILS_ENV=production, which this app has no database config for
+# (envs are development/deployed/prod/staging/sandbox), so boot died with
+# ActiveRecord::AdapterNotSpecified before precompiling anything. Reopened #544 to redo the
+# application.css fix correctly (match the deployed RAILS_ENV=development, which has a DB
+# config, and confirm the deployed asset config actually needs precompiled assets).
 
 # ---------- runtime: slim — only runtime deps + built artifacts ----------
 # ruby:3.3.6-slim is a manifest list, so buildx picks the per-arch base automatically.
