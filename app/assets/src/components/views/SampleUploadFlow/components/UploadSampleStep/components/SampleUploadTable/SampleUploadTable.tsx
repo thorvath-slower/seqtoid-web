@@ -13,6 +13,16 @@ import { SELECT_ID_KEY } from "../../../../constants";
 import { SampleUploadTableRenderers } from "./components/SampleUploadTableRenderers";
 import cs from "./sample_upload_table.scss";
 
+// #492: constants used to size the table from the sample count so a short list
+// does not reserve a big empty block. These mirror what BaseTable renders with:
+// defaultHeaderHeight (50) and the per-row height function passed as
+// `defaultRowHeight` below (10 + 30 * number-of-R1-files; basespace/remote rows
+// have no file_names_R1 so they fall back to one line -> 40px). MAX_TABLE_HEIGHT
+// caps the growth so long lists scroll inside the table (the previous fixed
+// behavior) instead of pushing the rest of the upload step down the page.
+const HEADER_HEIGHT = 50;
+const MAX_TABLE_HEIGHT = 400;
+
 const NAME_COLUMN = {
   dataKey: "name",
   width: 500,
@@ -182,6 +192,17 @@ export class SampleUploadTable extends React.Component<SampleUploadTableProps> {
       selectedSampleIdsConcat.add(mapSampleToConcatGroup[sampleId]);
     });
 
+    // #492: drive the table height from the number of rows so a few samples no
+    // longer leave a large empty gap. Sum each row's rendered height, add the
+    // header, and cap at MAX_TABLE_HEIGHT so long lists scroll instead of growing
+    // unbounded. AutoSizer still receives a definite pixel height (via the inline
+    // style on .tableWrapper), which is what it needs to render rows at all.
+    const rowsHeight = (samples || []).reduce(
+      (total, sample) => total + 10 + 30 * (sample.file_names_R1?.length || 1),
+      0,
+    );
+    const tableHeight = Math.min(HEADER_HEIGHT + rowsHeight, MAX_TABLE_HEIGHT);
+
     return (
       <div className={cs.sampleUploadTable}>
         <div className={cs.detectedMsg}>
@@ -197,45 +218,49 @@ export class SampleUploadTable extends React.Component<SampleUploadTableProps> {
             Click to remove unselected samples
           </span>
         </div>
-        <Table
-          className={cs.table}
-          // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
-          columns={this.getColumns()}
-          data={samples}
-          // Default to 40px for non-local (i.e. BaseSpace) uploads
-          defaultRowHeight={({ row }) =>
-            10 + 30 * (row.file_names_R1?.length || 1)
-          }
-          headerLabelClassName={cs.columnHeaderLabel}
-          // Reset cached row heights so dynamic heights keep working
-          onColumnSort={() => SampleUploadTableRenderers.cache.clearAll()}
-          sortable
-          selectableKey={SELECT_ID_KEY}
-          // Support selecting rows containing concatenated samples
-          onSelectRow={(values: string, checked: boolean) =>
-            values.split(",").forEach(value => onSampleSelect(value, checked))
-          }
-          onSelectAllRows={onAllSamplesSelect}
-          selected={selectedSampleIdsConcat}
-          // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
-          selectableCellRenderer={
-            localUpload ? SampleUploadTableRenderers.renderSelectableCell : null
-          }
-          onRowClick={this.onRowClick}
-          defaultSortBy="name"
-          defaultSortDirection={SortDirection.ASC}
-          selectRowDataGetter={({ rowData }) => {
-            if (localUpload) {
-              return {
-                finishedValidating: get("finishedValidating", rowData),
-                id: get("_selectId", rowData),
-                isValid: get("isValid", rowData),
-              };
+        <div className={cs.tableWrapper} style={{ height: tableHeight }}>
+          <Table
+            className={cs.table}
+            // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+            columns={this.getColumns()}
+            data={samples}
+            // Default to 40px for non-local (i.e. BaseSpace) uploads
+            defaultRowHeight={({ row }) =>
+              10 + 30 * (row.file_names_R1?.length || 1)
             }
-            return get("_selectId", rowData);
-          }}
-          rowRenderer={this.rowRenderer}
-        />
+            headerLabelClassName={cs.columnHeaderLabel}
+            // Reset cached row heights so dynamic heights keep working
+            onColumnSort={() => SampleUploadTableRenderers.cache.clearAll()}
+            sortable
+            selectableKey={SELECT_ID_KEY}
+            // Support selecting rows containing concatenated samples
+            onSelectRow={(values: string, checked: boolean) =>
+              values.split(",").forEach(value => onSampleSelect(value, checked))
+            }
+            onSelectAllRows={onAllSamplesSelect}
+            selected={selectedSampleIdsConcat}
+            // @ts-expect-error CZID-8698 expect strictNullCheck error: error TS2322
+            selectableCellRenderer={
+              localUpload
+                ? SampleUploadTableRenderers.renderSelectableCell
+                : null
+            }
+            onRowClick={this.onRowClick}
+            defaultSortBy="name"
+            defaultSortDirection={SortDirection.ASC}
+            selectRowDataGetter={({ rowData }) => {
+              if (localUpload) {
+                return {
+                  finishedValidating: get("finishedValidating", rowData),
+                  id: get("_selectId", rowData),
+                  isValid: get("isValid", rowData),
+                };
+              }
+              return get("_selectId", rowData);
+            }}
+            rowRenderer={this.rowRenderer}
+          />
+        </div>
       </div>
     );
   }
