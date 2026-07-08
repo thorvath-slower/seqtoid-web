@@ -715,7 +715,36 @@ const SampleViewComponent = ({
             setIsCreatingPersistedBackground(false);
             setHasPersistedBackground(true);
           })
-          .catch((error: Error) => {
+          .catch((error: { error?: unknown }) => {
+            setIsCreatingPersistedBackground(false);
+
+            // createPersistedBackground/updatePersistedBackground reject with the parsed
+            // response body (see api/core.ts), so error.error holds the server payload, not
+            // an HTTP status. Two failures here are benign races on a best-effort preference
+            // save (the report already renders with the chosen background) and must NOT page
+            // Sentry (#556):
+            //   - update() "Persisted background not found" (the create has not committed yet)
+            //   - create() "already has a background persisted" (UniquePersistedBackgroundValidator)
+            // Re-sync the local flag so the next save takes the correct create-vs-update path,
+            // and drop to console instead of Sentry.
+            const serverError = JSON.stringify(error?.error ?? error);
+            if (serverError.includes("Persisted background not found")) {
+              setHasPersistedBackground(false);
+              console.warn(
+                "Persisted background save skipped (create not yet committed)",
+                error,
+              );
+              return;
+            }
+            if (serverError.includes("already has a background persisted")) {
+              setHasPersistedBackground(true);
+              console.warn(
+                "Persisted background already exists; will update on next change",
+                error,
+              );
+              return;
+            }
+            // Genuinely unexpected failure: keep reporting it.
             logError({
               message:
                 "SampleView: Failed to persist background model selection",
@@ -727,7 +756,6 @@ const SampleViewComponent = ({
                 isCreatingPersistedBackground,
               },
             });
-            setIsCreatingPersistedBackground(false);
             console.error(error);
           });
       }
