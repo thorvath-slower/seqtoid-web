@@ -296,6 +296,16 @@ class WorkflowRunsController < ApplicationController
         )
       end
     end
+  rescue SfnExecution::SfnDescriptionNotFoundError => e
+    # Orphaned/incomplete run: its Step Functions execution description is missing from S3, so
+    # no output paths exist. Treat as "no results" and return a graceful 404 instead of raising
+    # a 500 to Sentry. Mirrors the WorkflowRunsController#results guard from #385 (#546).
+    LogUtil.log_error(
+      "AMR report download unavailable: SFN execution description not found",
+      exception: e,
+      workflow_run_id: @workflow_run&.id
+    )
+    render(json: { status: "Output not available" }, status: :not_found)
   end
 
   def benchmark_report_downloads
@@ -332,6 +342,16 @@ class WorkflowRunsController < ApplicationController
         )
       end
     end
+  rescue SfnExecution::SfnDescriptionNotFoundError => e
+    # Orphaned/incomplete run: its Step Functions execution description is missing from S3, so
+    # no output paths exist. Treat as "no results" and return a graceful 404 instead of raising
+    # a 500 to Sentry. Mirrors the WorkflowRunsController#results guard from #385 (#546).
+    LogUtil.log_error(
+      "Benchmark report download unavailable: SFN execution description not found",
+      exception: e,
+      workflow_run_id: @workflow_run&.id
+    )
+    render(json: { status: "Output not available" }, status: :not_found)
   end
 
   def amr_gene_level_downloads
