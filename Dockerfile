@@ -43,8 +43,16 @@ RUN apt-get update && apt-get upgrade -y && \
   apt-transport-https
 
 # samtools 1.17 (apt's 1.9 lacks the -X flag the AMR download service needs).
-RUN curl -L https://github.com/samtools/samtools/releases/download/1.17/samtools-1.17.tar.bz2 | \
-  tar xj && cd samtools-1.17/ && make && make install
+# #78: download to a file and verify its SHA256 before extracting, so a compromised or
+# corrupted tarball fails the build instead of being compiled + installed silently. -f makes
+# curl fail on an HTTP error (previously a 404/500 body could be piped into tar). The SHA256
+# is the official samtools 1.17 GitHub release asset.
+RUN curl -fsSL -o samtools-1.17.tar.bz2 \
+  https://github.com/samtools/samtools/releases/download/1.17/samtools-1.17.tar.bz2 \
+  && echo "3adf390b628219fd6408f14602a4c4aa90e63e18b395dad722ab519438a2a729  samtools-1.17.tar.bz2" | sha256sum -c - \
+  && tar xjf samtools-1.17.tar.bz2 \
+  && cd samtools-1.17/ && make && make install \
+  && cd .. && rm -rf samtools-1.17 samtools-1.17.tar.bz2
 
 # node pinned to .node-version (CZID-197) — build-time only (webpack); NOT shipped.
 # #482: node's release assets use `x64`/`arm64` (not Docker's `amd64`/`arm64`), so map
