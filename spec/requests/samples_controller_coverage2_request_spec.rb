@@ -461,18 +461,18 @@ RSpec.describe "Samples (coverage2) request", type: :request do
   end
 
   describe "PUT /samples/:id/move_to_project (admin only)" do
-    # NOTE: SamplesController#move_to_project exists and is admin-gated (see the
-    # admin_required before_action), but no route is wired for it in
-    # config/routes.rb, so it is currently unreachable over HTTP. Characterize
-    # that reality rather than asserting a success that cannot happen.
-    it "is not exposed as a route" do
+    # #561: the route (put :move_to_project, samples member) is now wired, so the
+    # admin move-sample-to-project form (app/views/samples/pipeline_runs.html.erb)
+    # reaches the action. Assert the real behavior.
+    it "moves the sample to the target project and renders show json" do
       sample = sample_for(@admin)
       new_project = create(:project, users: [@admin])
       sign_in @admin
 
-      expect do
-        put "/samples/#{sample.id}/move_to_project.json", params: { project_id: new_project.id }
-      end.to raise_error(ActionController::RoutingError)
+      put "/samples/#{sample.id}/move_to_project.json", params: { project_id: new_project.id }
+
+      expect(response).to have_http_status(:ok)
+      expect(sample.reload.project_id).to eq(new_project.id)
     end
   end
 

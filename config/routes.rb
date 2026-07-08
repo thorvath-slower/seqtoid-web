@@ -84,6 +84,7 @@ Rails.application.routes.draw do
       put :reupload_source
       put :kickoff_pipeline
       put :cancel_pipeline_run
+      put :move_to_project
 
       post :save_metadata
       post :save_metadata_v2
