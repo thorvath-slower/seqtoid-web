@@ -8,13 +8,14 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "semantic-ui-css/semantic.min.css";
 import "url-search-params-polyfill";
+import ErrorFallback from "~/components/common/ErrorBoundary/ErrorFallback";
+import SupportPortal from "~/components/common/SupportPortal/SupportPortal";
 import { UserContext } from "~/components/common/UserContext";
 import { initialGlobalContextState } from "./globalContext/initialState";
 import { GlobalContext, globalContextReducer } from "./globalContext/reducer";
 import UserContextType from "./interface/allowedFeatures";
 import "./loader.scss";
 import RelayEnvironment from "./relay/RelayEnvironment";
-import SupportPortal from "~/components/common/SupportPortal/SupportPortal";
 import "./styles/appcues.scss";
 import "./styles/core.scss";
 
@@ -88,7 +89,18 @@ const ReactComponentWithGlobalContext = ({
     initialGlobalContextState,
   );
   return (
-    <Sentry.ErrorBoundary fallback={<>An error has occured</>}>
+    // App-root catch-all (#466): any view mounted via react_component that is
+    // not already wrapped by its own ErrorBoundary (report/heatmap/downloads)
+    // still lands here. Render the shared friendly ErrorFallback instead of the
+    // old bare "An error has occured" string, so a thrown render error shows a
+    // clean message + retry rather than a blank/technical page. Sentry.ErrorBoundary
+    // keeps reporting the exception to Sentry (#382) and exposes resetError for
+    // the retry.
+    <Sentry.ErrorBoundary
+      fallback={({ error, resetError }) => (
+        <ErrorFallback error={error} onRetry={resetError} />
+      )}
+    >
       <BrowserRouter>
         <RelayEnvironment>
           <UserContext.Provider value={userContext}>
