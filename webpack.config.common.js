@@ -77,9 +77,13 @@ const config = {
           {
             loader: "postcss-loader",
             options: {
-              ident: "postcss",
               sourceMap: true,
-              plugins: loader => [require("cssnano")({ preset: "default" })],
+              // postcss-loader v4+ moved plugins under postcssOptions and dropped
+              // the loader-function form and the `ident` field (postcss-loader v3
+              // -> v8 pull-forward, CZID-318).
+              postcssOptions: {
+                plugins: [require("cssnano")({ preset: "default" })],
+              },
             },
           },
           {
@@ -114,9 +118,13 @@ const config = {
           {
             loader: "postcss-loader",
             options: {
-              ident: "postcss",
               sourceMap: true,
-              plugins: loader => [require("cssnano")({ preset: "default" })],
+              // postcss-loader v4+ moved plugins under postcssOptions and dropped
+              // the loader-function form and the `ident` field (postcss-loader v3
+              // -> v8 pull-forward, CZID-318).
+              postcssOptions: {
+                plugins: [require("cssnano")({ preset: "default" })],
+              },
             },
           },
           {
@@ -146,9 +154,13 @@ const config = {
           {
             loader: "postcss-loader",
             options: {
-              ident: "postcss",
               sourceMap: true,
-              plugins: loader => [require("cssnano")({ preset: "default" })],
+              // postcss-loader v4+ moved plugins under postcssOptions and dropped
+              // the loader-function form and the `ident` field (postcss-loader v3
+              // -> v8 pull-forward, CZID-318).
+              postcssOptions: {
+                plugins: [require("cssnano")({ preset: "default" })],
+              },
             },
           },
         ],
