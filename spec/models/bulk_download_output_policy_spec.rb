@@ -48,7 +48,15 @@ RSpec.describe BulkDownloadTypesHelper do
 
   describe "VALID_BULK_DOWNLOAD_TYPES" do
     it "matches the catalogue keys" do
-      expect(described_class::VALID_BULK_DOWNLOAD_TYPES).to match_array(BulkDownloadTypesHelper::BULK_DOWNLOAD_TYPES.pluck(:type))
+      # VALID_BULK_DOWNLOAD_TYPES derives from BULK_DOWNLOAD_TYPE_NAME_TO_DATA.keys, and that hash is
+      # built via Hash[pluck(:type).zip(...)], which dedupes the couple of catalogue entries that share
+      # a type (sample_taxon_report / combined_sample_taxon_results appear twice with different params).
+      # Compare against the unique type set so the assertion reflects that dedup rather than failing on
+      # the pre-existing duplicate rows.
+      # BULK_DOWNLOAD_TYPES is a plain Array, so this is Enumerable#pluck + Array#uniq, not an AR query;
+      # the Rails/UniqBeforePluck cop (which wants .distinct) does not apply here.
+      catalogue_types = BulkDownloadTypesHelper::BULK_DOWNLOAD_TYPES.pluck(:type).uniq # rubocop:disable Rails/UniqBeforePluck
+      expect(described_class::VALID_BULK_DOWNLOAD_TYPES).to match_array(catalogue_types)
     end
   end
 end
