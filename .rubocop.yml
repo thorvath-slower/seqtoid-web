@@ -233,3 +233,12 @@ Layout/BlockAlignment:
 # with `_` (the default autocorrect) would break the binding. Allow unused keyword args.
 Lint/UnusedMethodArgument:
   AllowUnusedKeywordArguments: true
+
+# RuboCop 0.93.1's Rails/BulkChangeTable cop raises an internal error (crashes the run) when it
+# inspects a `create_table ... if_not_exists: true` block. if_not_exists is the idiomatic idempotent
+# heal used by the export_control_clearances migration (#533). It is a cop BUG, not a real finding
+# (BulkChangeTable is about combining separate column changes, which that migration does not do).
+# Exclude the affected migration until the pinned RuboCop is bumped past the fix (tracked: #557).
+Rails/BulkChangeTable:
+  Exclude:
+    - 'db/migrate/20250703000001_create_export_control_clearances.rb'
