@@ -37,7 +37,7 @@ namespace :taxon_lineage_slice do
   end
 
   # OpenSearch/ES rejects a sustained burst of `_bulk` writes with 429 ("Too Many
-  # Requests" / rejected execution — queue full) when the full ~4.75M-row lineage is
+  # Requests" / rejected execution -- queue full) when the full ~4.75M-row lineage is
   # indexed back-to-back against a small (e.g. single-node dev) domain (#551). Without a
   # retry the whole rebuild aborts and leaves a half-built index. Retry the batch with
   # exponential backoff (capped) so a transient rejection rides through. Matched by class
@@ -280,8 +280,8 @@ namespace :taxon_lineage_slice do
       puts "ES index #{es.index_name} already built and in sync with the DB (#{db_count} docs); skipping rebuild."
     else
       puts "ES index missing or out of sync with the DB; (re)building."
-      # Best-effort (#551): a search-index rebuild hiccup — e.g. OpenSearch 429 under load,
-      # or the 429 exhausting the per-batch retries above — must never fail this deploy hook
+      # Best-effort (#551): a search-index rebuild hiccup -- e.g. OpenSearch 429 under load,
+      # or the 429 exhausting the per-batch retries above -- must never fail this deploy hook
       # or 500 the app. Lineage lookups + pathogen flagging read MySQL, which is already
       # loaded; the search index can be rebuilt out-of-band via
       # `rake taxon_lineage_slice:create_taxon_lineage_slice_es_index`. Log loudly and carry on.
