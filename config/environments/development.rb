@@ -69,6 +69,20 @@ Rails.application.configure do
   # Do not fallback to assets pipeline if a precompiled asset is missed.
   # config.assets.compile = true
 
+  # #544: the deployed dev env runs RAILS_ENV=development and serves assets
+  # dynamically (config.assets.compile defaults true) -- it does NOT run
+  # `assets:precompile` at image build time (that step was tried and reverted in
+  # #204/#210 because it boots RAILS_ENV=production, which this app has no DB
+  # config for). With Sprockets 4 the only precompile source is manifest.js, and
+  # `application.css` is declared there (`//= link application.css`). But with
+  # config.assets.debug = true the stylesheet_link_tag helper takes the
+  # find_debug_asset path and raises AssetNotPrecompiledError (HTTP 500 --
+  # HomeController#landing, DEV-RAILS-PROJECT-B) unless the asset is in the
+  # precompiled manifest, which does not exist without a precompile step.
+  # Disable the precompiled-asset check so dev compiles/serves the stylesheet
+  # dynamically instead of 500ing. Dev-only; leaves staging/prod untouched.
+  config.assets.check_precompiled_asset = false
+
   # Specifies the header that your server uses for sending files.
   # config.action_dispatch.x_sendfile_header = 'X-Sendfile' # for Apache
   # config.action_dispatch.x_sendfile_header = 'X-Accel-Redirect' # for NGINX
