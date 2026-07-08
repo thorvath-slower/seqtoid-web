@@ -6,7 +6,11 @@ module ElasticsearchQueryHelper
   LAMBDA_ENV = ENV["LAMBDA_ENV"] || (Rails.env.development? || Rails.env.test? ? "dev" : Rails.env)
 
   config = { host: ENV["HEATMAP_ES_ADDRESS"], transport_options: { request: { timeout: 200 } } }
-  ES_CLIENT = Elasticsearch::Client.new(config) unless Rails.env.test?
+  # Wrap the heatmap client in a circuit breaker (#496): a down/overloaded heatmap
+  # domain fast-fails once the failure threshold is crossed instead of every heatmap
+  # request paying the 200s timeout and exhausting the Puma pool. Passthrough when
+  # disabled via OPENSEARCH_BREAKER_ENABLED=0.
+  ES_CLIENT = OpensearchCircuit.wrap(Elasticsearch::Client.new(config), name: :heatmap_opensearch) unless Rails.env.test?
 
   LAMBDA_CLIENT = Aws::Lambda::Client.new(
     http_read_timeout: 1000, # more than the 900 second limit on lambda executions
