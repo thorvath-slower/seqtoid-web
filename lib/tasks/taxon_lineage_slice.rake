@@ -67,6 +67,79 @@ namespace :taxon_lineage_slice do
     end
   end
 
+  # Bulk-index the loaded TaxonLineage rows into OpenSearch (#478). The full ~4.75M-row
+  # rebuild was single-threaded: sequential _bulk calls bound throughput to one in-flight
+  # request. This runs up to TAXON_ES_BULK_CONCURRENCY _bulk calls concurrently for a
+  # near-linear speedup up to the domain's ingest ceiling.
+  #
+  # Threading model: the DB read (find_in_batches) and the per-record as_indexed_json
+  # serialization stay on THIS thread -- ActiveRecord connections are not safe to share
+  # across threads -- so the producer builds each batch's request body and hands only the
+  # (plain-Hash) body to the worker pool. Worker threads do nothing but the independent
+  # _bulk HTTP call, each still riding the #551 429 backoff (with_es_retry).
+  #
+  # Concurrency is ENV-tunable with a CONSERVATIVE default of 1 (serial -- byte-for-byte the
+  # previous behavior) so a small single-node dev OpenSearch domain is never overloaded on a
+  # plain rebuild. Raise TAXON_ES_BULK_CONCURRENCY (e.g. 4-8) on multi-node staging/prod
+  # domains; the 429 backoff keeps it safe even if the value overshoots the ceiling.
+  def self.bulk_index_taxon_lineage(es, index, batch_size)
+    concurrency = [(ENV["TAXON_ES_BULK_CONCURRENCY"].presence || 1).to_i, 1].max
+
+    build_body = lambda do |group|
+      group.map { |rec| { index: { _index: index, _id: rec.id, data: rec.__elasticsearch__.as_indexed_json } } }
+    end
+    index_body = lambda do |body|
+      resp = with_es_retry("bulk index") { es.client.bulk(body: body) }
+      puts "  WARN: some docs failed to index in a batch" if resp && resp["errors"]
+    end
+
+    if concurrency == 1
+      TaxonLineage.find_in_batches(batch_size: batch_size) { |group| index_body.call(build_body.call(group)) }
+      return
+    end
+
+    puts "Parallel bulk index: #{concurrency} concurrent _bulk streams (TAXON_ES_BULK_CONCURRENCY)."
+    # Bounded producer/consumer: the queue holds at most `concurrency` pending batches so
+    # memory stays bounded no matter how far ahead the DB reader runs. The first worker
+    # error is captured and re-raised on this thread AFTER draining, so the caller's `ensure`
+    # (which restores the index settings) still runs and no half-built state is hidden.
+    #
+    # A worker exits ONLY on the nil sentinel -- never on error. If a failed worker died
+    # early, the queue (already full at `concurrency`) would have no consumer and the
+    # producer's / sentinel's `push` would block forever (deadlock). So once an error is
+    # recorded, workers keep popping and discarding until the sentinels arrive; the producer
+    # stops enqueuing real work as soon as it sees the error.
+    queue = SizedQueue.new(concurrency)
+    mutex = Mutex.new
+    error = nil
+    workers = Array.new(concurrency) do
+      Thread.new do
+        while (body = queue.pop)
+          next if mutex.synchronize { !error.nil? } # drain-and-discard after a failure
+
+          begin
+            index_body.call(body)
+          rescue StandardError => e
+            mutex.synchronize { error ||= e }
+          end
+        end
+      end
+    end
+
+    begin
+      TaxonLineage.find_in_batches(batch_size: batch_size) do |group|
+        break if mutex.synchronize { !error.nil? }
+
+        queue.push(build_body.call(group))
+      end
+    ensure
+      concurrency.times { queue.push(nil) } # one sentinel per worker so each exits its loop
+      workers.each(&:join)
+    end
+
+    raise error if error
+  end
+
   desc "Seed 2024 taxon lineage data"
   task import_data_from_s3: :environment do
     # Long-running S3 import: on deploy/rollout the pod may be sent SIGTERM. Trap it
@@ -210,12 +283,10 @@ namespace :taxon_lineage_slice do
       # proxy path entirely.
       # Batch size is ENV-tunable (#551) so a constrained domain can throttle down; each
       # batch's _bulk call retries on 429 with backoff instead of aborting the rebuild.
+      # Concurrency is ENV-tunable (#478); each concurrent _bulk stream rides the same 429
+      # backoff. See bulk_index_taxon_lineage for the threading model.
       batch_size = (ENV["TAXON_ES_BULK_BATCH"].presence || 5000).to_i
-      TaxonLineage.find_in_batches(batch_size: batch_size) do |group|
-        body = group.map { |rec| { index: { _index: index, _id: rec.id, data: rec.__elasticsearch__.as_indexed_json } } }
-        resp = with_es_retry("bulk index") { es.client.bulk(body: body) }
-        puts "  ⚠ some docs failed to index in a batch" if resp && resp["errors"]
-      end
+      bulk_index_taxon_lineage(es, index, batch_size)
     ensure
       es.client.indices.put_settings(index: index, body: { index: restore })
       es.client.indices.refresh(index: index)
