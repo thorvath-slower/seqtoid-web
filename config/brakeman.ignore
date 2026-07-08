@@ -136,7 +136,7 @@
       "cwe_id": [
         89
       ],
-      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+      "note": "False positive (ticket #293). The only interpolated value is Time.current.strftime('%Y-%m-%d'), a server-side date string of fixed form YYYY-MM-DD (digits and hyphen only) that cannot carry user input. sample_ids is user-influenced but reaches the query only via .where(id: sample_ids), which ActiveRecord binds as a parameter -- it is never interpolated into this Arel.sql string. No SQL-injection reachability. Brakeman's Medium-confidence heuristic flags all interpolation into Arel.sql regardless of source. Kept as an ignore rather than refactored to avoid altering a security-sensitive visibility predicate."
     },
     {
       "warning_type": "SQL Injection",
@@ -159,7 +159,7 @@
       "cwe_id": [
         89
       ],
-      "note": "Inherited baseline accepted at the Brakeman gate re-enable (CZID-462 / #294, 2026-07-06). Pre-existing SQL Injection finding, not introduced by this change. The gate fails on NEW warnings only; these are pinned so it ratchets forward without a mass-remediation up front. Re-triage as security work permits."
+      "note": "False positive (ticket #293). The only interpolated value is Time.current.strftime('%Y-%m-%d'), a server-side date string of fixed form YYYY-MM-DD (digits and hyphen only) that cannot carry user input. sample_ids is user-influenced but reaches the query only via .where(id: sample_ids), which ActiveRecord binds as a parameter -- it is never interpolated into this Arel.sql string. No SQL-injection reachability. Brakeman's Medium-confidence heuristic flags all interpolation into Arel.sql regardless of source. Kept as an ignore rather than refactored to avoid altering a security-sensitive visibility predicate."
     },
     {
       "warning_type": "SQL Injection",
