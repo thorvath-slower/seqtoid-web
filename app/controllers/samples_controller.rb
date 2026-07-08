@@ -1028,7 +1028,9 @@ class SamplesController < ApplicationController
 
   def taxid_contigs_download
     taxid = params[:taxid]
-    return if HUMAN_TAX_IDS.include? taxid.to_i
+    # #562: fail closed on human taxids with a clean empty 200 rather than a bare
+    # `return`, which left no render and raised MissingExactTemplate (500-class).
+    return head :ok if HUMAN_TAX_IDS.include? taxid.to_i
 
     pr = select_pipeline_run(@sample, params[:pipeline_version])
     contigs = pr.get_contigs_for_taxid(taxid.to_i)
@@ -1085,7 +1087,9 @@ class SamplesController < ApplicationController
   end
 
   def show_taxid_fasta
-    return if HUMAN_TAX_IDS.include? params[:taxid].to_i
+    # #562: fail closed on human taxids with a clean empty 200 rather than a bare
+    # `return`, which left no render and raised MissingExactTemplate (500-class).
+    return head :ok if HUMAN_TAX_IDS.include? params[:taxid].to_i
 
     pr = select_pipeline_run(@sample, params[:pipeline_version])
     if params[:hit_type] == "NT_or_NR"
