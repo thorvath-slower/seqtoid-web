@@ -1,5 +1,9 @@
 class BenchmarkWorkflowRun < WorkflowRun
-  AWS_S3_TRUTH_FILES_BUCKET = "s3://idseq-bench/datasets/truth_files/".freeze
+  # Ground-truth truth-file location for benchmark runs (CZID-580). Historically hardcoded to the
+  # CZI-owned public idseq-bench bucket. Mirror the S3_DATABASE_BUCKET pattern: allow an ENV override
+  # so operators can repoint to a UCSF-owned bucket without a code change. The default is kept for
+  # back-compatibility; when S3_TRUTH_FILES_BUCKET is set, the ENV value wins.
+  AWS_S3_TRUTH_FILES_BUCKET = ENV.fetch("S3_TRUTH_FILES_BUCKET", "s3://idseq-bench/datasets/truth_files/").freeze
 
   OUTPUT_BENCHMARK_HTML_TEMPLATE = "benchmark.%<workflow_name>s_benchmark.benchmark_html".freeze
   OUTPUT_BENCHMARK_TRUTH_NT_TEMPLATE = "benchmark.%<workflow_name>s_benchmark.truth_nt".freeze
