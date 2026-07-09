@@ -870,7 +870,10 @@ const SampleViewComponent = ({
         snapshotShareId: snapshotShareId,
         basic: true,
       });
-      setProjectSamples(projectSamples.samples);
+      // #505: getSamples can resolve to null or an object without `samples` (error/empty
+      // response shape). projectSamples is `.map`ped in SampleViewHeader, so an undefined
+      // value threw the minified "y.map is not a function" TypeError. Default to [].
+      setProjectSamples(projectSamples?.samples ?? []);
     };
     project?.id &&
       fetchProjectSamples(parseInt(project.id), snapshotShareId).catch(
@@ -924,7 +927,12 @@ const SampleViewComponent = ({
           snapshotShareId,
           pipelineVersion,
         });
-        setCoverageVizDataByTaxon(coverageVizSummary);
+        // #505: getCoverageVizSummary can resolve to null (no data / error shape).
+        // coverageVizDataByTaxon is typed and consumed as a keyed object (getCoverageVizParams
+        // / getCombinedAccessionDataForSpecies index into it), so a null value threw the
+        // minified "right-hand side of 'in' should be an object, got null" TypeError. Default
+        // to {} to preserve the object invariant (matching the initial state).
+        setCoverageVizDataByTaxon(coverageVizSummary ?? {});
       }
     };
     fetchCoverageVizData().catch(error => {
