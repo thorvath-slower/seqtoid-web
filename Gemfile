@@ -83,8 +83,6 @@ gem "opentelemetry-instrumentation-all", "~> 0.76"
 # Use SCSS for stylesheets
 gem 'sprockets-es6'
 gem "strong_migrations"
-# Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
-gem 'turbolinks', '~> 5'
 # Use Uglifier as compressor for JavaScript assets
 gem 'uglifier', '~> 4.1'
 # Redirect
