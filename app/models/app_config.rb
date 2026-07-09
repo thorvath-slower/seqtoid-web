@@ -14,6 +14,14 @@ class AppConfig < ApplicationRecord
   # flag so device attestation can be scoped to the highest-sensitivity flows only. Defaults OFF (dark);
   # go-live is counsel/vendor-gated. TODO(counsel/product): which flows require it.
   ENABLE_EXPORT_CONTROL_DEVICE_ATTESTATION = 'enable_export_control_device_attestation'.freeze
+  # CZID-596/599 -- when this is "1", the Descartes Visual Compliance restricted-party SCREENING service
+  # (export-control Layer 3) is ACTIVE: ScreeningService may call the SearchEntity API and place holds.
+  # Defaults OFF ("" / nil) so the screening core ships DARK and is NEVER invoked -- ScreeningService's
+  # enabled?/screen_if_enabled short-circuit to a full BYPASS (no call, no hold, normal behavior) when
+  # this is off. Go-live is counsel + vendor gated (CZID-335), never flipped by engineering. This is
+  # SEPARATE from ENABLE_EXPORT_CONTROL_LAYER3 (the gate flag): the screening core can be exercised in a
+  # sandbox with this flag while the user-facing gate stays off.
+  ENABLE_DESCARTES_SCREENING = 'enable_descartes_screening'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.
