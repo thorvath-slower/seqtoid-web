@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2025_07_03_000003) do
+ActiveRecord::Schema[7.0].define(version: 2025_07_09_000002) do
   create_table "accession_coverage_stats", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The id of the pipeline run the coverage stats were generated from"
     t.string "accession_id", null: false, comment: "The NCBI GenBank id of the accession the coverage stats were created for"
@@ -238,6 +238,18 @@ ActiveRecord::Schema[7.0].define(version: 2025_07_03_000003) do
     t.datetime "created_at", precision: 6, null: false
     t.index ["user_id", "clearance_version", "verification_status", "screening_result"], name: "idx_export_clearance_user_version_status"
     t.index ["user_id"], name: "index_export_control_clearances_on_user_id"
+  end
+
+  create_table "holds", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "subject_ref", null: false
+    t.string "subject_type"
+    t.string "reason", null: false
+    t.bigint "screening_result_id"
+    t.datetime "released_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["screening_result_id"], name: "index_holds_on_screening_result_id"
+    t.index ["subject_ref", "released_at"], name: "index_holds_on_subject_ref_and_released_at"
   end
 
   create_table "host_genomes", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
@@ -658,6 +670,24 @@ ActiveRecord::Schema[7.0].define(version: 2025_07_03_000003) do
     t.bigint "sample_id", null: false
     t.index ["sample_id"], name: "index_samples_visualizations_on_sample_id"
     t.index ["visualization_id"], name: "index_samples_visualizations_on_visualization_id"
+  end
+
+  create_table "screening_results", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "subject_ref", null: false
+    t.string "subject_type"
+    t.string "soptionalid"
+    t.string "transstatus"
+    t.string "alert_level", null: false
+    t.integer "risk_country"
+    t.string "list"
+    t.string "sdistributedid"
+    t.string "incident_id"
+    t.string "provider"
+    t.datetime "screened_at", null: false
+    t.string "raw_response_ref"
+    t.datetime "created_at", precision: 6, null: false
+    t.index ["incident_id"], name: "index_screening_results_on_incident_id"
+    t.index ["subject_ref", "screened_at"], name: "index_screening_results_on_subject_ref_and_screened_at"
   end
 
   create_table "seed_migrations", id: :integer, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
