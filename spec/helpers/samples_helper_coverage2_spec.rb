@@ -382,4 +382,33 @@ RSpec.describe SamplesHelper, type: :helper do
       expect(result).to be_present
     end
   end
+
+  # Exercises the visibility CASE expression built via ActiveRecord::Base.sanitize_sql
+  # (CZID-293) against the real database, and pins the public/private mapping so the
+  # brakeman false-positive refactor cannot silently change query behavior.
+  describe "#get_visibility_by_sample_id / #get_visibility_by_sample_id_and_current_power" do
+    before do
+      @public_sample = create(:sample, project: create(:public_project, users: [@joe]), user: @joe)
+      @private_sample = create(:sample, project: create(:project, users: [@joe], public_access: 0, days_to_keep_sample_private: 365), user: @joe)
+      @cp = Power.new(@joe)
+    end
+
+    it "maps public-project samples to 1 and private-project samples to 0 (via current_power)" do
+      without_partial_double_verification do
+        allow(helper).to receive(:current_power).and_return(@cp)
+      end
+
+      result = helper.get_visibility_by_sample_id([@public_sample.id, @private_sample.id])
+
+      expect(result[@public_sample.id]).to eq(1)
+      expect(result[@private_sample.id]).to eq(0)
+    end
+
+    it "maps visibility the same way with an explicitly-passed current_power" do
+      result = helper.get_visibility_by_sample_id_and_current_power([@public_sample.id, @private_sample.id], @cp)
+
+      expect(result[@public_sample.id]).to eq(1)
+      expect(result[@private_sample.id]).to eq(0)
+    end
+  end
 end
