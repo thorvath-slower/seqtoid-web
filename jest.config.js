@@ -43,8 +43,10 @@ module.exports = {
   coveragePathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/build/"],
   coverageReporters: ["text-summary", "json", "html"],
   // RATCHET, not a target. These floors sit just below the true whole-tree
-  // baseline measured with the honest collectCoverageFrom above (Node 24.18.0,
-  // 2026-07-08: lines 4.66% / branches 3.00% / functions 2.93% / stmts 4.70%).
+  // baseline measured with the honest collectCoverageFrom above. Re-measured
+  // after coverage wave 1 landed (#244 utils/api, #245 common, #246 ui) on
+  // Node 24.18.0, 2026-07-08: lines 11.31% / branches 9.01% / functions 9.64% /
+  // stmts 11.35% (was 4.66 / 3.00 / 2.93 / 4.70 at the #240 baseline).
   // Flooring to the whole number below actual means CI fails only if coverage
   // REGRESSES -- coverage can only go up. Bump these floors upward as new specs
   // land (see COVERAGE-GAP-ANALYSIS-JEST-2026-07-07.md for the path to 90/90).
@@ -52,10 +54,10 @@ module.exports = {
   // nothing; these honest floors replace that fiction.
   coverageThreshold: {
     global: {
-      branches: 2,
-      functions: 2,
-      lines: 4,
-      statements: 4,
+      branches: 9,
+      functions: 9,
+      lines: 11,
+      statements: 11,
     },
   },
   globals: {},
