@@ -46,6 +46,21 @@ class AppConfig < ApplicationRecord
   # Unknown/blank => "hold" (fail-closed; the policy is NEVER "allow" on a hit). Counsel owns the
   # legally-correct response to a hit.
   EXPORT_CONTROL_HIT_HANDLING = 'export_control_hit_handling'.freeze
+  # CZID-599 -- per-gate-point toggles for the LIVE export-control screening gate (ExportControlScreeningGate).
+  # Each turns the ScreeningService caller ON at ONE point, and ONLY when the master
+  # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 is also "1". Both default OFF, so the gate hooks are a full
+  # PASS-THROUGH (no screen call, no hold, normal user flow) until counsel + the license enable them.
+  # Separate flags so the onboarding backstop and the result-release backstop can be turned on
+  # independently. Screening is ADDITIONALLY gated by ENABLE_DESCARTES_SCREENING (screen_if_enabled), so
+  # this ships triple-dark. Go-live is counsel + vendor gated (CZID-335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_SCREEN_ONBOARDING = 'enable_export_control_screen_onboarding'.freeze
+  ENABLE_EXPORT_CONTROL_SCREEN_RELEASE = 'enable_export_control_screen_release'.freeze
+  # CZID-598 -- watermark (ISO-8601 UTC string, no offset) for the Descartes Incident Manager resolution
+  # poller (ResolveScreeningHolds). Records the "To" bound of the last fully-processed IMTimeStampSearch
+  # window; the next poll starts its "From" here. Advanced ONLY after a reply is fully processed, so a
+  # failed poll re-covers the same window (idempotent re-processing). Empty/unset => first poll uses the
+  # API default 24h look-back. Inert until ENABLE_DESCARTES_SCREENING is on (the job self-skips when off).
+  DESCARTES_RESOLUTION_POLL_CURSOR = 'descartes_resolution_poll_cursor'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.
