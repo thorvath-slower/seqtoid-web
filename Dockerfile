@@ -114,12 +114,47 @@ COPY . ./
 ARG GIT_COMMIT
 ENV GIT_VERSION=${GIT_COMMIT}
 
-# NOTE (#544): a `rake assets:precompile` step was added here and REVERTED because it broke
-# the build -- it booted with RAILS_ENV=production, which this app has no database config for
-# (envs are development/deployed/prod/staging/sandbox), so boot died with
-# ActiveRecord::AdapterNotSpecified before precompiling anything. Reopened #544 to redo the
-# application.css fix correctly (match the deployed RAILS_ENV=development, which has a DB
-# config, and confirm the deployed asset config actually needs precompiled assets).
+# #544: Precompile the Sprockets assets (application.css et al.) into public/assets so the
+# runtime image ships them. In the deployed envs config.assets.compile is off (prod.rb line 49
+# commented; dev has the check disabled), so without precompiled assets the server-rendered
+# landing page 500s with Sprockets::Rails::Helper::AssetNotPrecompiledError (HomeController#
+# landing). This runs AFTER `npm run build-img`, so the webpack dist bundles that application.css
+# `//= require`s already exist.
+#
+# Boot env for the precompile:
+#  - RAILS_ENV=development : the env this deployed image actually boots + serves as (bin/deploy
+#    maps dev->development, and DEV is where the app runs and where the Sentry 500s fired). It is
+#    the runtime-validated env and boots cleanly here: its redis cache_store + session_store are
+#    inside an `if tmp/caching-dev.txt exists` block (false in the build -> null_store), so no
+#    REDISCLOUD_URL is needed and no config-method assignment fails. NOT `production` -- this app
+#    has no `production` DB config (envs: development/deployed/prod/staging/sandbox), which is why
+#    the earlier attempt (#204) died with ActiveRecord::AdapterNotSpecified. NOT `prod` either:
+#    prod.rb is not yet runtime-validated and aborts boot on latent bugs (ENV['REDISCLOUD_URL']
+#    + '/0/cache' with no redis var; `config.session_store =` is a removed setter in Rails 7.1).
+#    The Sprockets manifest written under public/assets is read env-agnostically at serve time --
+#    content-hashed digests, asset_host applied at render time -- so the same precompiled assets
+#    serve every tier (dev/staging/sandbox/prod) once those prod.rb boot bugs are fixed.
+#  - assets:precompile is a rake task, so Rails forces config.eager_load=false -- no app models
+#    are loaded, so no boot-time DB connection is attempted.
+#  - DATABASE_URL : a dummy, parseable URL so the DB config resolves without the real
+#    RDS_ADDRESS/DB_* env vars; precompile is lazy and never opens the connection.
+#  - SECRET_KEY_BASE : a dummy value so boot never needs a real secret baked into the build.
+#  - AWS_REGION/AWS_DEFAULT_REGION : precompile boots the full env, and s3.rb constructs
+#    Aws::S3::Client.new at load; the AWS SDK requires a region at construction, which the
+#    runtime env supplies but the build does not. A region (no credentials, no connection)
+#    lets boot proceed. Value mirrors the app's us-west-2 home region.
+#  - ASSETS_PRECOMPILE=1 : a build-only marker (never set at runtime) read by
+#    config/initializers/elasticsearch.rb to SKIP wiring the live search client -- the
+#    OpensearchCircuit wrapper is not needed to compile assets and pulling it in at build
+#    time is avoidable. Runtime behavior is unchanged because the flag is absent there.
+RUN SECRET_KEY_BASE=dummydummydummydummydummydummydummydummydummydummydummydummy \
+  DATABASE_URL="mysql2://u:p@127.0.0.1/dummy" \
+  AWS_REGION=us-west-2 \
+  AWS_DEFAULT_REGION=us-west-2 \
+  ASSETS_PRECOMPILE=1 \
+  RAILS_ENV=development \
+  bundle exec rails assets:precompile \
+  && ls -l public/assets | head -20
 
 # ---------- runtime: slim — only runtime deps + built artifacts ----------
 # ruby:3.3.6-slim is a manifest list, so buildx picks the per-arch base automatically.
