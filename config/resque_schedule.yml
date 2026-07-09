@@ -30,3 +30,13 @@ ClearFailedResqueJobs:
   class: ClearResqueFailureQueue
   queue: clear_resque_failure_queue
   description: "This job clears the Resque failure queue of failed jobs every week"
+
+# CZID-598 (export-control Layer 3) -- Descartes Incident Manager resolution poller. INERT by default:
+# the job self-skips (no network, no writes) unless AppConfig::ENABLE_DESCARTES_SCREENING == "1" AND the
+# Descartes RPS endpoint/credentials are configured. Wired here so it activates automatically once the
+# feature is enabled per env (go-live is counsel + vendor gated, never flipped by engineering).
+ResolveScreeningHolds:
+  every: 15m
+  class: ResolveScreeningHolds
+  queue: resolve_screening_holds
+  description: "Polls Descartes IMTimeStampSearch for restricted-party adjudication verdicts and releases or keeps holds. Self-skips when Descartes screening is disabled."

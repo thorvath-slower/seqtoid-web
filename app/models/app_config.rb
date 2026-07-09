@@ -31,6 +31,12 @@ class AppConfig < ApplicationRecord
   # this ships triple-dark. Go-live is counsel + vendor gated (CZID-335), never flipped by engineering.
   ENABLE_EXPORT_CONTROL_SCREEN_ONBOARDING = 'enable_export_control_screen_onboarding'.freeze
   ENABLE_EXPORT_CONTROL_SCREEN_RELEASE = 'enable_export_control_screen_release'.freeze
+  # CZID-598 -- watermark (ISO-8601 UTC string, no offset) for the Descartes Incident Manager resolution
+  # poller (ResolveScreeningHolds). Records the "To" bound of the last fully-processed IMTimeStampSearch
+  # window; the next poll starts its "From" here. Advanced ONLY after a reply is fully processed, so a
+  # failed poll re-covers the same window (idempotent re-processing). Empty/unset => first poll uses the
+  # API default 24h look-back. Inert until ENABLE_DESCARTES_SCREENING is on (the job self-skips when off).
+  DESCARTES_RESOLUTION_POLL_CURSOR = 'descartes_resolution_poll_cursor'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.
