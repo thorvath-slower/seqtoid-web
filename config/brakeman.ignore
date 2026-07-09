@@ -233,52 +233,6 @@
     {
       "warning_type": "SQL Injection",
       "warning_code": 0,
-      "fingerprint": "25be8d7c1a97ab58842679913ebaef5ce53654b99fd0b6df354fb65383170e58",
-      "check_name": "SQL",
-      "message": "Possible SQL injection",
-      "file": "app/helpers/samples_helper.rb",
-      "line": 586,
-      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
-      "code": "Arel.sql(\"CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime(\"%Y-%m-%d\")}' THEN 1 ELSE 0 END AS public\")",
-      "render_path": null,
-      "location": {
-        "type": "method",
-        "class": "SamplesHelper",
-        "method": "get_visibility_by_sample_id"
-      },
-      "user_input": "Time.current.strftime(\"%Y-%m-%d\")",
-      "confidence": "Medium",
-      "cwe_id": [
-        89
-      ],
-      "note": "False positive (ticket #293; re-confirmed CZID-189 triage 2026-07-08). The only interpolated value is Time.current.strftime('%Y-%m-%d') -- the server clock, format-constrained to \\d{4}-\\d{2}-\\d{2}. No user-input path reaches it; everything else is literal SQL."
-    },
-    {
-      "warning_type": "SQL Injection",
-      "warning_code": 0,
-      "fingerprint": "9d4f11869a5da26ecc639692fcaa0b9fecf36007495c9edf0fba5040a6ada1b1",
-      "check_name": "SQL",
-      "message": "Possible SQL injection",
-      "file": "app/helpers/samples_helper.rb",
-      "line": 597,
-      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
-      "code": "Arel.sql(\"CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime(\"%Y-%m-%d\")}' THEN 1 ELSE 0 END AS public\")",
-      "render_path": null,
-      "location": {
-        "type": "method",
-        "class": "SamplesHelper",
-        "method": "get_visibility_by_sample_id_and_current_power"
-      },
-      "user_input": "Time.current.strftime(\"%Y-%m-%d\")",
-      "confidence": "Medium",
-      "cwe_id": [
-        89
-      ],
-      "note": "False positive (ticket #293; re-confirmed CZID-189 triage 2026-07-08). The only interpolated value is Time.current.strftime('%Y-%m-%d') -- the server clock, format-constrained to \\d{4}-\\d{2}-\\d{2}. No user-input path reaches it; everything else is literal SQL."
-    },
-    {
-      "warning_type": "SQL Injection",
-      "warning_code": 0,
       "fingerprint": "7873603b15a3ebd096180c0a916a8d123d88e41a60e26667488de29c92f76ca6",
       "check_name": "SQL",
       "message": "Possible SQL injection",

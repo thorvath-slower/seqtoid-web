@@ -568,6 +568,21 @@ module SamplesHelper
     end
   end
 
+  # Builds the "public visibility" CASE expression used by the get_visibility_*
+  # helpers. The only dynamic value is the server clock date, which
+  # ActiveRecord::Base.sanitize_sql binds as a quoted parameter -- producing SQL
+  # identical to the previous string interpolation but without raw interpolation.
+  # This makes the safety explicit and removes the brakeman SQL-injection false
+  # positive (CZID-293); it does not change the query or its result.
+  def public_visibility_case_sql
+    Arel.sql(
+      ActiveRecord::Base.sanitize_sql(
+        ["CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < ? THEN 1 ELSE 0 END AS public",
+         Time.current.strftime("%Y-%m-%d"),]
+      )
+    )
+  end
+
   def get_visibility_by_sample_id(sample_ids)
     # When in conjunction with some filters, the query below was not returning the public property,
     # thus we need to get ids and redo the query independently
@@ -583,7 +598,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%Y-%m-%d')}' THEN 1 ELSE 0 END AS public"))]
+           .pluck("samples.id", public_visibility_case_sql)]
   end
 
   def get_visibility_by_sample_id_and_current_power(sample_ids, current_power)
@@ -594,7 +609,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%Y-%m-%d')}' THEN 1 ELSE 0 END AS public"))]
+           .pluck("samples.id", public_visibility_case_sql)]
   end
 
   # Takes an array of samples and uploads metadata for those samples.
