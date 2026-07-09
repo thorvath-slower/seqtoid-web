@@ -22,6 +22,30 @@ class AppConfig < ApplicationRecord
   # SEPARATE from ENABLE_EXPORT_CONTROL_LAYER3 (the gate flag): the screening core can be exercised in a
   # sandbox with this flag while the user-facing gate stays off.
   ENABLE_DESCARTES_SCREENING = 'enable_descartes_screening'.freeze
+  # CZID-600 -- export-control Layer 3 screening POLICY config. These carry counsel's operational choices
+  # (list scope, whitelist, cadence, hit-handling) as runtime config so they are drop-in without a deploy.
+  # They hold NO secret values (secrets are ENV/Chamber -- see ExportControl::ScreeningPolicy). Each is
+  # read through ExportControl::ScreeningPolicy and ships INERT / fail-closed by default, so the feature
+  # stays dark until counsel provisions values. Go-live is counsel + vendor gated (CZID-335).
+  #
+  # Which Descartes RPS list-groups to search (maps to the SearchEntity srpsgroupbypass field). Accepts
+  # counsel's group NAMES (comma/space/pipe separated, case-insensitive: Export, Munitions, GSA, Police,
+  # Banking, International) OR the raw numerals ("12"). Blank/unset => send empty => Descartes profile
+  # default. For our export-control use the relevant groups are Export (1) + Munitions (2).
+  EXPORT_CONTROL_RPS_GROUPS = 'export_control_rps_groups'.freeze
+  # JSON array of known-good institutional subjects to allow past a screening hold (the WL/AL allow-table
+  # -- cuts false positives for established UCSF users). Each entry matches a subject_ref ("User:42") or
+  # an email domain ("ucsf.edu" / "@ucsf.edu"), case-insensitive. Blank/unset => NOBODY is whitelisted
+  # (fail-closed default). Example: ["ucsf.edu", "User:1"].
+  EXPORT_CONTROL_SCREENING_WHITELIST = 'export_control_screening_whitelist'.freeze
+  # Re-screen cadence in DAYS -- how long a passing screen stays valid before a re-screen is due. Blank,
+  # zero, or non-positive => always re-screen (most conservative). Counsel sets the operational value.
+  EXPORT_CONTROL_RESCREEN_CADENCE_DAYS = 'export_control_rescreen_cadence_days'.freeze
+  # Hit-handling policy applied to a screening hold: "block" (deny outright), "hold" (place a hold and
+  # await human Incident-Manager adjudication -- DEFAULT), or "report" (hold + emit a report signal).
+  # Unknown/blank => "hold" (fail-closed; the policy is NEVER "allow" on a hit). Counsel owns the
+  # legally-correct response to a hit.
+  EXPORT_CONTROL_HIT_HANDLING = 'export_control_hit_handling'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.
