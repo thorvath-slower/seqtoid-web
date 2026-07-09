@@ -15,6 +15,13 @@ class BulkDownloadsController < ApplicationController
 
   before_action :set_bulk_download_and_validate_access_token, only: UPDATE_WITH_TOKEN_ACTIONS
 
+  # CZID-599 -- LIVE export-control screening at the RESULT-RELEASE backstop: screen before a bulk
+  # download is created (released). Full PASS-THROUGH (no screen call, no hold, normal flow) unless
+  # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 == "1" AND the release toggle is on AND Descartes screening
+  # is enabled -- ships triple-DARK, counsel/vendor-gated (CZID-335). See ExportControlScreeningGate
+  # (included via ApplicationController).
+  before_action :screen_export_control_release, only: [:create]
+
   # GET /bulk_downloads/types
   def types
     workflow = params[:workflow]
