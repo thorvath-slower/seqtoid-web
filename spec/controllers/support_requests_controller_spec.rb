@@ -66,9 +66,34 @@ RSpec.describe SupportRequestsController, type: :controller do
         # Log deep-links are constructed and filtered to this session/user.
         expect(captured[:log_links][:cloudwatch_logs_insights]).to include("cloudwatch")
         expect(captured[:log_links][:otel_dashboard]).to include(captured[:correlation_id])
-        # The OTel step-by-step is scaffolded pending #472 (not faked).
+        # (CZID-472) With no SUPPORT_LOG_GROUP configured (test env) the live
+        # action-log query is inert, so no synthesized steps -- but the operator
+        # still gets a one-click deep-link to the raw per-user action-log trail.
         expect(captured[:action_log_steps]).to be_nil
-        expect(captured[:log_links][:otel_action_log]).to be_nil
+        expect(captured[:log_links][:otel_action_log]).to include("logs-insights")
+      end
+
+      context "when SUPPORT_LOG_GROUP is configured and the action log has entries" do
+        before do
+          stub_const("ENV", ENV.to_hash.merge("SUPPORT_LOG_GROUP" => "/seqtoid/support"))
+        end
+
+        it "attaches the parsed action-log steps and folds them into the summary" do
+          steps = [
+            { at: "2026-07-09T10:00:00Z", action: "project.create", outcome: "ok" },
+            { at: "2026-07-09T10:01:00Z", action: "bulk_download.create", outcome: "error", error_class: "RuntimeError" },
+          ]
+          allow(SupportActionLogQuery).to receive(:recent_steps).and_return(steps)
+
+          captured = nil
+          allow(LogUtil).to receive(:log_message) { |_msg, **payload| captured = payload }
+
+          post :create, params: valid_params
+
+          expect(captured[:action_log_steps]).to eq(steps)
+          expect(captured[:summary]).to include("Recent steps:")
+          expect(captured[:summary]).to include("bulk_download.create (error)")
+        end
       end
 
       it "falls back to a generic runbook when nothing matches" do
