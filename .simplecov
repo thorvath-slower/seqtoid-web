@@ -22,7 +22,13 @@ SimpleCov.start 'rails' do
   #
   # Line coverage measures % of lines executed.
   # Branch coverage measures % of conditional branches executed.
-  minimum_coverage line: 61, branch: 46
+  #
+  # When the suite is sharded across CI runner jobs (CZID-542, SHARD_INDEX set),
+  # each shard executes only its --only-group slice, so its per-shard coverage is
+  # naturally far below the whole-suite floor -- enforcing here would red every
+  # shard. The floor is instead enforced once on the COLLATED result in
+  # bin/collate-coverage. A serial/local run (no SHARD_INDEX) still enforces here.
+  minimum_coverage line: 61, branch: 46 unless ENV["SHARD_INDEX"]
 
   # Exclude mostly manual tasks for now:
   add_filter "/lib/tasks"
