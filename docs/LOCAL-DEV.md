@@ -46,6 +46,24 @@ The only thing that still needs real AWS is the **S3 sample-upload** step
 (`samples#upload_credentials` → STS) — that is the genuine cloud boundary; the rest of the
 app runs fully offline.
 
+### First boot: build assets, then restart web (CZID-298)
+
+On a **fresh clone** the `web` container comes up before the production asset bundles
+exist, so the landing page 500s until you build them once and restart:
+
+```bash
+docker compose exec -T web bash -lc 'npm run build-img'   # emit app/assets/dist/*.bundle.min.js
+docker compose restart web                                 # pick up the fresh bundles
+```
+
+Two things make this reliable and are already wired into `docker-compose.yml`:
+
+- The `web` service carries an **anonymous `/app/node_modules` volume** so the `.:/app`
+  bind mount does not shadow the image-baked `node_modules` — otherwise `build-img`
+  fails with `webpack: not found`.
+- After the restart the landing + authed pages render cleanly. (For the *inner-loop*
+  frontend flow use `make local-start-webapp` / `npm start` instead — see below.)
+
 ### Log in offline
 
 Auth0 needs a client id you won't have offline. Local dev bypasses it:

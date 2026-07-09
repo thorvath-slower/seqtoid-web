@@ -124,6 +124,12 @@ services:
     platform: linux/amd64
     volumes:
       - .:/app
+      # Anonymous volume so the `.:/app` bind mount does NOT shadow the
+      # image-baked /app/node_modules (webpack and the rest of the build deps).
+      # Without this, a fresh clone's empty node_modules masks the built deps ->
+      # `npm run build-img` fails with `webpack: not found` -> no asset bundles ->
+      # the landing page 500s. See CZID-298.
+      - /app/node_modules
       - ./log:/app/log
       - ./tmp:/app/tmp
       - ./db:/app/db
