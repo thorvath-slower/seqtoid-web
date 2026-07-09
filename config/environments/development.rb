@@ -228,4 +228,12 @@ Rails.application.configure do
     Bullet.rails_logger = true
     Bullet.skip_html_injection = false
   end
+
+  # Allow web-console's error page (with the full exception body) to render for
+  # requests coming from the Docker bridge network. By default web-console only
+  # trusts loopback, so in local docker-compose dev (client IP is the 172.16/12
+  # bridge, not 127.0.0.1) it blanks the 500 body and hides the real exception.
+  # LOCAL/dev-only -- this file is the development env and is never loaded in a
+  # deployed environment. See CZID-298.
+  config.web_console.permissions = "172.16.0.0/12"
 end
