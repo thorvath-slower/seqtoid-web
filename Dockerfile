@@ -134,8 +134,12 @@ ENV GIT_VERSION=${GIT_COMMIT}
 #    RDS_ADDRESS/DB_* env vars; precompile is lazy and never opens the connection.
 #  - SECRET_KEY_BASE : prod.rb reads ENV["SECRET_KEY_BASE"] directly; a dummy value satisfies
 #    boot without baking a real secret into the build.
+#  - REDISCLOUD_URL : prod.rb builds `config.cache_store` url as ENV['REDISCLOUD_URL'] + '/0/cache'
+#    at boot, so it must be a non-nil string. redis_cache_store connects lazily (only on the
+#    first cache read/write), which precompile never does, so a dummy localhost URL is enough.
 RUN SECRET_KEY_BASE=dummydummydummydummydummydummydummydummydummydummydummydummy \
   DATABASE_URL="mysql2://u:p@127.0.0.1/dummy" \
+  REDISCLOUD_URL="redis://127.0.0.1:6379" \
   RAILS_ENV=prod \
   bundle exec rails assets:precompile \
   && ls -l public/assets | head -20
