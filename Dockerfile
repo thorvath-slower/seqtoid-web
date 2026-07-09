@@ -115,32 +115,33 @@ ARG GIT_COMMIT
 ENV GIT_VERSION=${GIT_COMMIT}
 
 # #544: Precompile the Sprockets assets (application.css et al.) into public/assets so the
-# runtime image ships them. prod.rb has config.assets.compile off (the on-the-fly fallback is
-# disabled), so without precompiled assets the server-rendered landing page 500s with
-# Sprockets::Rails::Helper::AssetNotPrecompiledError (HomeController#landing). This runs AFTER
-# `npm run build-img`, so the webpack dist bundles that application.css `//= require`s exist.
+# runtime image ships them. In the deployed envs config.assets.compile is off (prod.rb line 49
+# commented; dev has the check disabled), so without precompiled assets the server-rendered
+# landing page 500s with Sprockets::Rails::Helper::AssetNotPrecompiledError (HomeController#
+# landing). This runs AFTER `npm run build-img`, so the webpack dist bundles that application.css
+# `//= require`s already exist.
 #
 # Boot env for the precompile:
-#  - RAILS_ENV=prod : the strict deployed env whose config.assets.compile is off and therefore
-#    REQUIRES precompiled assets. The one image is promoted to every tier, and the Sprockets
-#    manifest written under public/assets is read env-agnostically at serve time, so the
-#    dev/staging/sandbox tiers (RAILS_ENV=development/staging/sandbox, per bin/deploy) serve the
-#    same precompiled assets. NOT `production` -- this app has no `production` DB config (envs:
-#    development/deployed/prod/staging/sandbox), which is exactly why the earlier attempt (#204)
-#    died with ActiveRecord::AdapterNotSpecified before precompiling anything.
-#  - assets:precompile is a rake task, so Rails forces config.eager_load=false regardless of
-#    prod.rb -- no app models are loaded, so no boot-time DB connection is attempted.
+#  - RAILS_ENV=development : the env this deployed image actually boots + serves as (bin/deploy
+#    maps dev->development, and DEV is where the app runs and where the Sentry 500s fired). It is
+#    the runtime-validated env and boots cleanly here: its redis cache_store + session_store are
+#    inside an `if tmp/caching-dev.txt exists` block (false in the build -> null_store), so no
+#    REDISCLOUD_URL is needed and no config-method assignment fails. NOT `production` -- this app
+#    has no `production` DB config (envs: development/deployed/prod/staging/sandbox), which is why
+#    the earlier attempt (#204) died with ActiveRecord::AdapterNotSpecified. NOT `prod` either:
+#    prod.rb is not yet runtime-validated and aborts boot on latent bugs (ENV['REDISCLOUD_URL']
+#    + '/0/cache' with no redis var; `config.session_store =` is a removed setter in Rails 7.1).
+#    The Sprockets manifest written under public/assets is read env-agnostically at serve time --
+#    content-hashed digests, asset_host applied at render time -- so the same precompiled assets
+#    serve every tier (dev/staging/sandbox/prod) once those prod.rb boot bugs are fixed.
+#  - assets:precompile is a rake task, so Rails forces config.eager_load=false -- no app models
+#    are loaded, so no boot-time DB connection is attempted.
 #  - DATABASE_URL : a dummy, parseable URL so the DB config resolves without the real
 #    RDS_ADDRESS/DB_* env vars; precompile is lazy and never opens the connection.
-#  - SECRET_KEY_BASE : prod.rb reads ENV["SECRET_KEY_BASE"] directly; a dummy value satisfies
-#    boot without baking a real secret into the build.
-#  - REDISCLOUD_URL : prod.rb builds `config.cache_store` url as ENV['REDISCLOUD_URL'] + '/0/cache'
-#    at boot, so it must be a non-nil string. redis_cache_store connects lazily (only on the
-#    first cache read/write), which precompile never does, so a dummy localhost URL is enough.
+#  - SECRET_KEY_BASE : a dummy value so boot never needs a real secret baked into the build.
 RUN SECRET_KEY_BASE=dummydummydummydummydummydummydummydummydummydummydummydummy \
   DATABASE_URL="mysql2://u:p@127.0.0.1/dummy" \
-  REDISCLOUD_URL="redis://127.0.0.1:6379" \
-  RAILS_ENV=prod \
+  RAILS_ENV=development \
   bundle exec rails assets:precompile \
   && ls -l public/assets | head -20
 
