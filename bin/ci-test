@@ -39,7 +39,35 @@ echo "::endgroup::"
 # so local runs never hard-break.
 PARALLEL_N="$(command -v nproc >/dev/null 2>&1 && nproc || echo 2)"
 
-if bundle exec parallel_test --version >/dev/null 2>&1; then
+if [ -n "${SHARD_INDEX:-}" ] && [ -n "${SHARD_TOTAL:-}" ]; then
+  # CZID-542: cross-runner sharding. This process runs ONLY its group slice
+  # (--only-group), balanced across shards by runtime. Each shard is a separate
+  # GitHub Actions matrix job; SimpleCov results are collated afterward
+  # (bin/collate-coverage). Off by default, so a plain local/serial run
+  # (no SHARD_INDEX) keeps the identical behavior below -- the SSOT holds.
+  echo "::group::Shard ${SHARD_INDEX}/${SHARD_TOTAL}: create + load all ${SHARD_TOTAL} parallel schemas"
+  # Prepare every parallel schema (idseq_test, idseq_test2 .. idseq_test<N>) on this
+  # runner, exactly like the non-sharded parallel path below. --only-group runs a
+  # single process, but parallel_tests picks that process's TEST_ENV_NUMBER (hence its
+  # DB) internally; preparing all N makes the shard robust to that numbering rather
+  # than guessing it. Reuses the proven parallel:* rake tasks. Each shard has its own
+  # fresh MySQL service container, so this cannot collide across shards.
+  bundle exec rake "parallel:drop[${SHARD_TOTAL}]" \
+                   "parallel:create[${SHARD_TOTAL}]" \
+                   "parallel:load_schema[${SHARD_TOTAL}]"
+  echo "::endgroup::"
+
+  echo "::group::RSpec (shard ${SHARD_INDEX} of ${SHARD_TOTAL}, --group-by runtime)"
+  # --only-group runs just this shard's slice; --group-by runtime balances by the
+  # committed timing log (tmp/parallel_runtime_rspec.log) when present, else falls
+  # back to file size. parallel_rspec prints one final "N examples, M failures"
+  # line for this shard's slice; the collate job sums those across shards.
+  SAMPLES_BUCKET_NAME=idseq-samples-development \
+    bundle exec parallel_rspec -n "${SHARD_TOTAL}" \
+      --only-group "${SHARD_INDEX}" \
+      --group-by runtime
+  echo "::endgroup::"
+elif bundle exec parallel_test --version >/dev/null 2>&1; then
   echo "::group::Create + load ${PARALLEL_N} parallel MySQL schemas"
   # parallel:drop first so reloads start clean (MySQL force:cascade drops trip FK
   # constraints when tables already exist); idempotent on fresh DBs. load_schema mirrors

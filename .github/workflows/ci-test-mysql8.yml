@@ -1,11 +1,18 @@
 name: ci-test (mysql 8)
 
-# PR test gate for seqtoid-web running the Rails suite against MySQL 8 — the chosen
+# PR test gate for seqtoid-web running the Rails suite against MySQL 8 -- the chosen
 # forward database (CZID-281). Runs bin/ci-test, the exact same SSOT script the local
 # harness runs (bin/ci-local), so local and CI cannot drift (CZID-109). Self-contained
 # (dummy AWS creds + service containers), so it runs in the fork with no cloud access.
 # Replaces the former Postgres gate (the Postgres direction was superseded by MySQL 8;
 # Postgres lives on in the V1/V3 variants).
+#
+# CZID-542: the Ruby suite is sharded across SHARD_TOTAL runner jobs (a GitHub Actions
+# matrix). Each shard runs only its --only-group slice (balanced by runtime) against its
+# own MySQL schema; a final collate job merges the per-shard SimpleCov results into one
+# coverage number and runs the promotion regression gate off that collated result. This
+# is a follow-up to the in-runner parallel_tests work (parallel_tests caps at a single
+# runner's core count, ~2 on ubuntu-latest).
 
 on:
   pull_request:
@@ -17,15 +24,27 @@ concurrency:
   group: ci-test-mysql8-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
+env:
+  # Modest shard count (2-4): diminishing returns + rising per-run infra-flake
+  # probability past ~4, since each shard re-pays container pull / mysql boot.
+  SHARD_TOTAL: 4
+
 jobs:
   ruby_test_mysql8:
-    name: Ruby Test (MySQL 8)
+    name: Ruby Test (MySQL 8) shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
     container: ruby:3.3.6
+    strategy:
+      # Never cancel sibling shards on one shard's failure -- we want every shard's
+      # result (and coverage artifact) so the collate job stays fail-closed rather than
+      # merging a partial set.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
-      # Dummy secret — test only.
+      # Dummy secret -- test only.
       AUTH_TOKEN_SECRET: 'GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ='
-      # Connect as root/empty-password — matches the local CI harness
+      # Connect as root/empty-password -- matches the local CI harness
       # (docker-compose.ci.yml) so privileges (db:drop/create/load) and behavior align.
       DB_USERNAME: root
       DB_PASSWORD: ''
@@ -35,6 +54,8 @@ jobs:
       AWS_ACCOUNT_ID: test
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
+      # CZID-542: this shard runs only its --only-group slice (see bin/ci-test).
+      SHARD_INDEX: ${{ matrix.shard }}
     services:
       redis:
         image: redis
@@ -69,17 +90,68 @@ jobs:
           key: ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems-${{ hashFiles('**/Gemfile.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems
-      - name: Run CI test suite
+      - name: Run CI test suite (shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }})
         # SINGLE SOURCE OF TRUTH: bin/ci-test (deps + schema load + rspec) is the exact
         # same script the local harness runs (bin/ci-local). Local and CI can't drift. (CZID-109.)
-        # Tee'd so the regression gate can read the RSpec summary; pipefail keeps ci-test's exit
-        # authoritative. shell:bash — the job's default step shell is dash (sh), which lacks pipefail.
+        # SHARD_INDEX/SHARD_TOTAL select this shard's slice; unset locally = identical serial run.
+        # Tee'd so the collate job can sum each shard's RSpec summary; pipefail keeps ci-test's exit
+        # authoritative. shell:bash -- the job's default step shell is dash (sh), which lacks pipefail.
         shell: bash
         run: |
           set -o pipefail
           bash bin/ci-test 2>&1 | tee "$RUNNER_TEMP/suite.log"
+      - name: Stage shard results
+        # Runs even when this shard's tests failed (but not on cancellation), so the
+        # collate job still sees this shard's coverage + summary. resultset.json is
+        # copied to a non-dot name to avoid upload-artifact's hidden-file skip.
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          mkdir -p shard-out
+          cp coverage/.resultset.json shard-out/resultset.json 2>/dev/null || echo '{}' > shard-out/resultset.json
+          cp "$RUNNER_TEMP/suite.log" shard-out/suite.log 2>/dev/null || true
+      - name: Upload shard results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-results-${{ matrix.shard }}
+          path: shard-out/
+          retention-days: 1
 
-      - name: Fetch regression comparator (platform-harness — single source of metric truth)
+  collate:
+    name: Collate coverage + regression gate
+    needs: ruby_test_mysql8
+    # Run on success OR a shard's test failure, but not on cancellation. A failed shard
+    # already reds the run; collate still produces the collated coverage + regression check.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    container: ruby:3.3.6
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+      - name: Install simplecov (standalone -- no app bundle needed to collate)
+        # Pin to the Gemfile.lock version so the collated percentage matches the suite.
+        shell: bash
+        run: gem install simplecov -v 0.22.0 --no-document
+      - name: Download shard results
+        uses: actions/download-artifact@v4
+        with:
+          path: shard-artifacts
+          pattern: shard-results-*
+      - name: Collate coverage (fail-closed on a missing shard)
+        # Merges every shard's SimpleCov resultset into coverage/.last_run.json and
+        # re-applies the whole-suite minimum floor. Exits non-zero if fewer than
+        # SHARD_TOTAL resultsets are present -- never merge a partial set.
+        shell: bash
+        env:
+          EXPECTED_SHARDS: ${{ env.SHARD_TOTAL }}
+          SHARD_ARTIFACT_DIR: shard-artifacts
+        run: ruby bin/collate-coverage
+      - name: Aggregate RSpec summary across shards
+        shell: bash
+        run: ruby bin/aggregate-rspec-summary shard-artifacts "$RUNNER_TEMP/suite.log"
+
+      - name: Fetch regression comparator (platform-harness -- single source of metric truth)
         if: ${{ github.base_ref == 'main' }}
         uses: actions/checkout@v6
         with:
@@ -89,8 +161,9 @@ jobs:
           fetch-depth: 1
 
       - name: Regression gate (baseline delta vs .regression-baseline.json)
-        # Only enforced on integration→main promotions. Catches a suite that silently shrank,
-        # coverage that slid, or new failures — beyond the plain green/red of bin/ci-test above.
+        # Only enforced on integration->main promotions. Reads the COLLATED coverage
+        # and the summed cross-shard RSpec summary -- catches a suite that silently
+        # shrank, coverage that slid, or new failures.
         if: ${{ github.base_ref == 'main' }}
         shell: bash
         run: |
