@@ -1434,7 +1434,11 @@ class SamplesController < ApplicationController
     else
       respond_to do |format|
         format.html {}
-        format.json { @sample.first_pipeline_run.get_pipeline_run_logs }
+        # The json format must explicitly render. Previously the block only
+        # computed get_pipeline_run_logs and returned it without rendering, so
+        # Rails fell through to default template lookup and raised
+        # ActionController::UnknownFormat (no pipeline_logs.json template).
+        format.json { render json: @sample.first_pipeline_run.get_pipeline_run_logs }
       end
     end
   end

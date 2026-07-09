@@ -318,20 +318,20 @@ RSpec.describe "Samples (coverage3) request", type: :request do
   end
 
   describe "GET /samples/:id/pipeline_logs.json (admin, with a run)" do
-    # BUG (flagged on #585): in the json format the action computes
-    # `@sample.first_pipeline_run.get_pipeline_run_logs` but never renders it, so
-    # Rails raises ActionController::UnknownFormat (500 in prod) for a sample that
-    # HAS a pipeline run. Same class of latent controller bug as #192's #561/#562.
-    # We pin the CURRENT behavior; DO NOT fix app code here (separate Forgejo bug).
-    it "raises UnknownFormat because the json format never renders (pins bug)" do
+    # FIXED (CZID-587): the json format now explicitly renders the logs. Prior to
+    # the fix the action computed `get_pipeline_run_logs` without rendering, so
+    # Rails fell through to default template lookup and raised
+    # ActionController::UnknownFormat (500 in prod) for a sample that HAS a run.
+    it "renders the pipeline run logs as json" do
       sample = sample_for(@admin)
       create(:pipeline_run, sample: sample)
       sign_in @admin
-      allow_any_instance_of(PipelineRun).to receive(:get_pipeline_run_logs).and_return(["logs"])
+      allow_any_instance_of(PipelineRun).to receive(:get_pipeline_run_logs).and_return(["log line 1", "log line 2"])
 
-      expect do
-        get "/samples/#{sample.id}/pipeline_logs.json"
-      end.to raise_error(ActionController::UnknownFormat)
+      get "/samples/#{sample.id}/pipeline_logs.json"
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to eq(["log line 1", "log line 2"])
     end
   end
 
