@@ -22,6 +22,15 @@ class AppConfig < ApplicationRecord
   # SEPARATE from ENABLE_EXPORT_CONTROL_LAYER3 (the gate flag): the screening core can be exercised in a
   # sandbox with this flag while the user-facing gate stays off.
   ENABLE_DESCARTES_SCREENING = 'enable_descartes_screening'.freeze
+  # CZID-599 -- per-gate-point toggles for the LIVE export-control screening gate (ExportControlScreeningGate).
+  # Each turns the ScreeningService caller ON at ONE point, and ONLY when the master
+  # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 is also "1". Both default OFF, so the gate hooks are a full
+  # PASS-THROUGH (no screen call, no hold, normal user flow) until counsel + the license enable them.
+  # Separate flags so the onboarding backstop and the result-release backstop can be turned on
+  # independently. Screening is ADDITIONALLY gated by ENABLE_DESCARTES_SCREENING (screen_if_enabled), so
+  # this ships triple-dark. Go-live is counsel + vendor gated (CZID-335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_SCREEN_ONBOARDING = 'enable_export_control_screen_onboarding'.freeze
+  ENABLE_EXPORT_CONTROL_SCREEN_RELEASE = 'enable_export_control_screen_release'.freeze
   # CZID-598 -- watermark (ISO-8601 UTC string, no offset) for the Descartes Incident Manager resolution
   # poller (ResolveScreeningHolds). Records the "To" bound of the last fully-processed IMTimeStampSearch
   # window; the next poll starts its "From" here. Advanced ONLY after a reply is fully processed, so a

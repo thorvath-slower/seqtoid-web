@@ -11,6 +11,11 @@ class ApplicationController < ActionController::Base
   # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 == "1", so it ships DARK; go-live is counsel/vendor-gated
   # (CZID-292/278/335). See ExportControlLayer3Gate.
   before_action :require_export_control_layer3
+  # CZID-599 -- LIVE export-control screening at the ONBOARDING backstop. Runs AFTER the Layer 3 gate.
+  # Full PASS-THROUGH (no screen call, no hold, normal flow) unless AppConfig::ENABLE_EXPORT_CONTROL_LAYER3
+  # == "1" AND the onboarding toggle is on AND Descartes screening is enabled -- ships triple-DARK,
+  # counsel/vendor-gated (CZID-335). See ExportControlScreeningGate.
+  before_action :screen_export_control_onboarding
   before_action :check_rack_mini_profiler
   before_action :check_browser
   before_action :set_current_context_for_logging!
@@ -23,6 +28,7 @@ class ApplicationController < ActionController::Base
   include ApplicationHelper
   include ExportControlAttestationGate # CZID-330 — provides require_export_control_attestation
   include ExportControlLayer3Gate # CZID-285/286 — provides require_export_control_layer3
+  include ExportControlScreeningGate # CZID-599 -- provides screen_export_control_onboarding / _release
 
   current_power do
     Power.new(current_user)
