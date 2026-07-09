@@ -81,4 +81,29 @@ RSpec.describe Auth0UserManagementHelper, type: :helper do
       end
     end
   end
+
+  # CZID-389: guard the Auth0 management domain so a scheme-prefixed env var cannot be
+  # mistaken for the host ("https://https://tenant" -> host "https" -> SocketError to
+  # https:443 during GraphqlController#execute).
+  describe "#normalize_auth0_domain" do
+    it "passes a bare host through unchanged" do
+      expect(Auth0UserManagementHelper.normalize_auth0_domain("tenant.auth0.com")).to eq("tenant.auth0.com")
+    end
+
+    it "strips a leading https:// scheme" do
+      expect(Auth0UserManagementHelper.normalize_auth0_domain("https://tenant.auth0.com")).to eq("tenant.auth0.com")
+    end
+
+    it "strips a leading http:// scheme and a trailing slash" do
+      expect(Auth0UserManagementHelper.normalize_auth0_domain("http://tenant.auth0.com/")).to eq("tenant.auth0.com")
+    end
+
+    it "returns nil when the env var is unset" do
+      expect(Auth0UserManagementHelper.normalize_auth0_domain(nil)).to be_nil
+    end
+
+    it "returns the value unchanged when it is blank" do
+      expect(Auth0UserManagementHelper.normalize_auth0_domain("")).to eq("")
+    end
+  end
 end
