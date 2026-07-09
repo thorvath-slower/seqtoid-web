@@ -22,15 +22,26 @@ Rails.application.configure do
   # Full error reports are disabled and caching is turned on.
   config.consider_all_requests_local       = false
   config.action_controller.perform_caching = true
-  config.cache_store = :redis_cache_store,
-                       {
-                         url: ENV['REDISCLOUD_URL'] + '/0/cache',
-                         # Needed for redis to evict keys in volatile-lru mode
-                         expires_in: 30.days,
-                       }
-  config.session_store = :cookie_store, {
-    key: '_czid_session',
-  }
+  # Guard the Redis cache store on REDISCLOUD_URL being present. Without the guard,
+  # `ENV['REDISCLOUD_URL'] + '/0/cache'` is `nil + '/0/cache'` -> NoMethodError at config
+  # load, which ABORTS boot before the app can serve anything. When the var is set the
+  # behavior is unchanged; when it is unset we fall back to :null_store, matching how
+  # development.rb degrades when caching is disabled. (#594)
+  if ENV['REDISCLOUD_URL'].present?
+    config.cache_store = :redis_cache_store,
+                         {
+                           url: ENV['REDISCLOUD_URL'] + '/0/cache',
+                           # Needed for redis to evict keys in volatile-lru mode
+                           expires_in: 30.days,
+                         }
+  else
+    config.cache_store = :null_store
+  end
+  # Rails 7.1 removed the `config.session_store = ...` assignment form: it routes through
+  # Railtie::Configuration#method_missing and raises NoMethodError ("Cannot assign to
+  # `session_store`, it is a configuration method"), aborting boot. Use the supported
+  # method-call form instead. (#594)
+  config.session_store :cookie_store, key: '_czid_session'
   # Ensures that a master key has been made available in either ENV["RAILS_MASTER_KEY"]
   # or in config/master.key. This key is used to decrypt credentials (and other encrypted files).
   # config.require_master_key = true

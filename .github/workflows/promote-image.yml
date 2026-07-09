@@ -121,7 +121,12 @@ jobs:
           # 2) Boot the web process briefly and probe the health endpoint. Best-effort port probe:
           #    if the container exposes 3000, we curl /health; otherwise the runnable check above is
           #    the gate. (Kept resilient so a health-route rename can't wedge promotion silently.)
-          CID="$(docker run -d -p 3000:3000 -e RAILS_ENV=production "$IMAGE" || true)"
+          # This app has NO `production` RAILS_ENV (envs: development/prod/staging/sandbox/test);
+          # bin/deploy maps the deployed tiers onto those names and the shipped container boots as
+          # RAILS_ENV=development (dev->development). Boot the smoke test as `development` so it
+          # exercises the env the image actually runs as, instead of a nonexistent `production`
+          # that Rails silently falls back to development for anyway. (#594)
+          CID="$(docker run -d -p 3000:3000 -e RAILS_ENV=development "$IMAGE" || true)"
           if [ -n "$CID" ]; then
             for _ in $(seq 1 30); do
               if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
