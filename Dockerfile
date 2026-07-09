@@ -139,8 +139,19 @@ ENV GIT_VERSION=${GIT_COMMIT}
 #  - DATABASE_URL : a dummy, parseable URL so the DB config resolves without the real
 #    RDS_ADDRESS/DB_* env vars; precompile is lazy and never opens the connection.
 #  - SECRET_KEY_BASE : a dummy value so boot never needs a real secret baked into the build.
+#  - AWS_REGION/AWS_DEFAULT_REGION : precompile boots the full env, and s3.rb constructs
+#    Aws::S3::Client.new at load; the AWS SDK requires a region at construction, which the
+#    runtime env supplies but the build does not. A region (no credentials, no connection)
+#    lets boot proceed. Value mirrors the app's us-west-2 home region.
+#  - ASSETS_PRECOMPILE=1 : a build-only marker (never set at runtime) read by
+#    config/initializers/elasticsearch.rb to SKIP wiring the live search client -- the
+#    OpensearchCircuit wrapper is not needed to compile assets and pulling it in at build
+#    time is avoidable. Runtime behavior is unchanged because the flag is absent there.
 RUN SECRET_KEY_BASE=dummydummydummydummydummydummydummydummydummydummydummydummy \
   DATABASE_URL="mysql2://u:p@127.0.0.1/dummy" \
+  AWS_REGION=us-west-2 \
+  AWS_DEFAULT_REGION=us-west-2 \
+  ASSETS_PRECOMPILE=1 \
   RAILS_ENV=development \
   bundle exec rails assets:precompile \
   && ls -l public/assets | head -20
