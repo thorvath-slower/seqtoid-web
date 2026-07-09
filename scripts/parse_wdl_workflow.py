@@ -60,7 +60,13 @@ def insert_declarations(task_inputs, decls):
         for task in task_inputs.keys():
             if f"WorkflowInput.{decl}" in task_inputs[task]:
                 task_inputs[task].remove(f"WorkflowInput.{decl}")
-                task_inputs[task].extend(inputs)
+                # A declaration may resolve to bare workflow-input names or to
+                # already-qualified "Task.output" references. Prefix only the bare
+                # names with "WorkflowInput." (mirroring read_call_task); leave
+                # already-dotted task-output references untouched.
+                task_inputs[task].extend(
+                    ref if "." in ref else f"WorkflowInput.{ref}" for ref in inputs
+                )
     return task_inputs
 
 
@@ -96,6 +102,8 @@ def parse_workflow_task(task):
         return read_conditional_task(task)
     elif isinstance(task, WDL.Tree.Decl):
         return read_declaration_task(task)
+
+    raise Exception(f"Unsupported task [{task}] type [{type(task)}]")
 
 
 def read_call_task(call):
@@ -149,16 +157,18 @@ def parse_input_item(reference):
         return parse_apply_expression(reference)
     elif isinstance(reference, WDL.Expr.Array):
         return parse_array_expression(reference)
-    elif isinstance(reference, (WDL.Expr.String, WDL.Expr.Int, WDL.Expr.Float, WDL.Expr.Boolean)):
+    elif isinstance(reference, (WDL.Expr.String, WDL.Expr.Int, WDL.Expr.Float, WDL.Expr.Boolean, WDL.Expr.Null)):
         return []  # ignore hard-coded constants
 
-    raise Exception(f"Unsupported reference: {reference}")
+    raise Exception(f"Unsupported reference [{reference}] type [{type(reference)}]")
 
 
 def parse_get_expression(get_exp):
     expression = get_exp.expr
     if isinstance(expression, WDL.Expr.Ident):
         return [str(expression.name)]
+
+    raise Exception(f"Unsupported expression [{expression}] for get_exp [{get_exp}] type [{type(expression)}]")
 
 
 def parse_apply_expression(apply_exp):
@@ -167,6 +177,8 @@ def parse_apply_expression(apply_exp):
         return parse_array_expression(apply_exp.arguments[0])
     elif function_name == DEFINED:
         return []
+
+    raise Exception(f"Unsupported function_name [{function_name}] for apply_exp [{apply_exp}]")
 
 
 def parse_array_expression(array_exp):
@@ -214,13 +226,13 @@ def main():
     if not doc.workflow:
         raise NoWorkflowError("No valid WDL workflow found.")
     # collect stage inputs
-    workflow_inputs = get_workflow_input_information(doc.workflow.inputs)
+    workflow_inputs = get_workflow_input_information(doc.workflow.inputs or [])
     # collect task names and inputs
     task_inputs, task_names, declarations = get_task_information(doc.workflow.body)
     # insert declarations into task inputs
     task_inputs = insert_declarations(task_inputs, declarations)
     file_basenames = get_file_basenames(doc.tasks)
-    outputs = get_output_aliases(doc.workflow.outputs)
+    outputs = get_output_aliases(doc.workflow.outputs or [])
     parsed = {
         "inputs": workflow_inputs,
         "task_names": task_names,
