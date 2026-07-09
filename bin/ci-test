@@ -57,15 +57,24 @@ if [ -n "${SHARD_INDEX:-}" ] && [ -n "${SHARD_TOTAL:-}" ]; then
                    "parallel:load_schema[${SHARD_TOTAL}]"
   echo "::endgroup::"
 
-  echo "::group::RSpec (shard ${SHARD_INDEX} of ${SHARD_TOTAL}, --group-by runtime)"
-  # --only-group runs just this shard's slice; --group-by runtime balances by the
-  # committed timing log (tmp/parallel_runtime_rspec.log) when present, else falls
-  # back to file size. parallel_rspec prints one final "N examples, M failures"
-  # line for this shard's slice; the collate job sums those across shards.
+  # --only-group runs just this shard's slice. --group-by runtime balances by the
+  # committed timing log (tmp/parallel_runtime_rspec.log), but parallel_tests reads
+  # that log eagerly and aborts (Errno::ENOENT) the moment the flag is passed without
+  # one. The log lives under tmp/, which is gitignored (/tmp/*), so it is absent on a
+  # fresh CI checkout -- passing --group-by runtime unconditionally hard-fails every
+  # shard. Only enable it when the log actually exists; otherwise let parallel_tests
+  # use its default grouping (runtime-if-present, filesize fallback), which is exactly
+  # what the non-sharded parallel path below relies on. parallel_rspec prints one final
+  # "N examples, M failures" line for this shard's slice; the collate job sums those.
+  group_by_args=()
+  if [ -f tmp/parallel_runtime_rspec.log ]; then
+    group_by_args=(--group-by runtime)
+  fi
+  echo "::group::RSpec (shard ${SHARD_INDEX} of ${SHARD_TOTAL})"
   SAMPLES_BUCKET_NAME=idseq-samples-development \
     bundle exec parallel_rspec -n "${SHARD_TOTAL}" \
       --only-group "${SHARD_INDEX}" \
-      --group-by runtime
+      "${group_by_args[@]+"${group_by_args[@]}"}"
   echo "::endgroup::"
 elif bundle exec parallel_test --version >/dev/null 2>&1; then
   echo "::group::Create + load ${PARALLEL_N} parallel MySQL schemas"
