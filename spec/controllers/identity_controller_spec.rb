@@ -5,8 +5,9 @@ RSpec.describe IdentityController, type: :controller do
 
   before do
     sign_in @joe
-    # Generate a private key and store in tmp
-    Open3.capture3("openssl ecparam -name secp384r1 -genkey -noout -out /tmp/czid-private-key.pem")
+    # The ES-384 signing key at /tmp/czid-private-key.pem is generated once per shard by
+    # spec/support/token_signing_key.rb (before(:suite)), so every token spec has it
+    # regardless of shard/order -- no per-example regeneration needed here.
   end
 
   describe "GET #identify" do
