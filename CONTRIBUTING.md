@@ -48,7 +48,9 @@ ticket is an **epic**: break it into child tickets **before** starting work.
 Exemplar: CZID-100 (171 test failures) -> CZID-103 through 107, one small PR each.
 
 ### 4. Traceability -- always answer "where did this come from"
-- **Branch:** `cat-<NNN>-short-slug` (e.g. `bug-111-puma-rack3`, `czid-108-conventions`).
+- **Branch:** `cat-<NNN>-short-slug` (e.g. `bug-111-puma-rack3`, `czid-108-conventions`),
+  cut off `main` and opened as a PR into `integration` -- see the branching + promotion
+  model in [`docs/branching.md`](docs/branching.md).
 - **Every commit subject** prefixed with the ticket: `bug-111: ...`.
 - **PR title** carries the ticket; **PR body links** the tracking issue.
 
