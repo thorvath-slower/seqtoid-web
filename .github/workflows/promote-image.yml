@@ -50,8 +50,12 @@ env:
   AWS_REGION: us-west-2
   # The GHCR source-of-record repo (from #392). The digest resolved here is the promotion unit.
   GHCR_REPO: ghcr.io/${{ github.repository_owner }}/seqtoid-web
-  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '941377154785' }}
-  GHA_ROLE: ${{ vars.GHA_ROLE || 'gha-seqtoid' }}
+  # Default = the DEV account (491013321714) + its dedicated CI role, matching
+  # build-docker-image.yml. The old default was the idseq-support account (941377154785 /
+  # gha-seqtoid) -- a stale idseq shared-registry holdover; per isolated-envs (D5) dev routes
+  # to dev, not support. Overridden by repo/org Actions vars when set.
+  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
+  GHA_ROLE: ${{ vars.GHA_ROLE || 'czid-dev-gh-actions-build' }}
   # Go-forward ECR repo (CZID-76). The CI-account repo the build pushed to.
   ECR_REPO_NAME: ${{ vars.ECR_REPO_NAME || 'seqtoid-web' }}
 

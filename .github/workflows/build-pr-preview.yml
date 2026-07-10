@@ -1,0 +1,88 @@
+name: build-pr-preview (per-PR preview image)
+run-name: Preview build for PR #${{ github.event.pull_request.number }}
+
+# Per-PR preview build (#613, branching-model work). A feature branch -> PR into
+# `integration` builds an ISOLATED image tagged sha-<prHeadSha> and pushes it to the
+# throwaway seqtoid-web-preview ECR repo. Phase 2's Argo ApplicationSet deploys that
+# image into a per-PR sandbox. This NEVER touches the main->dev path:
+#   - build-docker-image.yml (push:main) is unchanged and still owns the promotable image.
+#   - This runs only on pull_request into integration, pushes only to seqtoid-web-preview,
+#     and assumes a SEPARATE role scoped to ecr:push on that repo only.
+#
+# The normal build role denies :pull_request OIDC subjects (CZID-26 C1), so this uses the
+# dedicated czid-dev-gh-actions-preview-build role (cypherid-web-infra #613) which allows
+# ONLY the seqtoid-web pull_request subject. Same-repo guard below means fork PRs (which
+# get no OIDC token) are skipped entirely.
+
+on:
+  pull_request:
+    branches: [integration]
+
+# One in-flight preview build per PR; a new push supersedes the previous.
+concurrency:
+  group: build-pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-west-2
+  # Dev account (the preview repo + role live in dev, 491013321714). Pinned via repo var.
+  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
+  # Deliberate pull_request-allowing role, scoped to ecr push/pull on seqtoid-web-preview only.
+  PREVIEW_ROLE: ${{ vars.PREVIEW_BUILD_ROLE || 'czid-dev-gh-actions-preview-build' }}
+  PREVIEW_ECR_REPO: seqtoid-web-preview
+
+jobs:
+  build_preview_image:
+    runs-on: ubuntu-latest
+    # SAME-REPO ONLY: a fork PR gets no OIDC token (id-token is not granted to fork PRs),
+    # so it could not assume the role anyway; skip it explicitly and loudly.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          # Build the exact PR head commit (not the synthetic merge ref), and full history
+          # so bin/build-docker's git ls-files SRC_HASH + version derivation work.
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+
+      - name: Configure AWS credentials (preview build role)
+        id: aws
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6
+        with:
+          role-to-assume: arn:aws:iam::${{ env.CI_ACCOUNT_ID }}:role/${{ env.PREVIEW_ROLE }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC_preview
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
+        with:
+          registry: ${{ env.CI_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.PREVIEW_ECR_REPO }}
+
+      - name: Build and push preview image
+        env:
+          AWS_ACCOUNT_ID: ${{ steps.aws.outputs.aws-account-id }}
+          # Build + push ONLY to the preview repo. CACHE_MODE=read: reads this repo's own
+          # (initially cold) :buildcache but never writes it, so a preview build can never
+          # pollute main's build cache. The first preview build on a cold cache is slower.
+          ECR_REPO_NAMES: ${{ env.PREVIEW_ECR_REPO }}
+          CACHE_MODE: read
+          # Pass PR head ref/sha via env (NOT inline ${{ }}) -- the branch name is
+          # attacker-controlled, so inlining it into the script is a shell-injection vector.
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          # bin/build-docker tags <repo>:sha-<commit8> + <repo>:branch-<ref>. Use the PR head
+          # sha (8 chars) so the tag matches what the Phase-2 ApplicationSet deploys.
+          bin/build-docker "$PR_HEAD_REF" "${PR_HEAD_SHA:0:8}"
+          echo "Pushed ${PREVIEW_ECR_REPO}:sha-${PR_HEAD_SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
+
+      # Scanning + signing (Trivy/cosign/GHCR) are deliberately NOT done here -- previews are
+      # ephemeral throwaways. The supply-chain gate runs on the integration->main promotion.
