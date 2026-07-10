@@ -276,3 +276,26 @@ taxonRefresh:
     requests:
       cpu: 500m
       memory: 2Gi
+
+# Per-PR preview sandbox extras (#616/#617). OFF by default -- dev/staging/prod render
+# nothing here. The preview ApplicationSet sets these per PR. When enabled, a PreSync
+# provision Job (isolated schema + scoped DB user + the sandbox's own SSM path) runs
+# before migrate, and a PostDelete teardown Job reaps them on PR close. App pods still
+# use serviceAccount.roleArn (the scoped seqtoid-web-preview role); the provision/
+# teardown Jobs use a SEPARATE, elevated provisioner SA (seqtoid-web-preview-provisioner).
+preview:
+  enabled: false
+  # PR number -- drives schema (idseq_pr_N), user (sbx_pr_N), SSM (idseq-sandbox-pr-N-web).
+  prNumber: ""
+  # Source chamber service to copy shared config + read master DB creds from.
+  # Empty -> idseq-<environment>-web.
+  srcChamberService: ""
+  provisioner:
+    serviceAccountName: seqtoid-web-provisioner
+    roleArn: ""          # the seqtoid-web-preview-provisioner IRSA role (infra repo)
+  activeDeadlineSeconds: 600
+  backoffLimit: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
