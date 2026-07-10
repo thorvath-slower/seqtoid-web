@@ -70,6 +70,13 @@ const Header = ({
   }
   return (
     <div>
+      {/* TEMPORARY: CI/CD end-to-end pipeline demo banner. Remove right after the demo (dev-only). */}
+      <AnnouncementBanner
+        id="cicd-e2e-demo-2026-07-10"
+        visible
+        message="This banner reached dev end to end automatically: merge -> CI -> Docker build -> GitOps -> Argo rollout, with zero manual deploy steps. (CI/CD pipeline demo)"
+      />
+
       {/* Announcement banners we only want to show within the app, not the landing page */}
 
       <AnnouncementBanner
