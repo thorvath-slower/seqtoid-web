@@ -60,6 +60,11 @@ const LiveSearchPopBox = ({
   // closure, which lagged one keystroke behind (so "france" searched "franc" and the
   // plain-text fallback showed "franc") — and (b) discard out-of-order responses.
   const latestQueryRef = useRef<string>("");
+  // track whether the current inputValue reflects an explicit selection (a picked
+  // suggestion or a deliberately-committed plain-text entry). Blur must NOT re-submit a
+  // committed selection as plain text -- that clobbered resolved locations, because
+  // inputValue held the truncated title while `value` held the full/adjusted name.
+  const selectedRef = useRef<boolean>(false);
 
   // If the value has changed, reset the input value.
   // Store the prevValue to detect whether the value has changed.
@@ -72,12 +77,12 @@ const LiveSearchPopBox = ({
   }, [value]);
 
   const handleKeyDown = keyEvent => {
-    // Pressing enter selects what they currently typed.
+    // Pressing enter selects what they currently typed (trimmed).
     if (keyEvent.key === "Enter" && inputMode) {
-      handleResultSelect({
-        result: inputValue,
-        currentEvent: {},
-      });
+      const trimmed = inputValue.trim();
+      if (trimmed !== "") {
+        handleResultSelect({ result: trimmed, currentEvent: {} });
+      }
     }
   };
 
@@ -87,7 +92,13 @@ const LiveSearchPopBox = ({
   };
 
   const handleResultSelect = ({ currentEvent, result }) => {
-    setInputValue(result.title);
+    selectedRef.current = true;
+    // result may be a suggestion object (title/name) or a plain-text string (Enter/blur).
+    // Coerce to a real string either way -- result.title was undefined for string results,
+    // which blanked the box.
+    const display =
+      typeof result === "string" ? result : (result.title ?? result.name ?? "");
+    setInputValue(display);
     onResultSelect && onResultSelect({ currentEvent, result });
     closeDropdown();
   };
@@ -105,12 +116,20 @@ const LiveSearchPopBox = ({
   };
 
   const handleSearchChange = value => {
+    // a genuine keystroke (value actually changed) invalidates any prior selection,
+    // so blur may again commit typed plain text. A focus-triggered re-search with the same
+    // value must NOT clear the flag.
+    if (value !== inputValue) {
+      selectedRef.current = false;
+    }
     setInputValue(value);
-    latestQueryRef.current = value;
 
-    // check minimum requirements for value
-    const parsedValue = value.trim();
-    if (parsedValue.length >= minChars) {
+    // search on and remember the TRIMMED query so leading/trailing spaces do not
+    // change the LocationIQ result set or ride into the plain-text fallback.
+    const query = value.trim();
+    latestQueryRef.current = query;
+
+    if (query.length >= minChars) {
       setIsFocused(true);
       setIsLoading(true);
 
@@ -118,12 +137,9 @@ const LiveSearchPopBox = ({
         clearTimeout(latestTimerId);
       }
 
-      // Pass `value` explicitly so the debounced search runs on exactly what the user
-      // typed — not the `inputValue` state, which the closure captured one keystroke ago.
-      const newTimerId = setTimeout(
-        () => triggerSearch(value),
-        delayTriggerSearch,
-      );
+      // Pass the trimmed query explicitly so the debounced search runs on exactly what the
+      // user typed, and out-of-order responses are matched against the same trimmed string.
+      const newTimerId = setTimeout(() => triggerSearch(query), delayTriggerSearch);
       setLatestTimerId(newTimerId);
     } else {
       // Below the minimum: stop loading and clear any stale results so the dropdown
@@ -163,9 +179,16 @@ const LiveSearchPopBox = ({
   // If a user selects an option, handleResultSelect will run and update props.value before this function runs.
   // So inputValue will equal props.value when this function runs and onResultSelect will not be called, which is correct.
   const handleBlur = () => {
-    // If the user has changed the input without selecting an option, select what they currently typed as plain-text.
-    if (onResultSelect && inputValue !== value) {
-      onResultSelect({ result: inputValue });
+    // only commit typed plain text on blur when the user genuinely typed something new
+    // and did NOT pick a suggestion. Never re-submit an already-committed selection -- that
+    // clobbered resolved locations, because inputValue held the truncated title while `value`
+    // held the full/adjusted name (so inputValue !== value stayed true even after a valid pick).
+    if (onResultSelect && !selectedRef.current) {
+      const trimmed = inputValue.trim();
+      const currentValue = typeof value === "string" ? value.trim() : value;
+      if (trimmed !== "" && trimmed !== currentValue) {
+        onResultSelect({ result: trimmed });
+      }
     }
 
     closeDropdown();
