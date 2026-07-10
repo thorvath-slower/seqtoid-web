@@ -15,4 +15,15 @@ config = {
 # environment but never searches, so the OpensearchCircuit wrapper (app/lib) is not needed;
 # skipping it keeps asset compilation independent of the search stack. ENV["ASSETS_PRECOMPILE"]
 # is never set at runtime, so deployed behavior is unchanged.
-Elasticsearch::Model.client = OpensearchCircuit.wrap(Elasticsearch::Client.new(config), name: :search_opensearch) unless Rails.env.test? || ENV["ASSETS_PRECOMPILE"]
+# Wire the client AFTER the app is loaded. Referencing OpensearchCircuit (app/lib -- which
+# itself depends on HttpResilience) directly in the initializer body raised
+# `uninitialized constant OpensearchCircuit` at boot, because autoloaded app/lib constants are
+# not available during initializer execution. That broke `db:migrate` (it boots the
+# environment) and, via the PreSync migrate hook, blocked every deploy. `to_prepare` runs once
+# the autoloader is ready (and re-runs on reload in development, so the wrapper never holds a
+# stale class), which resolves the constant. Runtime behavior is otherwise unchanged.
+Rails.application.config.to_prepare do
+  unless Rails.env.test? || ENV["ASSETS_PRECOMPILE"]
+    Elasticsearch::Model.client = OpensearchCircuit.wrap(Elasticsearch::Client.new(config), name: :search_opensearch)
+  end
+end
