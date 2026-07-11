@@ -76,6 +76,15 @@ namespace :sandbox do
     sh!("chamber write #{n[:ssm]} db_password #{password}")
     sh!("chamber write #{n[:ssm]} db_name #{n[:schema]}")
 
+    # Point S3 at the sandbox bucket. The copied config carries dev's SAMPLES_BUCKET_NAME,
+    # but the sandbox IRSA role can only WRITE seqtoid-sandbox/* -- leaving dev's bucket
+    # here would make every upload/pipeline S3 write fail with AccessDenied. Override to
+    # the sandbox bucket (the role's write scope); per-PR keys are separated by the
+    # sandbox's own DB references. (SAMPLES_BUCKET_NAME + the _V1 variant the app reads.)
+    sandbox_bucket = ENV["SANDBOX_SAMPLES_BUCKET"] || "seqtoid-sandbox"
+    sh!("chamber write #{n[:ssm]} samples_bucket_name #{sandbox_bucket}")
+    sh!("chamber write #{n[:ssm]} samples_bucket_name_v1 #{sandbox_bucket}")
+
     puts "[sandbox:provision] done -- pod may now boot with CHAMBER_SERVICE=#{n[:ssm]} DB_NAME=#{n[:schema]}"
   end
 
