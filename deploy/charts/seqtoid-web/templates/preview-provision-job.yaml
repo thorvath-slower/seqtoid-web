@@ -1,4 +1,5 @@
 {{- if .Values.preview.enabled -}}
+{{- $src := .Values.preview.srcChamberService | default (printf "idseq-%s-web" .Values.environment) -}}
 # Per-PR sandbox PROVISION Job (#616). PreSync hook at sync-wave -10 -- runs after the
 # provisioner SA (-20) and BEFORE the migrate hook (0), so the isolated schema exists
 # before `db:migrate` runs against it (via DB_NAME).
@@ -11,7 +12,6 @@
 #
 # hook-delete-policy BeforeHookCreation only (mirrors migrate #481): an in-flight
 # provision is never killed by an overlapping sync; the task is idempotent on retry.
-{{- $src := .Values.preview.srcChamberService | default (printf "idseq-%s-web" .Values.environment) -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
