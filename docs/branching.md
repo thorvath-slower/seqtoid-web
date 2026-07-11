@@ -1,13 +1,16 @@
 # Branching + promotion model
 
-How code moves from a laptop to production, and what each branch means. This is the
-*flow*; for PR shape/scope discipline see [`../CONTRIBUTING.md`](../CONTRIBUTING.md),
-and for the deploy/promotion *mechanics* see [`DEPLOY-METHODS.md`](DEPLOY-METHODS.md),
-[`DEPLOY-PROMOTION.md`](DEPLOY-PROMOTION.md), and [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
+How code moves from a laptop to the shared dev environment, and what each branch
+means. This is the *flow*; for PR shape/scope discipline see
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md), and for the deploy/promotion *mechanics*
+see [`DEPLOY-METHODS.md`](DEPLOY-METHODS.md), [`DEPLOY-PROMOTION.md`](DEPLOY-PROMOTION.md),
+and [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
 
-> **TL;DR:** Branch off `main`. Open a small PR into `integration`. It spins up an
-> isolated per-PR preview sandbox you can upload to and run pipelines in. When
-> `integration` is promoted to `main`, `main` auto-deploys to the shared **dev**
+> **TL;DR:** Branch off `integration`. Open a small PR back into `integration` -- it
+> spins up an isolated per-PR preview sandbox you can upload to and run pipelines in.
+> `integration` is the active development trunk; the only thing it does is host those
+> sandboxes and accumulate reviewed work. On a **weekly cadence** the good-to-go state
+> of `integration` is promoted to `main`, and `main` auto-deploys to the shared **dev**
 > environment. `main` then promotes forward through **staging -> prod** on the gated
 > chain. `main` is always the known-good trunk.
 
@@ -16,79 +19,100 @@ and for the deploy/promotion *mechanics* see [`DEPLOY-METHODS.md`](DEPLOY-METHOD
 ## The picture
 
 ```
-  feature branch  --PR-->  integration  --promote-->  main  --auto-->  dev (shared)
-  (cat-NNN-slug)      |                        (known-good trunk)          |
-                      |                                                    |
-                      v                                                    v
-             per-PR PREVIEW sandbox                        main --gated--> staging --gated--> prod
-             pr-N.dev.seqtoid.org                          (deploy-promote, digest-pinned)
-             (own app + DB + S3;
-              shared dev Batch/SFN backend)
+  feature/bug/improvement       PR      integration      weekly       main       auto      dev (shared)
+  branch off integration  ----------->  (dev trunk +  ----------->  (known-good  ------->  dev.seqtoid.org
+  (cat-NNN-slug)              |          preview        promotion    weekly           |
+                             |          sandboxes)     (automated)  roll-up)          |
+                             v                                                        v
+                    per-PR PREVIEW sandbox                              main --gated--> staging --gated--> prod
+                    pr-N.dev.seqtoid.org                                (deploy-promote, digest-pinned)
+                    (own app + DB + S3;
+                     shared dev Batch/SFN backend)
 ```
 
-- **`main` = known-good.** It is the only branch that auto-deploys to the shared
-  **dev** environment (`dev.seqtoid.org`) via GitOps (`gitops-advance-dev.yml` ->
-  Argo CD). Nothing else touches the dev pipeline.
-- **`integration` = the staging branch for changes.** Feature PRs target it. It is
-  reset to `main` and kept protected; it promotes *to* `main`, it does **not** deploy
-  to dev.
-- **feature branches** are where you work: `cat-NNN-short-slug` off `main`.
+- **`integration` = the active development trunk.** Feature PRs branch off it and merge
+  back into it. Its *only* job is to host the per-PR preview sandboxes and accumulate
+  reviewed changes between promotions. It does **not** deploy to any persistent
+  environment.
+- **`main` = known-good.** It is the weekly roll-up of `integration`, and the only
+  branch that auto-deploys to the shared **dev** environment (`dev.seqtoid.org`) via
+  GitOps (`gitops-advance-dev.yml` -> Argo CD). Nothing else touches the dev pipeline.
+- **feature branches** are where you work: `cat-NNN-short-slug` off `integration`.
 
 ---
 
 ## The dev inner loop (what you actually do)
 
-1. **Branch off `main`:** `git switch -c cat-NNN-short-slug origin/main`
-   (naming + one-concern rules: [`../CONTRIBUTING.md`](../CONTRIBUTING.md)).
+1. **Branch off `integration`:** `git switch -c cat-NNN-short-slug origin/integration`
+   (naming + one-concern rules: [`../CONTRIBUTING.md`](../CONTRIBUTING.md)). You build on
+   the latest in-flight state, so your PR is a clean increment.
 2. **Validate locally first:** `make ci-local` -> green in Docker **before** you push.
    CI is the final gate, not your dev loop.
-3. **Open a small PR into `integration`.** This triggers:
+3. **Open a small PR into `integration`.** Label it `preview` to get a sandbox. This
+   triggers:
    - the required checks (`Javascript`, `Ruby Test (MySQL 8)` shards 1-4,
      `Collate coverage + regression gate`) + 1 review, and
    - a **per-PR preview build** (`build-pr-preview.yml`) that pushes an isolated
      image, which the preview sandbox deploys.
-4. **Use your preview sandbox** at `pr-N.dev.seqtoid.org`: it has its **own** app, DB,
-   and S3, so you can upload samples and run pipelines end-to-end without touching
-   anyone else's data. It dispatches to the **shared dev** Batch/Step Functions
-   backend and loads results back into **your** sandbox DB only.
+4. **Use your preview sandbox** at `pr-N.dev.seqtoid.org`: it has its **own** app, DB
+   schema, and S3 prefix, so you can upload samples and run pipelines end-to-end
+   without touching anyone else's data. It dispatches to the **shared dev** Batch/Step
+   Functions backend and loads results back into **your** sandbox DB only.
 5. **Merge to `integration`** once green + reviewed. The sandbox is torn down when the
-   PR closes.
+   PR closes or the `preview` label is removed.
 
-## Promotion (integration -> main -> dev -> staging -> prod)
+## Promotion
 
-- **`integration` -> `main`:** promote the reviewed, green `integration` state to
-  `main` (a PR; `main` requires the same checks + a review). This is the gate that
-  makes something "known-good".
-- **`main` -> dev:** automatic. A green `main` build advances the dev image tag via
-  GitOps and Argo rolls it out (blue/green with a smoke gate).
-- **`main` -> staging -> prod:** the gated, digest-pinned promotion chain -- the exact
-  tested artifact is walked forward, each tier behind a GitHub Environment approval.
-  See [`DEPLOY-PROMOTION.md`](DEPLOY-PROMOTION.md) + [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
-  Prod is never deployed directly.
+### `integration` -> `main` (weekly, automated)
+
+A scheduled workflow (`promote-integration-to-main.yml`) promotes the green state of
+`integration` to `main` on a **weekly cadence**. The promotion is the release event
+that makes something "known-good" and sends it to dev. Because every change in
+`integration` was already reviewed and green on its own PR, the weekly roll-up is an
+aggregation of already-vetted work.
+
+### Hotfix (expedited promotion)
+
+An urgent dev fix does **not** wait for the weekly cron. It still flows **through
+`integration`** (so it gets a preview sandbox and the normal checks + review), then a
+person triggers the **same** promotion workflow off-cycle via `workflow_dispatch`
+(the "kick it off manually" path). This keeps one promotion path with two triggers --
+`schedule` (weekly) and `workflow_dispatch` (hotfix) -- rather than a second, divergent
+route. A commit-message suffix is deliberately **not** used: a manual dispatch is
+explicit, permission-gated, and auditable.
+
+### `main` -> dev (automatic)
+
+A green `main` build advances the dev image tag via GitOps and Argo rolls it out
+(blue/green with a smoke gate). `main` only moves on promotion, so dev updates on the
+promotion cadence (weekly by default, or immediately on a hotfix dispatch).
+
+### `main` -> staging -> prod (gated)
+
+The gated, digest-pinned promotion chain -- the exact tested artifact is walked
+forward, each tier behind a GitHub Environment approval. See
+[`DEPLOY-PROMOTION.md`](DEPLOY-PROMOTION.md) + [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
+Prod is never deployed directly.
 
 ---
 
 ## Branch protection (enforced)
 
-Both `main` and `integration` (on `thorvath-slower/seqtoid-web`) require:
-- the full required status checks above,
-- at least 1 approving review,
-- no force-push, no deletion.
+On `thorvath-slower/seqtoid-web`:
 
-So nothing lands on either branch without green CI + a review.
+- **`integration`** requires the full required status checks above, at least 1
+  approving review, and no force-push / no deletion. This is where features land.
+- **`main`** takes changes **only** via the `integration -> main` promotion (no direct
+  pushes, no feature PRs), requires the same status checks green, and no force-push /
+  no deletion. Nothing reaches dev without having gone through `integration` first.
 
 ---
 
-## What is live vs coming
+## Notes
 
-| Piece | Status |
-|---|---|
-| `main` -> dev auto-deploy (GitOps + Argo) | **Live** |
-| `integration` branch + protection | **Live** |
-| Per-PR preview **build** (`build-pr-preview.yml` + scoped ECR/role) | **Landing** (apply the infra, then enable the workflow) |
-| Per-PR preview **sandboxes** (Argo ApplicationSet: app + DB + S3 per PR) | **Phase 2 (in progress)** |
-| `main` -> staging -> prod promotion chain | **Defined**; staging/prod clusters being stood up |
-
-Until the preview sandboxes land, feature PRs still target `integration` and validate
-via `make ci-local` + CI; the isolated `pr-N.dev.seqtoid.org` environment arrives with
-Phase 2.
+- **The end-state** is to stand this same model up on the IT-ARS (UCSF) repos so the
+  whole team works against that pipeline directly (or pushes local fixes up to it to
+  run through the sandboxes). The retired `modernization` snapshot branch is no longer
+  used.
+- `integration` is periodically fast-forwarded to `main` after a promotion so the two
+  never drift apart in the "main-only" direction.
