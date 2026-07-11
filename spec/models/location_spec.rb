@@ -132,6 +132,20 @@ RSpec.describe Location, type: :model do
       expect(location.new_record?).to eq(false)
       expect(location.id).to eq(mock_location.id)
     end
+
+    it "falls back to client-supplied fields when the OSM re-fetch returns an error (#672)" do
+      # LocationIQ reverse-by-osm_id can return {"error": ...}; with an empty locations table
+      # every selection hits this path. It must NOT crash / raise -- fall back to loc_info.
+      loc_info = { name: "Metropole de Lyon, France", geo_level: "subdivision", country_name: "France", osm_id: 123, osm_type: "Relation" }
+
+      expect(Location).to receive(:geosearch_by_osm_id).with(123, "Relation").exactly(1).times
+                                                       .and_return([true, { "error" => "Unable to geocode" }])
+      expect(LocationHelper).not_to receive(:adapt_location_iq_response)
+
+      location = Location.find_or_new_by_fields(loc_info)
+      expect(location.new_record?).to eq(true)
+      expect(location.country_name).to eq("France")
+    end
   end
 
   context "#specificity_valid?" do
