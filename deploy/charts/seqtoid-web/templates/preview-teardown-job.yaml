@@ -1,4 +1,5 @@
 {{- if .Values.preview.enabled -}}
+{{- $src := .Values.preview.srcChamberService | default (printf "idseq-%s-web" .Values.environment) -}}
 # Per-PR sandbox TEARDOWN Job (#616). PostDelete hook -- runs when the preview
 # Application is deleted (the ApplicationSet reaps it on PR close), and drops the
 # schema + scoped user and deletes the sandbox SSM path.
@@ -7,7 +8,6 @@
 # pointed at the SOURCE service so it has the master DB creds (to DROP) + the provisioner
 # role's SSM access (to delete the sandbox path). The task is idempotent -- safe if the
 # schema/user/params are already gone.
-{{- $src := .Values.preview.srcChamberService | default (printf "idseq-%s-web" .Values.environment) -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
