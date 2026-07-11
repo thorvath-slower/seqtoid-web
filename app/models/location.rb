@@ -145,7 +145,17 @@ class Location < ApplicationRecord
     elsif loc_info[:osm_id].to_i > 0 && loc_info[:osm_type]
       # Warning: OSM IDs may change, but it is OK to do a service lookup with them.
       success, resp = geosearch_by_osm_id(loc_info[:osm_id], loc_info[:osm_type])
-      raise "Couldn't fetch OSM ID #{loc_info[:osm_id]} (#{loc_info[:osm_type]})" unless success
+
+      # The OSM re-fetch is a best-effort hardening step ("don't fully trust client input").
+      # It is NOT a hard requirement: LocationIQ reverse-by-osm_id can return an error/addressless
+      # payload ({"error": ...}), and with an empty locations table EVERY selection hits this path.
+      # When the re-fetch is unavailable, fall back to the client-supplied fields (the client
+      # already geocoded the selection) instead of raising / crashing the save. See #672.
+      resp_usable = success && resp.is_a?(Hash) && !resp["error"] && resp["address"].present?
+      unless resp_usable
+        Rails.logger.warn("[Location] OSM re-fetch unavailable for osm_id=#{loc_info[:osm_id]} (#{loc_info[:osm_type]}); using client-supplied location fields")
+        return new_from_params(loc_info)
+      end
 
       location_fields = LocationHelper.adapt_location_iq_response(resp)
 
