@@ -24,6 +24,9 @@ spec:
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
+      annotations:
+        # Karpenter must not evict this Job mid-run during node consolidation.
+        karpenter.sh/do-not-disrupt: "true"
       labels:
         {{- include "seqtoid-web.labels" . | nindent 8 }}
         app.kubernetes.io/component: sandbox-teardown

@@ -37,6 +37,11 @@ spec:
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
+      annotations:
+        # Don't let Karpenter consolidate the node out from under an in-flight migration
+        # (aggressive consolidateAfter on the dev/preview NodePools would otherwise evict
+        # the pod mid-run and, on a small pool, it may fail to reschedule -> backoff).
+        karpenter.sh/do-not-disrupt: "true"
       labels:
         {{- include "seqtoid-web.labels" . | nindent 8 }}
         app.kubernetes.io/component: migrate
