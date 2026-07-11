@@ -108,4 +108,19 @@ namespace :sandbox do
 
     puts "[sandbox:teardown] done"
   end
+
+  # Idempotent seed for the sandbox migrate hook. db:seed (db/seeds.rb) uses
+  # AppConfig.create, which raises on a schema that already has these rows -- so it fails
+  # on ANY re-sync of a sandbox (a PR push re-runs the migrate hook against the existing
+  # schema). Guard it: only run db:seed on a truly fresh schema (no app_configs yet).
+  # The first sync seeds the (dev) SFN ARNs + launched features; later re-syncs skip it.
+  desc "Run db:seed only if the sandbox schema has not been seeded yet (idempotent)"
+  task seed_once: :environment do
+    if AppConfig.count.zero?
+      puts "[sandbox:seed_once] fresh schema -- running db:seed"
+      Rake::Task["db:seed"].invoke
+    else
+      puts "[sandbox:seed_once] app_configs already present (#{AppConfig.count}) -- skipping db:seed"
+    end
+  end
 end
