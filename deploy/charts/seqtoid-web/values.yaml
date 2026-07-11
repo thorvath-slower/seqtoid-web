@@ -190,6 +190,11 @@ extraEnv: []
 # in `chamber exec ... bundle exec`. Keyed by NAME (a map, not a list) so a per-env
 # values file can override a single worker's replicaCount/resources without redefining
 # the whole set — Helm deep-merges maps by key but replaces lists wholesale (#486/#487).
+#
+# Per-worker `enabled: false` skips that worker's Deployment entirely (default true when
+# absent). A preview sandbox sets `workers.shoryuken.enabled: false` so it does not become
+# a competing consumer on dev's shared SQS queue — it uses POLLING (result-monitor +
+# pipeline-monitor against its own DB) instead.
 workers:
   resque:
     args: ["rake", "resque:workers"]
