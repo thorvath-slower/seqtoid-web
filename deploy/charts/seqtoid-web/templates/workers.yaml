@@ -3,6 +3,7 @@
 # to the image ENTRYPOINT, which wraps them in `chamber exec ... bundle exec`.
 {{- $root := . -}}
 {{- range $name, $w := .Values.workers }}
+{{- if ne $w.enabled false }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -90,4 +91,5 @@ spec:
           {{- end }}
           resources:
             {{- toYaml (default $root.Values.resources $w.resources) | nindent 12 }}
+{{- end }}
 {{- end }}
