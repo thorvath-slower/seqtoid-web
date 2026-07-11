@@ -101,10 +101,16 @@ namespace :sandbox do
     c.query("FLUSH PRIVILEGES")
     c.close
 
-    # Delete every param under the sandbox path. `chamber delete` removes one key; list
-    # then delete. Non-fatal if already gone (teardown must be idempotent).
-    keys = `chamber list --exported #{n[:ssm]} 2>/dev/null`.lines.drop(1).map { |l| l.split(/\s+/).first }.compact
-    keys.each { |k| system("chamber delete #{n[:ssm]} #{k}") }
+    # Delete every param under the sandbox SSM path. Enumerate + delete via the aws CLI
+    # (the chamber service `X` maps to SSM path `/X/`); this is more robust than parsing
+    # `chamber list` output. Idempotent: no-op if the path is already empty.
+    require "shellwords"
+    ssm_path = "/#{n[:ssm]}"
+    names = `aws ssm get-parameters-by-path --path #{Shellwords.escape(ssm_path)} --recursive --query 'Parameters[].Name' --output text 2>/dev/null`.split
+    names.each_slice(10) do |batch|
+      system("aws", "ssm", "delete-parameters", "--names", *batch, out: File::NULL, err: File::NULL)
+    end
+    puts "[sandbox:teardown] deleted #{names.size} SSM params under #{ssm_path}"
 
     puts "[sandbox:teardown] done"
   end
