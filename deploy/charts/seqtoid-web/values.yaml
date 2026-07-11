@@ -148,6 +148,10 @@ workerLivenessProbe:
 migrate:
   enabled: true
   command: ["rails", "db:migrate:with_data"]
+  # SA the migrate hook runs as. Empty -> the app SA. A preview sandbox sets this to the
+  # provisioner SA (a PreSync hook that exists before migrate on a brand-new namespace,
+  # avoiding a deadlock where migrate waits on the Sync-phase app SA).
+  serviceAccountName: ""
   # A single deterministic, idempotent db:migrate invocation. `rails db:migrate`
   # only applies pending migrations and records schema_migrations per step, so an
   # interrupted run safely resumes on retry — do NOT add destructive steps here.

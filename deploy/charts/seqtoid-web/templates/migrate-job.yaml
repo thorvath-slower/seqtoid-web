@@ -42,7 +42,12 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" . }}
+      # Default = the app SA. A preview sandbox overrides this to the provisioner SA:
+      # the migrate PreSync hook runs BEFORE the Sync phase, so on a brand-new sandbox
+      # namespace the app SA (a Sync-phase resource) does not exist yet and migrate would
+      # deadlock. The provisioner SA is a PreSync hook (already present), and can read the
+      # sandbox SSM path chamber needs -- so migrate runs against the sandbox schema.
+      serviceAccountName: {{ .Values.migrate.serviceAccountName | default (include "seqtoid-web.serviceAccountName" .) }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
