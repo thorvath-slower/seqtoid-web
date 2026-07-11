@@ -15,7 +15,10 @@ deployed: &deployed
 
 development:
   <<: *default
-  database: idseq_dev
+  # idseq_dev matches the dev RDS (not idseq_development). DB_NAME lets a per-PR preview
+  # sandbox (which runs as RAILS_ENV=development) point at its OWN schema on the shared dev
+  # Aurora, e.g. idseq_pr_N. Unset -> idseq_dev, byte-identical to today.
+  database: <%= ENV['DB_NAME'] || 'idseq_dev' %>
 
 prod:
   <<: *deployed
