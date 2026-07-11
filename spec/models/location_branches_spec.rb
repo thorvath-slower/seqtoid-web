@@ -110,11 +110,14 @@ RSpec.describe Location, type: :model do
       expect(result.name).to eq("New City")
     end
 
-    it "raises when the OSM fetch is unsuccessful" do
+    it "falls back to client-supplied fields when the OSM fetch is unsuccessful (#672)" do
+      # Resilience: the OSM re-fetch is best-effort. A failed reverse lookup must NOT raise /
+      # crash the save -- fall back to the client-supplied (already geocoded) fields.
       allow(Location).to receive(:geosearch_by_osm_id).and_return([false, {}])
-      expect do
-        Location.find_or_new_by_fields(osm_id: 42, osm_type: "relation")
-      end.to raise_error(/Couldn't fetch OSM ID/)
+      result = Location.find_or_new_by_fields(osm_id: 42, osm_type: "relation", name: "Client City", country_name: "France")
+      expect(result).to be_a(Location)
+      expect(result.new_record?).to eq(true)
+      expect(result.name).to eq("Client City")
     end
 
     it "falls back to new_from_params when osm data is missing (else branch)" do
