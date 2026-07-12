@@ -295,6 +295,13 @@ class WorkflowRun < ApplicationRecord
     return "#{workflow}-v#{wdl_version}"
   end
 
+  # How many times a workflow run for a given sample+workflow will be
+  # automatically re-dispatched after a transient (non-input) SFN failure before
+  # the failure is surfaced to the user. Mirrors PipelineRun's once-only
+  # automatic restart. WorkflowRun has no cheap-retry layer (its result loads are
+  # best-effort), so recovery here is restart-only. See CZID-676 / #676.
+  WORKFLOW_AUTO_RESTART_LIMIT = 1
+
   def update_status(remote_status = nil)
     remote_status ||= sfn_execution.description[:status]
     # Collapse failed status into our local unique failure status. Status retrieved from [2020/08/12]:
@@ -306,6 +313,22 @@ class WorkflowRun < ApplicationRecord
       if input_error.present?
         remote_status = STATUS[:succeeded_with_issue]
         error_message = input_error[:message]
+      elsif auto_restart_after_failure_eligible?
+        # Transient/infra SFN failure (not an input error). Record the failure
+        # so the restart stays bounded, then auto-restart once via #rerun so a
+        # recoverable workflow self-heals instead of stranding the user (CZID-676).
+        update(
+          time_to_finalized: time_since_executed_at,
+          error_message: parse_yaml_error_message,
+          status: STATUS[:failed]
+        )
+        LogUtil.log_message(
+          "Auto-restarting WorkflowRun #{id} (#{workflow}) after a transient SFN failure " \
+          "(bounded to #{WORKFLOW_AUTO_RESTART_LIMIT} per sample+workflow).",
+          workflow_run_id: id
+        )
+        rerun
+        return
       else
         Rails.logger.error("SampleFailedEvent: Sample #{sample.id} by " \
         "#{sample.user.role_name} failed WorkflowRun #{id} (#{workflow}). See: #{sample.status_url}. " \
@@ -327,6 +350,27 @@ class WorkflowRun < ApplicationRecord
     elsif !finalized? && remote_status != status
       update(status: remote_status)
     end
+  end
+
+  # True when a failed run should be auto-restarted: it has not already been
+  # deprecated (e.g. by a prior restart) and this sample+workflow has not already
+  # hit the auto-restart budget. Only reached for non-input-error failures (the
+  # caller checks input_error first). Bounds itself off prior FAILED runs the
+  # same way PipelineRun#automatic_restart_allowed? does, so it cannot loop. Any
+  # error here fails safe (no restart).
+  def auto_restart_after_failure_eligible?
+    return false if deprecated?
+
+    sample.workflow_runs
+          .where(workflow: workflow, status: STATUS[:failed])
+          .where.not(id: id)
+          .count < WORKFLOW_AUTO_RESTART_LIMIT
+  rescue StandardError => e
+    LogUtil.log_error(
+      "Could not determine auto-restart eligibility for WorkflowRun #{id}: #{e.message}",
+      exception: e, workflow_run_id: id
+    )
+    false
   end
 
   def input_error
