@@ -1,7 +1,10 @@
 module LocationHelper
   # Adapter function to munge responses from Location IQ API to our format
   def self.adapt_location_iq_response(body)
-    address = body["address"]
+    # Degrade instead of crashing on an error/addressless provider payload. LocationIQ can
+    # return {"error": ...} (e.g. reverse-by-osm_id lookups), which has no "address" key;
+    # without this guard the `.include?`/`.key?` calls below raise NoMethodError on nil. See #672.
+    address = body["address"] || {}
     # Note(jsheu): 'type' field may contain a helpful exact name match, but not
     # necessarily. Ex: city, state, administrative, river, university, station..
     category = body["type"]
