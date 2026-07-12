@@ -28,6 +28,15 @@
 # the right per-arch ruby base automatically. buildx also injects the TARGETARCH build-arg
 # (`amd64`|`arm64`) into any stage that declares it — used below to fetch the correct
 # per-arch prebuilt binaries (node, chamber, mysql client).
+# chamber built from source with a CURRENT Go toolchain (#674 / #474). segmentio's prebuilt
+# release binaries lag on Go and carry Go-stdlib CVEs -- even chamber v3.1.5 ships built with
+# Go 1.25.6, still exposed to CVE-2026-39822 (fixed in Go 1.25.12+). The floating golang:1.25
+# tag tracks the latest 1.25.x patch (>= 1.25.12), so this clears it and keeps clearing future
+# Go-stdlib CVEs on rebuild. The stage runs natively per target platform, so `go install`
+# builds the correct per-arch binary (amd64/arm64) with no extra flags.
+FROM golang:1.25 AS chamber-builder
+RUN CGO_ENABLED=0 GOBIN=/out go install github.com/segmentio/chamber/v3@v3.1.5
+
 FROM ruby:3.3.6@sha256:347edd0c70ee08d87de9f01b99de2f14a64cedb5d1bfb38457dfe8cd0bf113c5 AS builder
 
 # buildx-provided target arch of the image being built: `amd64` or `arm64`.
@@ -73,11 +82,10 @@ RUN npm i -g npm@11.16.0
 RUN pip3 config set global.break-system-packages true
 RUN pip3 install --upgrade pip
 
-# chamber — pulls secrets at boot (bin/entrypoint.sh); needed at runtime, copied below.
-# #482: chamber's release assets use Docker's arch token (`amd64`/`arm64`), so TARGETARCH
-# slots in directly.
-RUN curl -L "https://github.com/segmentio/chamber/releases/download/v2.10.8/chamber-v2.10.8-linux-${TARGETARCH}" -o /bin/chamber
-RUN chmod +x /bin/chamber
+# chamber is built from source in the `chamber-builder` stage below (see top of file) and
+# copied into the runtime stage -- so it inherits a current Go toolchain instead of
+# segmentio's prebuilt release binary, which lags on Go and carried Go-stdlib CVEs
+# (#674: CVE-2026-39822 was unfixed even in the v3.1.5 prebuilt / Go 1.25.6). #474.
 
 COPY requirements.txt ./
 RUN pip3 install "cython<3.0.0"
@@ -202,7 +210,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 # Built artifacts from the builder stage.
 COPY --from=builder /usr/local/bundle /usr/local/bundle
 COPY --from=builder /usr/local/bin/samtools /usr/local/bin/samtools
-COPY --from=builder /bin/chamber /bin/chamber
+COPY --from=chamber-builder /out/chamber /bin/chamber
 # python packages + the awscli entrypoint (NOT /usr/local/bin wholesale — that would
 # drag node back in). pip3 (break-system-packages) installs here on bookworm.
 COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
