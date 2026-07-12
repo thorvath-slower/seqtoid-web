@@ -231,14 +231,20 @@ ENV GIT_VERSION=${GIT_COMMIT}
 #   - /app/log             : Rails logfiles
 #   - /app/app/assets/dist : webpack output (built in the builder stage); kept writable in
 #                            case the app touches it at boot.
+#   - /home/appuser        : HOME for the runtime user. The app shells out to the aws CLI
+#                            (Python/botocore) for S3 result I/O, and the CLI needs a writable
+#                            HOME for its config/cache dir. useradd --no-create-home does not
+#                            make it, so we create + chown it here; otherwise every transfer
+#                            dies with "[Errno 13] Permission denied: /home/appuser" and all
+#                            pipeline result-loading fails (CZID-64 regression).
 # The whole /app tree is chowned so the working tree is fully owned by appuser. Gems in
 # /usr/local/bundle and the chamber binary at /bin/chamber stay root-owned but are world-
 # readable / world-executable (COPY preserves the 0755 chmod from the builder), so appuser
 # can `bundle exec` and run `chamber` without ever needing to write there.
 RUN groupadd --gid 10001 appuser \
   && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin appuser \
-  && mkdir -p /app/tmp /app/log /app/app/assets/dist \
-  && chown -R appuser:appuser /app
+  && mkdir -p /home/appuser /app/tmp /app/log /app/app/assets/dist \
+  && chown -R appuser:appuser /app /home/appuser
 USER appuser
 
 EXPOSE 3000
