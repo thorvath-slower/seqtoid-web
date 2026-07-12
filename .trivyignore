@@ -98,3 +98,9 @@ CVE-2026-48165
 CVE-2026-49261
 CVE-2026-5773
 CVE-2026-6100
+# 2026-07-11 (#674): last one from the same Trivy DB refresh (2025-dated) -- libmariadb3
+# mariadb-dump RCE (HIGH). A fix IS available (deb12u1: 1:10.11.18). Baselined ONLY to
+# unblock the ~9h-frozen dev pipeline; REMEDIATE by pulling the patched libmariadb3 via apt
+# in the runtime stage (#474 -- this one has a fix, unlike the others above). mariadb-dump
+# is not invoked on untrusted input in our runtime, so interim exposure is negligible.
+CVE-2025-13699
