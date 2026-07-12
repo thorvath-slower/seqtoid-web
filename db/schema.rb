@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2025_07_09_000002) do
+ActiveRecord::Schema[7.0].define(version: 2025_07_12_000001) do
   create_table "accession_coverage_stats", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The id of the pipeline run the coverage stats were generated from"
     t.string "accession_id", null: false, comment: "The NCBI GenBank id of the accession the coverage stats were created for"
@@ -575,6 +575,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_07_09_000002) do
     t.bigint "truncated_bases"
     t.datetime "deleted_at", precision: nil, comment: "When the user triggered deletion of the pipeline run"
     t.bigint "mapped_reads"
+    t.integer "results_load_retry_count", default: 0, null: false, comment: "Times results-loading has been auto-retried after the SFN succeeded but outputs failed to load. Bounds the finalize_results cheap-retry auto-heal."
     t.index ["adjusted_remaining_reads"], name: "index_pipeline_runs_on_adjusted_remaining_reads"
     t.index ["alignment_config_id"], name: "pipeline_runs_alignment_config_id_fk"
     t.index ["compression_ratio"], name: "index_pipeline_runs_on_compression_ratio"
