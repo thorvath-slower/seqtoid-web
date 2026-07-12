@@ -1191,6 +1191,14 @@ class PipelineRun < ApplicationRecord
     error
   end
 
+  # Number of times finalize_results will auto-retry loading results when the
+  # compute (SFN) succeeded but one or more outputs failed to load (e.g. a
+  # transient infra error). A cheap retry re-loads the already-produced S3
+  # outputs rather than surfacing a healthy pipeline as a failed sample.
+  # Bounded so a genuinely un-loadable output eventually fails for real.
+  # See CZID-676 / #676.
+  RESULTS_LOAD_RETRY_LIMIT = 1
+
   def finalize_results(compiling_stats_error)
     if all_output_states_loaded? && compiling_stats_error.blank?
       update(
@@ -1203,6 +1211,13 @@ class PipelineRun < ApplicationRecord
         Resque.enqueue(PrecacheReportInfo, id)
       end
       event = EventDictionary::PIPELINE_RUN_SUCCEEDED
+    elsif results_load_auto_heal_eligible?
+      # Compute succeeded but one or more outputs failed to load. Reset the
+      # non-loaded outputs and re-open the run so the result monitor re-attempts
+      # them from the already-produced S3 outputs, instead of marking a healthy
+      # pipeline as a failed sample. Bounded by RESULTS_LOAD_RETRY_LIMIT.
+      auto_heal_results_load
+      return
     else
       update(
         results_finalized: FINALIZED_FAIL,
@@ -1215,6 +1230,41 @@ class PipelineRun < ApplicationRecord
       event,
       sample.user,
       pipeline_run_id: id, project_id: sample.project.id, run_time: run_time
+    )
+  end
+
+  # True when a finalize failure looks like a transient results-load failure we
+  # should auto-heal: the compute (SFN) actually succeeded, it is not a known
+  # user / input error, and we are still under the retry budget. Any error while
+  # probing SFN status is treated as not-eligible (the run fails normally).
+  def results_load_auto_heal_eligible?
+    return false if results_load_retry_count.to_i >= RESULTS_LOAD_RETRY_LIMIT
+    return false if known_user_error.present? || input_error.present?
+
+    sfn_execution.description[:status] == WorkflowRun::STATUS[:succeeded]
+  rescue StandardError => e
+    LogUtil.log_error(
+      "Could not determine results-load auto-heal eligibility for PipelineRun #{id}: #{e.message}",
+      exception: e, pipeline_run_id: id
+    )
+    false
+  end
+
+  # Reset the non-loaded output states and re-open the run for loading so the
+  # result monitor re-attempts them. update_columns avoids the before_save
+  # callbacks (this runs inside the monitor loop).
+  def auto_heal_results_load
+    output_states.where.not(state: STATUS_LOADED).find_each do |output_state|
+      output_state.update(state: STATUS_UNKNOWN)
+    end
+    update_columns( # rubocop:disable Rails/SkipsModelValidations
+      results_load_retry_count: results_load_retry_count.to_i + 1,
+      results_finalized: IN_PROGRESS
+    )
+    LogUtil.log_message(
+      "Auto-healing results-load failure for PipelineRun #{id} " \
+      "(attempt #{results_load_retry_count}/#{RESULTS_LOAD_RETRY_LIMIT}); reset non-loaded outputs for re-load.",
+      pipeline_run_id: id
     )
   end
 
