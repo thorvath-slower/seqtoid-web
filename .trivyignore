@@ -82,3 +82,19 @@ CVE-2026-48801
 CVE-2026-54297
 CVE-2026-54904
 CVE-2026-54906
+
+# 2026-07-11 baseline refresh (#674): a Trivy DB update surfaced these new 2026
+# HIGH/CRITICAL CVEs in the base OS (debian) + python3.11-stdlib layers. No fixed
+# package is available yet (the runtime already runs apt-get upgrade), so they are
+# accepted-current under the gate-on-new model and tracked for remediation via base
+# image / package updates when patches land (#474). The chamber Go-stdlib CVE from the
+# same DB update WAS remediated (source-build, #291) rather than baselined.
+CVE-2026-4224
+CVE-2026-44168
+CVE-2026-44171
+CVE-2026-44172
+CVE-2026-48163
+CVE-2026-48165
+CVE-2026-49261
+CVE-2026-5773
+CVE-2026-6100
