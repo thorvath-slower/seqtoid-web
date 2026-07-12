@@ -302,7 +302,11 @@ class WorkflowRun < ApplicationRecord
   # best-effort), so recovery here is restart-only. See CZID-676 / #676.
   WORKFLOW_AUTO_RESTART_LIMIT = 1
 
-  def update_status(remote_status = nil)
+  # allow_auto_restart: set false by callers that force a synthetic failure and
+  # must not trigger a self-heal restart -- notably the 24h timeout fail-safe
+  # (HandleSfnNotificationsTimeout), which gives up on lost/stuck runs. Genuine
+  # SFN-reported failures (the real notification handler) leave it true.
+  def update_status(remote_status = nil, allow_auto_restart: true)
     remote_status ||= sfn_execution.description[:status]
     # Collapse failed status into our local unique failure status. Status retrieved from [2020/08/12]:
     # https://docs.aws.amazon.com/step-functions/latest/apireference/API_DescribeExecution.html#API_DescribeExecution_ResponseSyntax
@@ -313,7 +317,7 @@ class WorkflowRun < ApplicationRecord
       if input_error.present?
         remote_status = STATUS[:succeeded_with_issue]
         error_message = input_error[:message]
-      elsif auto_restart_after_failure_eligible?
+      elsif allow_auto_restart && auto_restart_after_failure_eligible?
         # Transient/infra SFN failure (not an input error). Record the failure
         # so the restart stays bounded, then auto-restart once via #rerun so a
         # recoverable workflow self-heals instead of stranding the user (CZID-676).
