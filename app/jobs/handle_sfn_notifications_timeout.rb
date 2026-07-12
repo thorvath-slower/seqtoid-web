@@ -19,8 +19,9 @@ class HandleSfnNotificationsTimeout
     overdue_workflow_runs = WorkflowRun.where(status: WorkflowRun::STATUS[:running]).where("executed_at < ?", MAX_RUNTIME.ago)
     if overdue_workflow_runs.present?
       overdue_workflow_runs.each do |wr|
-        # Alert is sent within update_status:
-        wr.update_status(WorkflowRun::STATUS[:failed])
+        # Alert is sent within update_status. This is the 24h fail-safe for
+        # lost/stuck runs, so do not auto-restart -- just mark it failed.
+        wr.update_status(WorkflowRun::STATUS[:failed], allow_auto_restart: false)
         Rails.logger.info("Marked WorkflowRun #{wr.id} as failed due to timeout.")
       end
     end
