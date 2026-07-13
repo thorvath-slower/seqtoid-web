@@ -60,7 +60,11 @@ export const OverflowMenu = ({
   supportNote,
   onRecoverySuccess,
 }: OverflowMenuProps) => {
-  if (!readyToDelete || !deleteId) return null;
+  // Show the menu when there is something actionable: a deletable run (readyToDelete,
+  // which for mNGS needs a report) OR a finalized/failed run that can be recovered.
+  // CZID-676: recovery must appear on FAILED samples (no report -> readyToDelete false),
+  // which is exactly where Retry/Re-run/Report are needed.
+  if (!deleteId || (!readyToDelete && !runFinalized)) return null;
   const [menuAnchorEl, setMenuAnchorEl] =
     useState<PopoverProps["anchorEl"]>(null);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
@@ -238,8 +242,9 @@ export const OverflowMenu = ({
         open={Boolean(menuAnchorEl)}
         onClose={closeActionsMenu}
       >
-        {renderDeleteRunMenuItem()}
-        {isMngs &&
+        {readyToDelete && renderDeleteRunMenuItem()}
+        {runFinalized &&
+          isMngs &&
           sampleId != null &&
           renderRecoveryMenuItem(
             "retry-run",
@@ -248,7 +253,8 @@ export const OverflowMenu = ({
             handleRetry,
             recoveryDisabled,
           )}
-        {(sampleId != null || workflowRunId != null) &&
+        {runFinalized &&
+          (sampleId != null || workflowRunId != null) &&
           renderRecoveryMenuItem(
             "rerun-run",
             `Re-run ${workflowShorthand} Analysis`,
@@ -256,13 +262,14 @@ export const OverflowMenu = ({
             handleRerun,
             recoveryDisabled,
           )}
-        {renderRecoveryMenuItem(
-          "report-run",
-          "Report to our team",
-          supportIcon,
-          handleReportToSupport,
-          false,
-        )}
+        {runFinalized &&
+          renderRecoveryMenuItem(
+            "report-run",
+            "Report to our team",
+            supportIcon,
+            handleReportToSupport,
+            false,
+          )}
       </Menu>
       <BulkDeleteModal
         isOpen={isBulkDeleteModalOpen}
