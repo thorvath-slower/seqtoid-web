@@ -211,14 +211,11 @@ RSpec.describe BulkDownloadsController, type: :controller do
         expect(response).to have_http_status(200)
       end
 
-      it "should error if too many samples are requested in an original input files bulk download" do
+      it "should reject a request for the removed original_input_file download type (prevent-download legal control)" do
         @sample_one = create(:sample, project: @project,
                                       pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }])
         @sample_two = create(:sample, project: @project,
                                       pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }])
-
-        # Set MAX_SAMPLES_BULK_DOWNLOAD_ORIGINAL_FILES to 1
-        AppConfigHelper.set_app_config(AppConfig::MAX_SAMPLES_BULK_DOWNLOAD_ORIGINAL_FILES, 1)
 
         bulk_download_params = {
           download_type: "original_input_file",
@@ -227,10 +224,10 @@ RSpec.describe BulkDownloadsController, type: :controller do
         }
 
         post :create, params: bulk_download_params
-        expect(response).to have_http_status(422)
 
+        expect(response).to have_http_status(422)
         json_response = JSON.parse(response.body)
-        expect(json_response["error"]).to eq(BulkDownloadsHelper::MAX_OBJECTS_EXCEEDED_ERROR_TEMPLATE % 1)
+        expect(json_response["error"]).to eq(BulkDownloadsHelper::UNKNOWN_DOWNLOAD_TYPE)
       end
 
       it "checks and uses the most recent pipeline run for a sample" do
@@ -310,26 +307,6 @@ RSpec.describe BulkDownloadsController, type: :controller do
 
         json_response = JSON.parse(response.body)
         expect(json_response["error"]).to eq(BulkDownloadsHelper::COLLABORATOR_ONLY_DOWNLOAD_TYPE)
-      end
-
-      it "should error if user attempts to activate uploader-only download type with sample they didn't upload" do
-        @sample_one = create(:sample, project: @project,
-                                      pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }], user: @joe)
-        @sample_two = create(:sample, project: @project,
-                                      pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }], user: @admin)
-
-        bulk_download_params = {
-          # This download type is uploader-only.
-          download_type: "original_input_file",
-          sample_ids: [@sample_one, @sample_two],
-          workflow: WorkflowRun::WORKFLOW[:short_read_mngs],
-        }
-
-        post :create, params: bulk_download_params
-        expect(response).to have_http_status(422)
-
-        json_response = JSON.parse(response.body)
-        expect(json_response["error"]).to eq(BulkDownloadsHelper::UPLOADER_ONLY_DOWNLOAD_TYPE)
       end
 
       it "should error if user specifies an unknown download type" do
@@ -826,7 +803,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         @sample_one = create(:sample, project: @project,
                                       pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }])
 
-        bulk_download = create(:bulk_download, user: @joe, pipeline_run_ids: [@sample_one.first_pipeline_run.id], download_type: "original_input_file", ecs_task_arn: "MOCK_TASK_ARN")
+        bulk_download = create(:bulk_download, user: @joe, pipeline_run_ids: [@sample_one.first_pipeline_run.id], download_type: "host_gene_counts", ecs_task_arn: "MOCK_TASK_ARN")
 
         get :index, format: :json
 
@@ -836,7 +813,7 @@ RSpec.describe BulkDownloadsController, type: :controller do
         expect(bulk_downloads.length).to eq(1)
         expect(bulk_downloads[0]["id"]).to eq(bulk_download.id)
         expect(bulk_downloads[0]["user_id"]).to eq(@joe.id)
-        expect(bulk_downloads[0]["download_type"]).to eq("original_input_file")
+        expect(bulk_downloads[0]["download_type"]).to eq("host_gene_counts")
         expect(bulk_downloads[0]["num_samples"]).to eq(1)
         expect(bulk_downloads[0]["user_name"]).to eq("Joe")
         expect(bulk_downloads[0]["execution_type"]).to eq("ecs")
@@ -874,29 +851,6 @@ RSpec.describe BulkDownloadsController, type: :controller do
 
         bulk_download_params = {
           download_type: "sample_overview",
-          sample_ids: [@sample_one, @sample_two],
-          workflow: WorkflowRun::WORKFLOW[:short_read_mngs],
-        }
-
-        post :create, params: bulk_download_params
-        expect(response).to have_http_status(200)
-      end
-
-      it "should allow uploader-only downloads with samples the admin didn't upload" do
-        @sample_one = create(:sample, project: @project,
-                                      pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }], user: @joe)
-        @sample_two = create(:sample, project: @project,
-                                      pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_CHECKED }], user: @admin)
-
-        # This runs "aegea ecs run", which won't succeed in CI, so we must mock it out.
-        allow(Open3).to receive(:capture3)
-          .and_return(
-            [JSON.generate("taskArn": "ABC"), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
-          )
-
-        bulk_download_params = {
-          # This download type is uploader-only.
-          download_type: "original_input_file",
           sample_ids: [@sample_one, @sample_two],
           workflow: WorkflowRun::WORKFLOW[:short_read_mngs],
         }
