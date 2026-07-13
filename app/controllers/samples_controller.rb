@@ -31,8 +31,17 @@ class SamplesController < ApplicationController
                   :results_folder, :show_taxid_alignment, :metadata, :amr,
                   :taxid_contigs_for_blast, :taxid_contigs_download, :taxon_five_longest_reads, :coverage_viz_summary,
                   :coverage_viz_data, :upload_credentials, :pipeline_logs,].freeze
-  EDIT_ACTIONS = [:edit, :update, :reupload_source, :kickoff_pipeline,
+  EDIT_ACTIONS = [:edit, :update, :reupload_source, :kickoff_pipeline, :retry_pipeline_run,
                   :pipeline_runs, :save_metadata, :save_metadata_v2, :kickoff_workflow, :move_to_project, :cancel_pipeline_run,].freeze
+
+  # Owner-triggered recovery actions (self-service, not admin). kickoff_pipeline = full re-run
+  # (new pipeline run, daily-capped); retry_pipeline_run = cheap reconcile of the existing run
+  # from its already-produced S3 outputs (uncapped). Scoped to the run creator (or admin) via
+  # check_owner, on top of the updatable_samples power scope. See CZID-676 Phase C.
+  RECOVERY_ACTIONS = [:kickoff_pipeline, :retry_pipeline_run].freeze
+  # Soft cap: at most this many owner-triggered full re-runs per sample per 24h (retry is
+  # uncapped since it re-uses cached compute). Admins are exempt.
+  RERUN_DAILY_LIMIT = 3
 
   OTHER_ACTIONS = [:bulk_upload_with_metadata, :bulk_import, :index, :index_v2, :details,
                    :dimensions, :all, :show_sample_names, :cli_user_instructions, :metadata_fields,
@@ -47,7 +56,7 @@ class SamplesController < ApplicationController
   skip_before_action :verify_authenticity_token, only: TOKEN_AUTH_ACTIONS
   prepend_before_action :token_based_login_support, only: TOKEN_AUTH_ACTIONS
 
-  before_action :admin_required, only: [:reupload_source, :kickoff_pipeline, :pipeline_runs, :move_to_project, :pipeline_logs, :cancel_pipeline_run, :benchmark, :benchmark_ground_truth_files]
+  before_action :admin_required, only: [:reupload_source, :pipeline_runs, :move_to_project, :pipeline_logs, :cancel_pipeline_run, :benchmark, :benchmark_ground_truth_files]
   before_action :login_required, only: [:bulk_import]
 
   # Read actions are mapped to viewable_samples scope and Edit actions are mapped to updatable_samples.
@@ -55,7 +64,11 @@ class SamplesController < ApplicationController
 
   before_action :set_sample, only: READ_ACTIONS + EDIT_ACTIONS + OWNER_ACTIONS
   before_action :assert_access, only: OTHER_ACTIONS # Actions which don't require access control check
-  before_action :check_owner, only: OWNER_ACTIONS
+  # Recovery (kickoff_pipeline re-run, retry_pipeline_run) is owner-scoped (creator or admin),
+  # not admin-only -- runs after set_sample so @sample is available. The daily cap gates only the
+  # full re-run (retry is uncapped). See CZID-676 Phase C.
+  before_action :check_owner, only: OWNER_ACTIONS + RECOVERY_ACTIONS
+  before_action :enforce_rerun_daily_cap, only: [:kickoff_pipeline]
   before_action :check_access
   before_action only: :amr do
     allowed_feature_required("AMR")
@@ -1410,6 +1423,23 @@ class SamplesController < ApplicationController
     end
   end
 
+  # PUT /samples/:id/retry_pipeline_run
+  # Owner-triggered cheap retry: reconcile the sample's latest mNGS pipeline run from its
+  # already-produced S3 outputs (PipelineRun#retry, via STATUS_RETRY_PR) instead of a full
+  # re-run. No new compute, so it is uncapped. Only applies to mNGS samples (PipelineRun);
+  # samples with no pipeline run (e.g. CG/AMR) get a 422 and should use re-run instead.
+  def retry_pipeline_run
+    pipeline_run = @sample.first_pipeline_run
+    if pipeline_run.nil?
+      render json: { message: "No pipeline run to retry for this sample." }, status: :unprocessable_content
+      return
+    end
+
+    @sample.status = Sample::STATUS_RETRY_PR
+    @sample.save
+    render json: { status: "retry queued", pipeline_run_id: pipeline_run.id }
+  end
+
   def cancel_pipeline_run
     pipeline_run = @sample.pipeline_runs.where(finalized: 0, deprecated: false).first
     respond_to do |format|
@@ -1741,6 +1771,22 @@ class SamplesController < ApplicationController
       }, status: :unauthorized
       # Rendering halts the filter chain
     end
+  end
+
+  # Soft rate-limit on owner-triggered full re-runs: at most RERUN_DAILY_LIMIT pipeline runs
+  # created for the sample in the last 24h (each full re-run creates one). Cheap retry does not
+  # create a run and is not gated here. Admins are exempt (support can always re-run). Rendering
+  # halts the filter chain.
+  def enforce_rerun_daily_cap
+    return if current_user.admin?
+
+    recent_runs = @sample.pipeline_runs.where("created_at > ?", 24.hours.ago).count
+    return if recent_runs < RERUN_DAILY_LIMIT
+
+    render json: {
+      message: "This sample has reached its daily re-run limit (#{RERUN_DAILY_LIMIT}). " \
+               "Please try again later, or use Report to our team if it keeps failing.",
+    }, status: :too_many_requests
   end
 
   def warn_if_large_bulk_upload(samples)

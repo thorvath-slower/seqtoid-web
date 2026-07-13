@@ -1167,4 +1167,38 @@ RSpec.describe WorkflowRunsController, type: :controller do
       end
     end
   end
+
+  # CZID-676 Phase C: rerun is owner-scoped (creator or admin), not admin-only.
+  context "Owner-scoped rerun (CZID-676)" do
+    before do
+      @collaborator = create(:user)
+      # @collaborator has project view access but is not the run creator.
+      @project = create(:project, users: [@joe, @collaborator])
+      @sample = create(:sample, project: @project, user: @joe)
+      @workflow_run = create(:workflow_run, sample: @sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:consensus_genome])
+    end
+
+    it "lets the run creator (non-admin) re-run their own workflow" do
+      sign_in @joe
+      expect_any_instance_of(WorkflowRun).to receive(:rerun)
+      put :rerun, params: { id: @workflow_run.id }
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "forbids a non-owner (project collaborator, non-admin) from re-running" do
+      sign_in @collaborator
+      expect_any_instance_of(WorkflowRun).not_to receive(:rerun)
+      put :rerun, params: { id: @workflow_run.id }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "enforces the daily re-run cap for the owner" do
+      sign_in @joe
+      create_list(:workflow_run, WorkflowRunsController::WORKFLOW_RERUN_DAILY_LIMIT,
+                  sample: @sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:consensus_genome])
+      expect_any_instance_of(WorkflowRun).not_to receive(:rerun)
+      put :rerun, params: { id: @workflow_run.id }
+      expect(response).to have_http_status(:too_many_requests)
+    end
+  end
 end

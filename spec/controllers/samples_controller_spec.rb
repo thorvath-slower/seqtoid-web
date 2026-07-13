@@ -1290,4 +1290,63 @@ RSpec.describe SamplesController, type: :controller do
       end
     end
   end
+
+  # CZID-676 Phase C: owner-scoped self-service recovery (not admin-only).
+  context "owner-scoped recovery (CZID-676)" do
+    before do
+      @collaborator = create(:user)
+      # @collaborator has project view access but did not create the sample.
+      @project = create(:project, users: [@joe, @collaborator])
+      @sample = create(:sample, project: @project, user: @joe,
+                       pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_FAILED }])
+    end
+
+    describe "PUT retry_pipeline_run (cheap retry)" do
+      it "lets the owner queue a retry" do
+        sign_in @joe
+        put :retry_pipeline_run, params: { id: @sample.id }
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["status"]).to eq("retry queued")
+      end
+
+      it "forbids a non-owner project collaborator" do
+        sign_in @collaborator
+        put :retry_pipeline_run, params: { id: @sample.id }
+        expect(response).to have_http_status(:unauthorized)
+      end
+
+      it "returns 422 when the sample has no pipeline run" do
+        sign_in @joe
+        no_run_sample = create(:sample, project: @project, user: @joe)
+        put :retry_pipeline_run, params: { id: no_run_sample.id }
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+    end
+
+    describe "PUT kickoff_pipeline (owner-scoped full re-run)" do
+      it "lets the owner (non-admin) trigger a re-run" do
+        sign_in @joe
+        allow_any_instance_of(Sample).to receive(:kickoff_pipeline) # isolate auth from dispatch
+        put :kickoff_pipeline, params: { id: @sample.id, format: :json }
+        expect(response).not_to have_http_status(:unauthorized)
+        expect(response).to have_http_status(:no_content)
+      end
+
+      it "forbids a non-owner project collaborator" do
+        sign_in @collaborator
+        put :kickoff_pipeline, params: { id: @sample.id, format: :json }
+        expect(response).to have_http_status(:unauthorized)
+      end
+
+      it "enforces the daily re-run cap for the owner" do
+        sign_in @joe
+        capped_sample = create(:sample, project: @project, user: @joe,
+                               pipeline_runs_data: Array.new(SamplesController::RERUN_DAILY_LIMIT) do
+                                 { finalized: 1, job_status: PipelineRun::STATUS_CHECKED }
+                               end)
+        put :kickoff_pipeline, params: { id: capped_sample.id, format: :json }
+        expect(response).to have_http_status(:too_many_requests)
+      end
+    end
+  end
 end

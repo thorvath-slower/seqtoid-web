@@ -5,9 +5,12 @@ class WorkflowRunsController < ApplicationController
   include WorkflowRunsFetching
 
   before_action :set_workflow_run, only: [:show, :results, :zip_link, :amr_report_downloads, :amr_gene_level_downloads, :cg_report_downloads, :benchmark_report_downloads]
-  before_action :admin_required, only: [:rerun]
+  # rerun is owner-scoped (creator or admin), enforced inline after set_workflow_run -- not
+  # admin-only. See CZID-676 Phase C.
 
   MAX_PAGE_SIZE = 100
+  # Soft cap: at most this many owner-triggered re-runs per sample+workflow per 24h. Admins exempt.
+  WORKFLOW_RERUN_DAILY_LIMIT = 3
   CLADE_FASTA_S3_KEY = "clade_exports/fastas/temp-%{path}".freeze
   CLADE_REFERENCE_TREE_S3_KEY = "clade_exports/trees/temp-%{path}".freeze
   CLADE_EXTERNAL_SITE = "clades.nextstrain.org".freeze
@@ -69,6 +72,22 @@ class WorkflowRunsController < ApplicationController
   def rerun
     wr_id = params[:id]
     set_workflow_run
+    return if @workflow_run.nil? # set_workflow_run already rendered a 404
+
+    unless current_user.admin? || @workflow_run.user_id == current_user.id
+      render json: { status: "error", message: "Only the original uploader can re-run this." }, status: :unauthorized
+      return
+    end
+
+    unless current_user.admin? || workflow_rerun_under_daily_cap?(@workflow_run)
+      render json: {
+        status: "error",
+        message: "This sample has reached its daily re-run limit (#{WORKFLOW_RERUN_DAILY_LIMIT}). " \
+                 "Please try again later, or use Report to our team if it keeps failing.",
+      }, status: :too_many_requests
+      return
+    end
+
     @workflow_run.rerun
     render json: { status: "success" }, status: :ok
   rescue StandardError => e
@@ -405,6 +424,15 @@ class WorkflowRunsController < ApplicationController
   end
 
   private
+
+  # Soft rate-limit: at most WORKFLOW_RERUN_DAILY_LIMIT workflow runs created for this
+  # sample+workflow in the last 24h (each re-run creates one). Admins are exempt at the caller.
+  def workflow_rerun_under_daily_cap?(workflow_run)
+    workflow_run.sample.workflow_runs
+                .where(workflow: workflow_run.workflow)
+                .where("created_at > ?", 24.hours.ago)
+                .count < WORKFLOW_RERUN_DAILY_LIMIT
+  end
 
   def set_workflow_run
     workflow_run = current_power.workflow_runs.find(params[:id])
