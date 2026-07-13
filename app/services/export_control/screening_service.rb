@@ -93,6 +93,9 @@ module ExportControl
     end
 
     def persist_and_decide(subject, soptionalid, response)
+      # SMP-1253: stamp the OTel trace id onto the durable evidence row so each compliance
+      # record cross-links to its distributed trace. nil when tracing is off (local/test/CI).
+      trace_id = ExportControl::ScreeningAudit.current_trace_id
       screening_result = ScreeningResult.create!(
         subject_ref: subject.subject_ref,
         subject_type: subject.subject_type,
@@ -105,13 +108,25 @@ module ExportControl
         incident_id: nil, # populated later by the CZID-598 resolution poller
         provider: PROVIDER,
         screened_at: Time.current,
-        raw_response_ref: response.raw_ref
+        raw_response_ref: response.raw_ref,
+        trace_id: trace_id
       )
 
       if screening_result.hold_required?
         hold = create_hold(subject, Hold::REASON_SCREENING_HIT, screening_result)
+        # SMP-1253 audit: identifiers only -- never the screened party's name/address.
+        ExportControl::ScreeningAudit.record(
+          "screen.held",
+          subject_ref: subject.subject_ref, decision: "held", alert_level: screening_result.alert_level,
+          screening_result_id: screening_result.id, hold_id: hold.id, provider: PROVIDER, trace_id: trace_id
+        )
         Outcome.new(decision: :held, screening_result: screening_result, hold: hold)
       else
+        ExportControl::ScreeningAudit.record(
+          "screen.allowed",
+          subject_ref: subject.subject_ref, decision: "allowed", alert_level: screening_result.alert_level,
+          screening_result_id: screening_result.id, provider: PROVIDER, trace_id: trace_id
+        )
         Outcome.new(decision: :allowed, screening_result: screening_result, hold: nil)
       end
     end
@@ -119,6 +134,11 @@ module ExportControl
     # Fail-closed hold with no screening row (transport/timeout/config/per-search error).
     def hold_on_error(subject)
       hold = create_hold(subject, Hold::REASON_SCREENING_ERROR, nil)
+      ExportControl::ScreeningAudit.record(
+        "screen.error",
+        subject_ref: subject.subject_ref, decision: "error", reason: Hold::REASON_SCREENING_ERROR,
+        hold_id: hold.id, provider: PROVIDER, trace_id: ExportControl::ScreeningAudit.current_trace_id
+      )
       Outcome.new(decision: :error, screening_result: nil, hold: hold)
     end
 
@@ -127,7 +147,9 @@ module ExportControl
         subject_ref: subject.subject_ref,
         subject_type: subject.subject_type,
         reason: reason,
-        screening_result_id: screening_result&.id
+        screening_result_id: screening_result&.id,
+        # SMP-1253: cross-link the hold to its distributed trace (nil when tracing is off).
+        trace_id: ExportControl::ScreeningAudit.current_trace_id
       )
     end
 

@@ -193,4 +193,42 @@ RSpec.describe ExportControl::ScreeningService, type: :service do
       expect(outcome.decision).to eq(:allowed)
     end
   end
+
+  # SMP-1253 -- the OTel/structured-log audit layer ON TOP of the durable evidence rows.
+  describe '#screen -- SMP-1253 audit wiring' do
+    it 'stamps trace_id on the evidence + hold rows (nil when tracing is off) and audit-logs the decision' do
+      stub_request(:post, search_url).to_return(status: 200, body: hit_body(smaxalert: '_R', sdistributedid: 'd-1'),
+                                                headers: json_headers)
+      allow(Rails.logger).to receive(:info).and_call_original
+
+      outcome = service.screen(party)
+
+      expect(outcome.decision).to eq(:held)
+      # trace_id is stamped but nil in test/CI (no OTLP configured -> no recording span).
+      expect(outcome.screening_result).to have_attributes(trace_id: nil)
+      expect(outcome.hold).to have_attributes(trace_id: nil)
+      expect(Rails.logger).to have_received(:info)
+        .with(a_string_matching(/\[screening_audit\].*"screening_event":"screen\.held"/))
+    end
+
+    it 'emits an audit line on a fail-closed error hold' do
+      stub_request(:post, search_url).to_timeout
+      allow(Rails.logger).to receive(:info).and_call_original
+
+      outcome = service.screen(party)
+
+      expect(outcome.decision).to eq(:error)
+      expect(Rails.logger).to have_received(:info)
+        .with(a_string_matching(/\[screening_audit\].*"screening_event":"screen\.error"/))
+    end
+
+    it 'never leaks the screened party name into the audit log' do
+      stub_request(:post, search_url).to_return(status: 200, body: clean_body, headers: json_headers)
+      allow(Rails.logger).to receive(:info).and_call_original
+
+      service.screen(party) # party.name = 'Wayne Smith'
+
+      expect(Rails.logger).not_to have_received(:info).with(a_string_matching(/screening_audit.*Wayne/))
+    end
+  end
 end
