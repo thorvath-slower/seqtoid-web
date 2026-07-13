@@ -29,6 +29,11 @@ class BulkDownload < ApplicationRecord
 
   attr_writer :params
 
+  # Raised when the shelled-out ECS/aegea kickoff command exits non-zero. Wraps
+  # the failure with a clean, human-readable message instead of re-raising the
+  # raw Python traceback that the subprocess emitted on stderr (see #532).
+  class KickoffError < StandardError; end
+
   validates :status, presence: true, inclusion: { in: [STATUS_WAITING, STATUS_RUNNING, STATUS_ERROR, STATUS_SUCCESS] }
   validate :params_checks
 
@@ -190,11 +195,26 @@ class BulkDownload < ApplicationRecord
     "#{server_host}#{bulk_downloads_progress_path(access_token: access_token, id: id)}"
   end
 
+  # The aegea ECS bulk-download tasks (cluster + executable-file bucket) are only
+  # provisioned per deployment stage (test/staging/prod); there is no "development"
+  # aegea cluster/bucket. So on a local `development` boot the ECS cluster and
+  # executable-file S3 bucket must be redirected to a real deployment stage. We derive
+  # that stage from ENV["ENVIRONMENT"] -- the same var the SFN ARNs are driven from
+  # (#385) -- defaulting to "staging" so a dev-env bulk download submits to the staging
+  # cluster/bucket instead of a non-existent `*-development` one (#186).
+  # NB: this only governs the cluster/bucket; task_role stays keyed on Rails.env, matching
+  # the prior behavior (the download IAM role IS provisioned per Rails env).
+  AEGEA_DEV_FALLBACK_STAGE = "staging".freeze
+
+  def aegea_deployment_stage
+    ENV["ENVIRONMENT"].presence || AEGEA_DEV_FALLBACK_STAGE
+  end
+
   # Returned as an array of strings
   def aegea_ecs_submit_command(
     executable_file_path: nil,
-    task_role: "czi-infectious-disease-downloads-#{Rails.env}", # TODO: Fix Rails.env
-    ecs_cluster: "idseq-fargate-tasks-#{Rails.env}", # TODO: Fix Rails.env
+    task_role: "czi-infectious-disease-downloads-#{Rails.env}", # role is provisioned per Rails env
+    ecs_cluster: "idseq-fargate-tasks-#{Rails.env}",
     executable_s3_bucket: S3_AEGEA_ECS_EXECUTE_BUCKET,
     ecr_image: "idseq-s3-tar-writer:latest",
     fargate_cpu: "4096",
@@ -205,12 +225,12 @@ class BulkDownload < ApplicationRecord
       ecr_image = config_ecr_image
     end
 
-    # Use the staging ecs cluster and executable s3 bucket for development.
-    # TODO Fix this, and use "dev" instead of "development" here, and in the Infra project
-    # if Rails.env.development?
-    #  ecs_cluster = "idseq-fargate-tasks-dev"
-    #  executable_s3_bucket = "aegea-ecs-execute-dev"
-    # end
+    # In local development there is no `*-development` aegea cluster/bucket, so redirect
+    # to a real deployment stage (ENV["ENVIRONMENT"], default "staging"). See #186.
+    if Rails.env.development?
+      ecs_cluster = "idseq-fargate-tasks-#{aegea_deployment_stage}"
+      executable_s3_bucket = "aegea-ecs-execute-#{aegea_deployment_stage}"
+    end
 
     command_flag = "--execute=#{executable_file_path}"
 
@@ -308,7 +328,13 @@ class BulkDownload < ApplicationRecord
     executable_file = create_local_exec_file(shell_command_escaped)
     aegea_command = aegea_ecs_submit_command(executable_file_path: executable_file.path.to_s)
 
-    command_stdout, command_stderr, status = Open3.capture3(*aegea_command)
+    # aegea shells out to AWS (ECS/Batch/ECR/S3) and fails intermittently on
+    # throttling / capacity / transient network / 5xx / timeouts. AegeaRetry
+    # retries only those transient signals with exponential backoff + jitter and
+    # surfaces permanent failures (bad args, unknown cluster, AccessDenied)
+    # immediately with the real stderr. First-try success behaves exactly as
+    # a bare Open3.capture3.
+    command_stdout, command_stderr, status = AegeaRetry.capture3(*aegea_command)
     if status.exitstatus.zero?
       output = JSON.parse(command_stdout)
       # Store the taskArn for debugging purposes.
@@ -319,7 +345,14 @@ class BulkDownload < ApplicationRecord
       self.status = STATUS_ERROR
       self.error_message = BulkDownloadsHelper::KICKOFF_FAILURE
       save!
-      raise command_stderr
+      # Log the raw subprocess stderr (which may carry a Python traceback) for
+      # debugging, but raise a typed error with a clean, human-readable message
+      # rather than re-raising the raw traceback string (see #532).
+      LogUtil.log_error(
+        "BulkDownloadKickoffError: aegea ECS kickoff failed for bulk download #{id}: #{command_stderr}",
+        bulk_download_id: id
+      )
+      raise KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE
     end
   ensure
     if executable_file.present?
@@ -395,40 +428,40 @@ class BulkDownload < ApplicationRecord
     download_src_urls = nil
     download_tar_names = nil
 
-    if download_type == ORIGINAL_INPUT_FILE_BULK_DOWNLOAD_TYPE
-      samples_ordered = samples_ordered.includes(:input_files)
-
-      download_src_urls = samples_ordered.map(&:input_file_s3_paths).flatten
-
-      # File output name notes:
-      # We use the sample name in the output file names (instead of the original input file names)
-      # because the sample name is what's visible on the UI and because the original file names might be non-unique.
-      # We include the project id because the cleaned project names might be non-unique.
-      download_tar_names = samples_ordered.map do |sample|
-        input_fastq_index = 0
-        sample.input_files.map do |input_file|
-          if input_file.file_type == InputFile::FILE_TYPE_FASTQ
-            if sample.input_files.fastq.count < 2
-              # Single-end sample
-              "#{get_output_file_prefix(sample, cleaned_project_names)}" \
-                  "original.#{input_file.file_extension}"
-            else
-              # Paired-end sample
-              # We assume that the first input fastq file is R1 and the second input fastq file is R2. This is the convention that the pipeline follows.
-              input_fastq_index += 1
-              "#{get_output_file_prefix(sample, cleaned_project_names)}" \
-                "original_R#{input_fastq_index}.#{input_file.file_extension}"
-            end
-          elsif input_file.file_type == InputFile::FILE_TYPE_REFERENCE_SEQUENCE
-            "#{get_output_file_prefix(sample, cleaned_project_names)}" \
-              "original_reference_sequence.#{input_file.file_extension}"
-          elsif input_file.file_type == InputFile::FILE_TYPE_PRIMER_BED
-            "#{get_output_file_prefix(sample, cleaned_project_names)}" \
-              "original_primer.#{input_file.file_extension}"
-          end
-        end
-      end.flatten
-    end
+    # if download_type == ORIGINAL_INPUT_FILE_BULK_DOWNLOAD_TYPE
+    #   samples_ordered = samples_ordered.includes(:input_files)
+    #
+    #   download_src_urls = samples_ordered.map(&:input_file_s3_paths).flatten
+    #
+    #   # File output name notes:
+    #   # We use the sample name in the output file names (instead of the original input file names)
+    #   # because the sample name is what's visible on the UI and because the original file names might be non-unique.
+    #   # We include the project id because the cleaned project names might be non-unique.
+    #   download_tar_names = samples_ordered.map do |sample|
+    #     input_fastq_index = 0
+    #     sample.input_files.map do |input_file|
+    #       if input_file.file_type == InputFile::FILE_TYPE_FASTQ
+    #         if sample.input_files.fastq.count < 2
+    #           # Single-end sample
+    #           "#{get_output_file_prefix(sample, cleaned_project_names)}" \
+    #               "original.#{input_file.file_extension}"
+    #         else
+    #           # Paired-end sample
+    #           # We assume that the first input fastq file is R1 and the second input fastq file is R2. This is the convention that the pipeline follows.
+    #           input_fastq_index += 1
+    #           "#{get_output_file_prefix(sample, cleaned_project_names)}" \
+    #             "original_R#{input_fastq_index}.#{input_file.file_extension}"
+    #         end
+    #       elsif input_file.file_type == InputFile::FILE_TYPE_REFERENCE_SEQUENCE
+    #         "#{get_output_file_prefix(sample, cleaned_project_names)}" \
+    #           "original_reference_sequence.#{input_file.file_extension}"
+    #       elsif input_file.file_type == InputFile::FILE_TYPE_PRIMER_BED
+    #         "#{get_output_file_prefix(sample, cleaned_project_names)}" \
+    #           "original_primer.#{input_file.file_extension}"
+    #       end
+    #     end
+    #   end.flatten
+    # end
 
     if download_type == UNMAPPED_READS_BULK_DOWNLOAD_TYPE
       download_src_urls = pipeline_runs_ordered.map(&:unidentified_fasta_s3_path)
@@ -546,7 +579,20 @@ class BulkDownload < ApplicationRecord
     PROGRESS_UPDATE_DELAY
   end
 
+  # Raised when the biom CLI conversion fails, so the failure surfaces as a typed error
+  # carrying the CLI stderr instead of a bare RuntimeError whose message is the raw Python
+  # biom traceback (#555).
+  class BiomConversionError < StandardError; end
+
   def create_biom_file(metrics_path, metadata_path, taxon_lineage_path)
+    # A header-only metrics file means no species-level taxa passed the selected filters;
+    # biom convert cannot build a 0-observation table, so fail fast with a clear message
+    # instead of shelling out to a guaranteed non-zero exit (#555).
+    if File.foreach(metrics_path).count <= 1
+      self.status = STATUS_ERROR
+      raise BiomConversionError, "No taxa matched the selected filters, so a BIOM file could not be generated."
+    end
+
     output_biom = "/tmp/#{id.to_s.shellescape}_output.biom"
     output_biom_metadata = "/tmp/#{id.to_s.shellescape}_output_metadata.biom"
     stdout, stderr, status = Open3.capture3("biom", "convert", "-i", metrics_path, "-o", output_biom.shellescape, '--table-type=OTU table', "--to-json")
@@ -561,12 +607,12 @@ class BulkDownload < ApplicationRecord
       else
         self.status = STATUS_ERROR
         LogUtil.log_error("biom add-metadata failed: #{stdout}, #{stderr}")
-        raise stderr
+        raise BiomConversionError, "biom add-metadata failed: #{stderr}"
       end
     else
       self.status = STATUS_ERROR
       LogUtil.log_error("biom convert failed: #{stdout}, #{stderr}")
-      raise stderr
+      raise BiomConversionError, "biom convert failed: #{stderr}"
     end
   end
 

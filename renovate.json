@@ -1,0 +1,40 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":maintainLockFilesDisabled"
+  ],
+  "timezone": "America/Los_Angeles",
+  "schedule": ["before 9am on monday"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rebaseWhen": "conflicted",
+  "pinDigests": true,
+  "packageRules": [
+    {
+      "description": "Group GitHub Actions bumps into one PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Group Ruby/Bundler gem bumps.",
+      "matchManagers": ["bundler"],
+      "groupName": "ruby gems"
+    },
+    {
+      "description": "Group JS/npm bumps.",
+      "matchManagers": ["npm"],
+      "groupName": "npm packages"
+    },
+    {
+      "description": "Group Python (requirements) bumps.",
+      "matchManagers": ["pip_requirements"],
+      "groupName": "python deps"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  }
+}

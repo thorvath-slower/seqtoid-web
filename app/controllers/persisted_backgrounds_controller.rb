@@ -40,7 +40,7 @@ class PersistedBackgroundsController < ApplicationController
     rescue ActiveRecord::RecordInvalid => e
       render(
         json: { error: e },
-        status: :unprocessable_entity
+        status: :unprocessable_content
       )
     end
   end
@@ -61,7 +61,7 @@ class PersistedBackgroundsController < ApplicationController
           new_background_id: new_background_id,
           error: e,
         },
-        status: :unprocessable_entity
+        status: :unprocessable_content
       )
     end
   end

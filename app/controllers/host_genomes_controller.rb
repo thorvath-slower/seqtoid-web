@@ -45,7 +45,7 @@ class HostGenomesController < ApplicationController
         format.json { render :show, status: :created, location: @host_genome }
       else
         format.html { render :new }
-        format.json { render json: @host_genome.errors, status: :unprocessable_entity }
+        format.json { render json: @host_genome.errors, status: :unprocessable_content }
       end
     end
   end
@@ -59,7 +59,7 @@ class HostGenomesController < ApplicationController
         format.json { render :show, status: :ok, location: @host_genome }
       else
         format.html { render :edit }
-        format.json { render json: @host_genome.errors, status: :unprocessable_entity }
+        format.json { render json: @host_genome.errors, status: :unprocessable_content }
       end
     end
   end

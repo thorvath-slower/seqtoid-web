@@ -1,3 +1,5 @@
+inherit_from: .rubocop_todo.yml
+
 require:
   - rubocop-rails
   - rubocop-performance
@@ -226,3 +228,10 @@ Layout/BlockAlignment:
 # # TODO: Enable after manual fixes
 # GraphQL/FieldName:
 #   Enabled: false
+
+# GraphQL resolver methods bind keyword args by name to the field's declared arguments
+# (e.g. `argument :snapshot_link_id` -> `def resolve(..., snapshot_link_id:)`). An accepted-but-
+# unused keyword arg is therefore part of the schema contract, not dead code — and prefixing it
+# with `_` (the default autocorrect) would break the binding. Allow unused keyword args.
+Lint/UnusedMethodArgument:
+  AllowUnusedKeywordArguments: true

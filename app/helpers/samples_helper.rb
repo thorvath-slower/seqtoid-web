@@ -560,7 +560,27 @@ module SamplesHelper
       { result_status_description: 'SKIPPED' }
     elsif sample.upload_error != Sample::UPLOAD_ERROR_LOCAL_UPLOAD_STALLED
       { result_status_description: 'FAILED' }
+    else
+      # A stalled local upload never finished, but it did not outright fail — surface it
+      # as INCOMPLETE (distinct from FAILED) so the sample-list pill isn't blank. Without
+      # this branch the method returned nil and the row rendered an empty status pill.
+      { result_status_description: 'INCOMPLETE' }
     end
+  end
+
+  # Builds the "public visibility" CASE expression used by the get_visibility_*
+  # helpers. The only dynamic value is the server clock date, which
+  # ActiveRecord::Base.sanitize_sql binds as a quoted parameter -- producing SQL
+  # identical to the previous string interpolation but without raw interpolation.
+  # This makes the safety explicit and removes the brakeman SQL-injection false
+  # positive (CZID-293); it does not change the query or its result.
+  def public_visibility_case_sql
+    Arel.sql(
+      ActiveRecord::Base.sanitize_sql(
+        ["CASE WHEN projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < ? THEN 1 ELSE 0 END AS public",
+         Time.current.strftime("%Y-%m-%d"),]
+      )
+    )
   end
 
   def get_visibility_by_sample_id(sample_ids)
@@ -578,7 +598,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("IF(projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%y-%m-%d')}', true, false) AS public"))]
+           .pluck("samples.id", public_visibility_case_sql)]
   end
 
   def get_visibility_by_sample_id_and_current_power(sample_ids, current_power)
@@ -589,7 +609,7 @@ module SamplesHelper
            .samples
            .where(id: sample_ids)
            .joins(:project)
-           .pluck("samples.id", Arel.sql("IF(projects.public_access = 1 OR DATE_ADD(samples.created_at, INTERVAL projects.days_to_keep_sample_private DAY) < '#{Time.current.strftime('%y-%m-%d')}', true, false) AS public"))]
+           .pluck("samples.id", public_visibility_case_sql)]
   end
 
   # Takes an array of samples and uploads metadata for those samples.
@@ -638,6 +658,7 @@ module SamplesHelper
     # With on_duplicate_key_update, activerecord-import will correctly update existing rows.
     # Rails model validations are also checked.
     update_keys = [:raw_value, :string_validated_value, :number_validated_value, :date_validated_value, :location_id]
+    # bug-#011: Hash form (conflict_target + columns) is portable to PostgreSQL.
     results = Metadatum.bulk_import metadata_to_save, validate: true, on_duplicate_key_update: update_keys
     results.failed_instances.each do |model|
       errors.push(MetadataUploadErrors.save_error(model.key, model.raw_value))
@@ -663,7 +684,7 @@ module SamplesHelper
     separator = "_vs_"
     sample_names = Sample.where(id: sample_ids).pluck(:name)
     comparison = sample_names.join(separator)
-    comparison += "#{separator}ground_truth_file" if ground_truth_file.present?
+    comparison += "#{separator}#{ground_truth_file}" if ground_truth_file.present?
 
     existing_project_sample_names = Sample.where(project_id: project_id).pluck(:name)
     increment_sample_name("benchmark_#{comparison}", existing_project_sample_names)
@@ -1114,9 +1135,9 @@ module SamplesHelper
       .where(id: samples
         .distinct(:id)
         .joins(:pipeline_runs, pipeline_runs: :taxon_counts)
-        .where(pipeline_runs: { id: PipelineRun.joins(:sample).where(sample: samples, job_status: "CHECKED").group(:sample_id).select("MAX(`pipeline_runs`.id) AS id") })
+        .where(pipeline_runs: { id: PipelineRun.joins(:sample).where(sample: samples, job_status: "CHECKED").group(:sample_id).select("MAX(pipeline_runs.id) AS id") })
         .where(taxon_counts: { tax_id: taxid, count_type: ["NT", "NR"] })
-        .where("`taxon_counts`.count > 0"))
+        .where("taxon_counts.count > 0"))
   end
 
   def filter_by_search_string(samples, search_string)

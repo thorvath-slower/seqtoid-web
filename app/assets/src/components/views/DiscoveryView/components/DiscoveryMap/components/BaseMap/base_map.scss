@@ -1,4 +1,7 @@
-@import url("https://api.tiles.mapbox.com/mapbox-gl-js/v0.42.0/mapbox-gl.css");
+// CZID-316: load mapbox-gl's CSS from the npm package (matches the installed mapbox-gl JS, 1.13.3)
+// instead of an external CDN @import pinned to v0.42.0 — fixes a CSS/JS version mismatch, drops the
+// external dependency, and lets css-loader inline it so it is no longer an ignored top-level @import.
+@import "~mapbox-gl/dist/mapbox-gl.css";
 @import "~styles/themes/elements";
 @import "~@czi-sds/components/dist/variables";
 

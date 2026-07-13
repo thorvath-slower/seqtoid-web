@@ -1,7 +1,6 @@
 module Types
   class SampleDetailsType < Types::BaseObject
     field :dbSample, Types::DbSampleType, null: true
-    field :metadata, Types::SampleMetadataType, null: true
     field :derivedSampleOutput, Types::DerivedSampleOutputType, null: true
     field :uploader, Types::SampleUploaderType, null: false
     field :mngsRunInfo, Types::MngsRunInfoType, null: true

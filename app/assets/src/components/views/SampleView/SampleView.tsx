@@ -42,6 +42,7 @@ import {
 import CoverageVizBottomSidebar from "~/components/common/CoverageVizBottomSidebar";
 import { CoverageVizParamsRaw } from "~/components/common/CoverageVizBottomSidebar/types";
 import { getCoverageVizParams } from "~/components/common/CoverageVizBottomSidebar/utils";
+import ErrorBoundary from "~/components/common/ErrorBoundary";
 import csSampleMessage from "~/components/common/SampleMessage/sample_message.scss";
 import NarrowContainer from "~/components/layout/NarrowContainer";
 import { IconLoading } from "~/components/ui/icons";
@@ -545,31 +546,41 @@ const SampleViewComponent = ({
   const processRawSampleReportData = useCallback(
     (rawReportData: RawReportData) => {
       const reportData: Taxon[] = [];
-      const highlightedTaxIds = new Set(rawReportData.highlightedTaxIds);
-      if (rawReportData.sortedGenus) {
-        const generaPathogenCounts = getGeneraPathogenCounts(
-          rawReportData.counts[SPECIES_LEVEL_INDEX],
-        );
+      // A GraphQL/report response can come back null or with an unexpected shape
+      // (e.g. `counts`/`sortedGenus` missing) — Sentry #386. Default every field we
+      // iterate over so a degenerate response renders an empty report instead of
+      // throwing "forEach/map is not a function" or "'in' on null" inside this callback.
+      const highlightedTaxIds = new Set(rawReportData?.highlightedTaxIds ?? []);
+      const counts = rawReportData?.counts ?? {};
+      const speciesCounts = counts[SPECIES_LEVEL_INDEX] ?? {};
+      const genusCounts = counts[GENUS_LEVEL_INDEX] ?? {};
+      const sortedGenus = rawReportData?.sortedGenus;
+      if (Array.isArray(sortedGenus)) {
+        const generaPathogenCounts = getGeneraPathogenCounts(speciesCounts);
 
-        rawReportData.sortedGenus.forEach((genusTaxId: number) => {
+        sortedGenus.forEach((genusTaxId: number) => {
+          const genusInfo = genusCounts[genusTaxId];
+          // Skip genera the counts map doesn't describe rather than throwing on
+          // `undefined.species_tax_ids`.
+          if (!genusInfo) return;
           let hasHighlightedChildren = false;
-          const childrenSpecies =
-            rawReportData.counts[GENUS_LEVEL_INDEX][genusTaxId].species_tax_ids;
-          const speciesData = childrenSpecies?.map((speciesTaxId: number) => {
-            const isHighlighted = highlightedTaxIds.has(speciesTaxId);
-            hasHighlightedChildren = hasHighlightedChildren || isHighlighted;
-            const speciesInfo =
-              rawReportData.counts[SPECIES_LEVEL_INDEX][speciesTaxId];
-            const speciesWithAdjustedMetricPrecision =
-              adjustMetricPrecision(speciesInfo);
-            return merge(speciesWithAdjustedMetricPrecision, {
-              highlighted: isHighlighted,
-              taxId: speciesTaxId,
-              taxLevel: TAX_LEVEL_SPECIES,
-            });
-          });
+          const childrenSpecies = genusInfo.species_tax_ids;
+          const speciesData = (childrenSpecies ?? []).map(
+            (speciesTaxId: number) => {
+              const isHighlighted = highlightedTaxIds.has(speciesTaxId);
+              hasHighlightedChildren = hasHighlightedChildren || isHighlighted;
+              const speciesInfo = speciesCounts[speciesTaxId];
+              const speciesWithAdjustedMetricPrecision =
+                adjustMetricPrecision(speciesInfo);
+              return merge(speciesWithAdjustedMetricPrecision, {
+                highlighted: isHighlighted,
+                taxId: speciesTaxId,
+                taxLevel: TAX_LEVEL_SPECIES,
+              });
+            },
+          );
           reportData.push(
-            merge(rawReportData.counts[GENUS_LEVEL_INDEX][genusTaxId], {
+            merge(genusInfo, {
               highlightedChildren: hasHighlightedChildren,
               pathogens: generaPathogenCounts[genusTaxId],
               taxId: genusTaxId,
@@ -589,14 +600,15 @@ const SampleViewComponent = ({
           reportData,
         },
       });
-      setLineageData(rawReportData.lineage);
+      setLineageData(rawReportData?.lineage);
       setReportData(reportData);
-      setReportMetadata(rawReportData.metadata);
+      const reportMetadata = rawReportData?.metadata ?? ({} as ReportMetadata);
+      setReportMetadata(reportMetadata);
       setLoadingReport(false);
       dispatchSelectedOptions({
         type: "newBackground",
         payload: {
-          background: rawReportData.metadata.backgroundId,
+          background: reportMetadata.backgroundId,
         },
       });
     },
@@ -703,7 +715,36 @@ const SampleViewComponent = ({
             setIsCreatingPersistedBackground(false);
             setHasPersistedBackground(true);
           })
-          .catch((error: Error) => {
+          .catch((error: { error?: unknown }) => {
+            setIsCreatingPersistedBackground(false);
+
+            // createPersistedBackground/updatePersistedBackground reject with the parsed
+            // response body (see api/core.ts), so error.error holds the server payload, not
+            // an HTTP status. Two failures here are benign races on a best-effort preference
+            // save (the report already renders with the chosen background) and must NOT page
+            // Sentry (#556):
+            //   - update() "Persisted background not found" (the create has not committed yet)
+            //   - create() "already has a background persisted" (UniquePersistedBackgroundValidator)
+            // Re-sync the local flag so the next save takes the correct create-vs-update path,
+            // and drop to console instead of Sentry.
+            const serverError = JSON.stringify(error?.error ?? error);
+            if (serverError.includes("Persisted background not found")) {
+              setHasPersistedBackground(false);
+              console.warn(
+                "Persisted background save skipped (create not yet committed)",
+                error,
+              );
+              return;
+            }
+            if (serverError.includes("already has a background persisted")) {
+              setHasPersistedBackground(true);
+              console.warn(
+                "Persisted background already exists; will update on next change",
+                error,
+              );
+              return;
+            }
+            // Genuinely unexpected failure: keep reporting it.
             logError({
               message:
                 "SampleView: Failed to persist background model selection",
@@ -715,7 +756,6 @@ const SampleViewComponent = ({
                 isCreatingPersistedBackground,
               },
             });
-            setIsCreatingPersistedBackground(false);
             console.error(error);
           });
       }
@@ -742,9 +782,19 @@ const SampleViewComponent = ({
   const previousBackground = useRef<number | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!sample?.pipeline_runs || sample?.pipeline_runs?.length === 0) {
-      // don't fetch sample report data if there is no mngs run on the sample
-      // this will be fixed when we split the sample report by tab
+    if (!sample) {
+      // The sample record itself is still loading — keep showing the spinner.
+      return;
+    }
+    if (!sample.pipeline_runs || sample.pipeline_runs.length === 0) {
+      // No mngs pipeline run on this sample (e.g. a dead/failed upload that never
+      // dispatched a run). The report fetch below is the ONLY path that clears
+      // loadingReport, and it never runs for these samples — so without this,
+      // fetchBackgrounds' initial setLoadingReport(true) is never reset and
+      // SampleViewMessage loops forever on "Loading report data." Clearing it lets
+      // SampleViewMessage fall through to the upload-error / failed state
+      // (sampleErrorInfo) that tells the user why it failed.
+      setLoadingReport(false);
       return;
     }
     if (!ignoreProjectBackground && hasPersistedBackground === null) {
@@ -782,6 +832,7 @@ const SampleViewComponent = ({
     fetchSampleReportData,
     hasPersistedBackground,
     persistNewBackgroundModelSelection,
+    sample,
     sample?.pipeline_runs,
     handleInvalidBackgroundSelection,
     previousBackground,
@@ -819,7 +870,10 @@ const SampleViewComponent = ({
         snapshotShareId: snapshotShareId,
         basic: true,
       });
-      setProjectSamples(projectSamples.samples);
+      // #505: getSamples can resolve to null or an object without `samples` (error/empty
+      // response shape). projectSamples is `.map`ped in SampleViewHeader, so an undefined
+      // value threw the minified "y.map is not a function" TypeError. Default to [].
+      setProjectSamples(projectSamples?.samples ?? []);
     };
     project?.id &&
       fetchProjectSamples(parseInt(project.id), snapshotShareId).catch(
@@ -873,7 +927,12 @@ const SampleViewComponent = ({
           snapshotShareId,
           pipelineVersion,
         });
-        setCoverageVizDataByTaxon(coverageVizSummary);
+        // #505: getCoverageVizSummary can resolve to null (no data / error shape).
+        // coverageVizDataByTaxon is typed and consumed as a keyed object (getCoverageVizParams
+        // / getCombinedAccessionDataForSpecies index into it), so a null value threw the
+        // minified "right-hand side of 'in' should be an object, got null" TypeError. Default
+        // to {} to preserve the object invariant (matching the initial state).
+        setCoverageVizDataByTaxon(coverageVizSummary ?? {});
       }
     };
     fetchCoverageVizData().catch(error => {
@@ -1384,20 +1443,27 @@ export const SampleView = ({
   snapshotShareId,
 }: SampleViewWrapperProps) => {
   return (
-    <Suspense
-      fallback={
-        <SampleMessage
-          icon={<IconLoading className={csSampleMessage.icon} />}
-          message={"Loading report data."}
-          status={"Loading"}
-          type={"inProgress"}
+    // Report view (#466): a render error here -- bad report data, a failed
+    // query resolving into a throw, etc. -- shows the friendly, actionable
+    // fallback (retry + contact support) instead of a blank page, while still
+    // reporting to Sentry. Resets automatically when the user opens a different
+    // sample so an error on sample A doesn't stick to sample B.
+    <ErrorBoundary view="report" resetKeys={[sampleId, snapshotShareId]}>
+      <Suspense
+        fallback={
+          <SampleMessage
+            icon={<IconLoading className={csSampleMessage.icon} />}
+            message={"Loading report data."}
+            status={"Loading"}
+            type={"inProgress"}
+          />
+        }
+      >
+        <SampleViewComponent
+          sampleId={sampleId}
+          snapshotShareId={snapshotShareId}
         />
-      }
-    >
-      <SampleViewComponent
-        sampleId={sampleId}
-        snapshotShareId={snapshotShareId}
-      />
-    </Suspense>
+      </Suspense>
+    </ErrorBoundary>
   );
 };

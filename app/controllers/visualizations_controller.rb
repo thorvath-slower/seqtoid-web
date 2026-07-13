@@ -99,7 +99,11 @@ class VisualizationsController < ApplicationController
   def save
     @type = visualization_params[:type]
     @data = visualization_params[:data]
-    sample_ids = @data[:sampleIds]
+    # Coerce to integers: over an HTTP request sampleIds arrive as strings
+    # (["12"]), but Visualization#sample_ids (from the samples join) are
+    # integers ([12]). Without this the Set comparison below never matches and
+    # a duplicate visualization is created on every re-save (#294).
+    sample_ids = Array(@data[:sampleIds]).map(&:to_i)
     # Delete to have single source of truth.
     @data.delete(:sampleIds)
 
@@ -301,7 +305,7 @@ class VisualizationsController < ApplicationController
     id = visualization_params[:id]
     name = visualization_params[:name]
 
-    if Visualization.find(id).update(name: name)
+    if current_power.visualizations.find(id).update(name: name)
       render json: { id: id, name: name }, status: :ok
     else
       render json: { error: @visualization.errors.full_messages }, status: :internal_server_error

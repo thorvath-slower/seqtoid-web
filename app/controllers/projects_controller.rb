@@ -5,6 +5,13 @@ class ProjectsController < ApplicationController
   include ReportHelper
   include MetadataHelper
   include ParameterSanitization
+  include ProjectsDiscovery
+  include OtelActionLogging
+
+  # CZID-472: per-user action log for support triage (identifiers only, no PII).
+  log_user_actions :create, action: "project.create"
+  log_user_actions :update, :destroy, action: "project.mutate",
+                                      context: ->(c) { { "czid.project.id" => c.params[:id] } }
   ########################################
   # Note to developers:
   # If you are adding a new action to the project controller, you must classify your action into
@@ -72,92 +79,27 @@ class ProjectsController < ApplicationController
 
         list_all_project_ids = ActiveModel::Type::Boolean.new.cast(params[:listAllIds])
 
-        projects = current_power.projects_by_domain(domain)
-
-        # including these early ensures that users and samples are joined in the same order, making rails assign deterministic aliases
-        # we use includes because we need data from both associations to return aggregate data for the project
-        projects = projects.includes(:users).includes(:samples)
-        projects = projects.where(id: project_id) if project_id
-        projects = projects.search_by_name(search) if search
-        if [:host, :location, :locationV2, :taxon, :time, :tissue, :annotations].any? { |key| params.key? key }
-          projects = projects.where(samples: { id: filter_samples(current_power.samples, params) })
-        elsif params.key?(:visibility)
-          access_to_project = params[:visibility] == "public"
-          projects = projects.where(public_access: access_to_project)
-        end
-
-        projects = if sorting_v0_allowed
-                     Project.sort_projects(projects, order_by, order_dir)
-                   else
-                     projects.order(Hash[order_by => order_dir])
-                   end
+        projects = discovery_projects_scope(
+          domain: domain,
+          project_id: project_id,
+          search: search,
+          sample_filters: params,
+          sorting_v0_allowed: sorting_v0_allowed,
+          order_by: order_by,
+          order_dir: order_dir
+        )
 
         limited_projects = limit ? projects.offset(offset).limit(limit) : projects
 
-        basic_attributes = [
-          'id', 'name', 'description', 'created_at', 'public_access', Arel.sql('COUNT(DISTINCT samples.id) AS number_of_samples'),
-        ]
-
         if basic
+          basic_attributes = discovery_project_basic_attributes
           names = basic_attributes.map { |attr| attr.split(' AS ').last }
-          limited_projects = limited_projects.group(:id)
           render json: {
             projects: limited_projects.group(:id).pluck(*basic_attributes).map { |p| names.zip(p).to_h },
           }
         else
-          limited_projects = limited_projects
-                             .includes(:creator, samples: [:host_genome, :user, { metadata: [:metadata_field, :location] }, :pipeline_runs, :workflow_runs])
-                             .group(:id)
-                             .references(:pipeline_runs, :samples, :workflow_runs)
-          # get aggregated lists of association values in string by using MySQL's GROUP_CONCAT (should update to JSON_ARRAYAGG when possible)
-          group_concat_host = Arel.sql("GROUP_CONCAT(DISTINCT host_genomes.name ORDER BY host_genomes.name SEPARATOR '::') AS hosts")
-          group_concat_sample_type = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'sample_type' THEN metadata.string_validated_value ELSE NULL END ORDER BY 1 SEPARATOR '::') AS sample_types") # order by sample type
-          group_concat_location = Arel.sql("GROUP_CONCAT(DISTINCT CASE WHEN metadata_fields.name = 'collection_location' THEN IFNULL(locations.name, metadata.string_validated_value) ELSE NULL END SEPARATOR '::') AS locations")
-          group_concat_users = Arel.sql("GROUP_CONCAT(DISTINCT CONCAT(users.name,'|',users.email) ORDER BY users.name SEPARATOR '::') AS users")
-          editable = Arel.sql("BIT_OR(IF(users.id=#{current_user.id} OR #{current_user.admin?}, 1, 0)) AS editable")
-          creator = Arel.sql("creators_projects.name AS creator")
-          creator_id = Arel.sql("creators_projects.id AS creator_id")
-          mngs_runs_count = Arel.sql("COUNT(DISTINCT CASE WHEN samples.initial_workflow='#{WorkflowRun::WORKFLOW[:short_read_mngs]}' THEN samples.id ELSE NULL END) AS mngs_runs_count")
-          cg_runs_count = Arel.sql("COUNT(DISTINCT (CASE
-                                      WHEN workflow_runs.workflow = '#{WorkflowRun::WORKFLOW[:consensus_genome]}' AND workflow_runs.deprecated = false AND workflow_runs.deleted_at IS NULL THEN workflow_runs.id
-                                      WHEN samples.initial_workflow = '#{WorkflowRun::WORKFLOW[:consensus_genome]}' THEN samples.id
-                                      ELSE NULL
-                                    END)
-                          ) AS cg_runs_count")
-          amr_runs_count = Arel.sql("COUNT(DISTINCT (CASE
-                                      WHEN workflow_runs.workflow = '#{WorkflowRun::WORKFLOW[:amr]}' AND workflow_runs.deprecated = false AND workflow_runs.deleted_at IS NULL THEN workflow_runs.id
-                                      WHEN samples.initial_workflow = '#{WorkflowRun::WORKFLOW[:amr]}' THEN samples.id
-                                      ELSE NULL
-                                    END)
-                            ) AS amr_runs_count")
-
-          attrs = [
-            *basic_attributes, group_concat_sample_type, group_concat_host, group_concat_location, editable, group_concat_users, creator, creator_id, mngs_runs_count, cg_runs_count, amr_runs_count,
-          ]
-          names = attrs.map { |attr| attr.split(' AS ').last }
-          name_email = ["name", "email"]
-          metadata = ["locations", "hosts", "sample_types"]
-
           render json: {
-            # Parentheses are very important. With do..end map returns nil before it is run (same does not happen with curly braces {} )
-            projects: (limited_projects.pluck(*attrs).map do |p|
-              project_hash = names.zip(p).to_h
-
-              # Don't show list of project members unless they can edit the project.
-              # :: and | are used as separators in the SQL queries above, so split on them here.
-              project_hash["users"] = project_hash["editable"] == 1 ? (project_hash["users"] || '').split('::').map { |u| name_email.zip(u.split('|')).to_h } : []
-              project_hash["owner"] = project_hash["creator"]
-
-              project_hash["editable"] = current_user.admin? || project_hash["editable"] == 1
-
-              metadata.each { |k| project_hash[k] = (project_hash[k] || '').split('::') }
-              # Return as "tissue" for legacy compatibility. It's too hard to
-              # rename all JS instances of "tissue".
-              project_hash["tissues"] = project_hash["sample_types"]
-
-              project_hash["sample_counts"] = project_hash.slice("number_of_samples", "mngs_runs_count", "cg_runs_count", "amr_runs_count")
-              project_hash.except("sample_types", "number_of_samples", "mngs_runs_count", "cg_runs_count", "amr_runs_count")
-            end),
+            projects: format_discovery_projects(limited_projects),
             all_projects_ids: (projects.pluck(:id).uniq if list_all_project_ids),
           }.compact
         end
@@ -231,7 +173,7 @@ class ProjectsController < ApplicationController
       span = (max_date - min_date + 1).to_i
       if span <= MAX_BINS
         # we group by day if the span is shorter than MAX_BINS days
-        bins_map = projects.group("DATE(`projects`.`created_at`)").count.map do |timestamp, count|
+        bins_map = projects.group("DATE(projects.created_at)").count.map do |timestamp, count|
           [timestamp.strftime("%Y-%m-%d"), count]
         end.to_h
         time_bins = (0...span).map do |offset|
@@ -248,7 +190,9 @@ class ProjectsController < ApplicationController
         bins_map = projects.group(
           ActiveRecord::Base.send(
             :sanitize_sql_array,
-            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `projects`.`created_at`)/:step)", { min_date: min_date, step: step }]
+            # MySQL 8 has no Postgres `::` casts or date subtraction; TIMESTAMPDIFF(DAY, ...) gives
+            # whole days, and FLOOR(.../step) is an Integer GROUP BY key matching bins_map[bucket].
+            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `projects`.`created_at`) / :step)", { min_date: min_date, step: step }]
           )
         ).count
         time_bins = (0...MAX_BINS).map do |bucket|
@@ -362,7 +306,7 @@ class ProjectsController < ApplicationController
     else
       render json: {
         message: 'Unable to set visibility for project',
-        status: :unprocessable_entity,
+        status: :unprocessable_content,
         errors: errors,
       }
     end
@@ -394,7 +338,7 @@ class ProjectsController < ApplicationController
         format.json { render :show, status: :created, location: @project, project: @project }
       else
         format.html { render :new }
-        format.json { render json: @project.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @project.errors.full_messages, status: :unprocessable_content }
       end
     end
   rescue ActiveRecord::RecordNotUnique
@@ -402,7 +346,7 @@ class ProjectsController < ApplicationController
       format.html {}
       format.json do
         render json: "Duplicate name",
-               status: :unprocessable_entity
+               status: :unprocessable_content
       end
     end
   end
@@ -452,7 +396,7 @@ class ProjectsController < ApplicationController
         format.json { head :no_content }
       else
         format.html { render :edit }
-        format.json { render json: { message: 'Cannot delete this project' }, status: :unprocessable_entity }
+        format.json { render json: { message: 'Cannot delete this project' }, status: :unprocessable_content }
       end
     end
   end

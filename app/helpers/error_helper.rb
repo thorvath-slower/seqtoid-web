@@ -134,7 +134,7 @@ module ErrorHelper
     end
 
     if field.base_type == MetadataField::STRING_TYPE
-      if field.force_options
+      if field.force_options == 1
         return "The valid options are #{JSON.parse(field.options).join(', ')}."
       else
         return "There was an error. Please contact us for help."
@@ -290,7 +290,7 @@ module ErrorHelper
         end
 
         if field.base_type == MetadataField::STRING_TYPE
-          @supported_errors[error_type] = if field.force_options
+          @supported_errors[error_type] = if field.force_options == 1
                                             {
                                               headers: ["Row #", "Sample Name", "Invalid Value"],
                                               title: ->(num_rows, _) { "#{num_rows} invalid values for \"#{field.display_name}\" (column #{col_index}). The valid options are #{JSON.parse(field.options).join(', ')}." },

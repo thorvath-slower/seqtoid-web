@@ -1,0 +1,310 @@
+# Default values for the seqtoid-web chart. Env overrides live in
+# cypherid-web-infra/deploy/argocd/values/seqtoid-web/<env>.yaml and layer on top.
+#
+# These defaults render a valid dev-shaped manifest so `helm template`/lint work
+# standalone in CI; real per-env values (account id, DNS, cert, subnets) come
+# from the infra repo's values files.
+
+project: czid
+# Logical env: dev | staging | prod. Drives names, namespace-suffixing, Chamber service.
+environment: dev
+# Rails RACK/RAILS_ENV. Leave blank to derive from `environment` (dev->development,
+# staging->staging, prod->production) via the seqtoid-web.railsEnv helper.
+railsEnv: ""
+
+image:
+  # Full ECR repository (per-env values override with the account-scoped repo).
+  # CZID-76: go-forward name is `seqtoid-web` (the per-env GitOps values reference
+  # `czid-<env>/seqtoid-web`). bin/build-docker + bin/push-docker dual-push both this
+  # name and the legacy `idseq-web` during the transition, so this default resolves to a
+  # real image. The live `idseq-web` repo is kept in place, not renamed.
+  repository: seqtoid-web
+  # CI advances this to the immutable sha-<commit> tag on deploy (GitOps, #444).
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Node scheduling. The image is single-arch (linux/amd64), but this cluster's
+# Karpenter also provisions arm64 (Graviton) nodes — an amd64 image on an arm64
+# node crashloops with "exec format error". Pin every seqtoid-web pod (web,
+# workers, migrate + taxon-load hooks) to amd64 until the image is multi-arch.
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+# Cost spin-down switch. When true, scale ALL workloads to 0 (web Rollout + every
+# worker) AND skip the migrate/taxon-load PreSync hooks. The app's data lives in
+# Aurora + OpenSearch (persistent, not on the pods), so this is a safe, reversible
+# way to spin dev down (e.g. nights/weekends) — flip back to false to restore.
+# GitOps-managed (Argo keeps it at 0); overridable per-env in the infra values.
+suspend: false
+
+# Web replicas (per active/preview color). Ignored when autoscaling.enabled or suspend.
+replicaCount: 2
+
+aws:
+  region: us-west-2
+  # Account id, used to template SAMPLES_BUCKET_NAME (mirrors the czecs default).
+  # Empty by default; per-env values set the real account.
+  accountId: ""
+  # Override the samples bucket name outright if it doesn't follow the pattern.
+  # (At runtime Chamber may also inject SAMPLES_BUCKET_NAME, which wins.)
+  samplesBucketName: ""
+
+# IRSA: the pod identity that replaces the ECS web task role. Grants SSM (Chamber),
+# S3, SQS, etc. via the role's policy. roleArn is filled per-env from the infra repo.
+serviceAccount:
+  create: true
+  name: ""
+  roleArn: ""
+
+# Secrets: least-change path is Chamber-in-container (the image ENTRYPOINT already
+# runs `chamber exec idseq-<env>-web`). ESO is a later swap (#325). When chamber is
+# enabled the pod just needs the IRSA role with SSM read; no envFrom needed.
+secrets:
+  chamber:
+    enabled: true
+    # Defaults to idseq-<environment>-web (the existing Chamber service name).
+    service: ""
+
+# Web container port (Rails server). Services expose `service.port` -> this.
+containerPort: 3000
+service:
+  port: 80
+
+# Blue/green strategy knobs (consumed by the Rollout).
+blueGreen:
+  autoPromotionEnabled: false     # dev/staging true; prod false (manual gate)
+  scaleDownDelaySeconds: 30
+  abortScaleDownDelaySeconds: 30
+  analysis:
+    enabled: true                 # gate promotion on the smoke AnalysisTemplate
+    postPromotion: false          # prod also re-checks after promotion
+
+# Smoke check the AnalysisTemplate runs against the PREVIEW color before promotion.
+smoke:
+  image: curlimages/curl:8.10.1
+  # Paths that must return HTTP 200 on the preview color. /health_check first;
+  # add critical read paths here as they harden.
+  paths:
+    - /health_check
+  timeoutSeconds: 10
+  # How many times the analysis retries the smoke Job before declaring failure.
+  failureLimit: 2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 65
+
+# Public edge: ALB via the AWS Load Balancer Controller -> the ACTIVE service.
+ingress:
+  enabled: true
+  host: ""                        # per-env DNS name
+  certificateArn: ""              # per-env ACM cert
+  # Extra alb.ingress.kubernetes.io/* annotations (subnets, etc.) merged in per-env.
+  annotations: {}
+  healthCheckPath: /health_check
+
+# Graceful drain so a promotion/scale-down doesn't drop in-flight requests.
+gracefulDrain:
+  preStopSleepSeconds: 15
+  terminationGracePeriodSeconds: 60
+
+# Resilience (#467a): worker drain hardening. Web pods drain via a preStop sleep +
+# a 60s grace period, but workers are different — resque/shoryuken already trap
+# SIGTERM to stop pulling new jobs and finish the in-flight one, but an in-flight
+# job (e.g. a pipeline dispatch) can outlast the web-sized 60s grace period and get
+# SIGKILLed mid-flight. Give workers their own, longer grace period so the running
+# job completes before the pod dies. The kubelet sends SIGTERM directly to PID 1
+# (no preStop needed for the signal), so this is purely about the grace window.
+# Per-worker override via workers.<name>.terminationGracePeriodSeconds; a long-job
+# worker (pipeline-monitor/result-monitor) may want a larger value than the default.
+workerDrain:
+  # 120s: double the web grace so a mid-flight dispatch/monitor tick finishes. Bump
+  # per-worker (or globally) if a worker's unit of work legitimately runs longer.
+  terminationGracePeriodSeconds: 120
+
+# Resilience (#467a): default exec-based liveness probe for worker Deployments.
+# Workers have no HTTP port, so without this a hung/crashed worker supervisor is
+# never restarted. The probe pgreps the worker's own command word (first arg, e.g.
+# `rake` / `shoryuken`); if the process tree is gone the kubelet restarts the pod.
+# Per-worker override/opt-out via workers.<name>.livenessProbe (set to null to disable).
+# initialDelaySeconds is generous because rake worker boot (chamber + Rails) is slow.
+workerLivenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Pre-sync migration (was the ECS run-task `rails db:migrate:with_data`).
+migrate:
+  enabled: true
+  command: ["rails", "db:migrate:with_data"]
+  # SA the migrate hook runs as. Empty -> the app SA. A preview sandbox sets this to the
+  # provisioner SA (a PreSync hook that exists before migrate on a brand-new namespace,
+  # avoiding a deadlock where migrate waits on the Sync-phase app SA).
+  serviceAccountName: ""
+  # A single deterministic, idempotent db:migrate invocation. `rails db:migrate`
+  # only applies pending migrations and records schema_migrations per step, so an
+  # interrupted run safely resumes on retry — do NOT add destructive steps here.
+  # Retries are handled by K8s (backoffLimit) so an overlapping Argo sync can't
+  # interrupt an in-flight migration (#481).
+  backoffLimit: 3
+  # Bound the Job so a stuck/hung migration fails cleanly (30m headroom) instead
+  # of wedging the PreSync phase indefinitely.
+  activeDeadlineSeconds: 1800
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+# Pre-sync taxon-lineage load (ticket #471). A fresh deploy has no taxon lineage
+# data, so reports/taxonomy/heatmaps come up empty. This Job idempotently imports
+# the taxon lineage slice from S3 and (re)builds the ES index, running after the
+# migrate Job (sync-wave 1) so the schema exists first. Default ON for dev; per-env
+# values may turn it off once an env already carries the data.
+taxonLoad:
+  enabled: true
+  # Idempotent wrapper: imports the slice only if absent, then converges the ES
+  # index. Never non-zeros on an already-loaded DB, so redeploys are a no-op.
+  command: ["rake", "taxon_lineage_slice:load_slice_if_needed"]
+  # The import is single-shot and idempotent; don't hammer S3 on failure.
+  backoffLimit: 1
+  # Bound the Job so a stuck import doesn't wedge the sync (2h headroom).
+  activeDeadlineSeconds: 7200
+  # The importer streams the CSV and inserts in chunks; give it memory headroom.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+
+# Extra plain env vars applied to web + workers + migrate (name/value pairs).
+extraEnv: []
+
+# Worker workloads (ECS czecs-resque.json x4 + czecs-shoryuken.json). Each becomes a
+# Deployment. `args` go to the image ENTRYPOINT (bin/entrypoint.sh), which wraps them
+# in `chamber exec ... bundle exec`. Keyed by NAME (a map, not a list) so a per-env
+# values file can override a single worker's replicaCount/resources without redefining
+# the whole set — Helm deep-merges maps by key but replaces lists wholesale (#486/#487).
+#
+# Per-worker `enabled: false` skips that worker's Deployment entirely (default true when
+# absent). A preview sandbox sets `workers.shoryuken.enabled: false` so it does not become
+# a competing consumer on dev's shared SQS queue — it uses POLLING (result-monitor +
+# pipeline-monitor against its own DB) instead.
+workers:
+  resque:
+    args: ["rake", "resque:workers"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 500m
+        memory: 3Gi
+  resque-scheduler:
+    args: ["rake", "resque:scheduler"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+  resque-pipeline-monitor:
+    args: ["rake", "pipeline_monitor"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+  resque-result-monitor:
+    args: ["rake", "result_monitor"]
+    replicaCount: 1
+    queue: "data_migration,q03_pipeline_run,result_monitor_loader,transfer_basespace_fastq_files,initiate_fastq_files_s3_cp,generate_bulk_download,precache_report_info,handle_sfn_notifications_timeout,check_soft_deleted_data,index_taxons,elasticsearch_index,hard_delete_objects,delete_unclaimed_user_accounts,delete_old_bulk_downloads,clear_resque_failure_queue,*"
+    samplesBucket: true
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+  shoryuken:
+    args: ["shoryuken", "-R", "-C", "config/shoryuken.yml"]
+    replicaCount: 1
+    samplesBucket: false
+    resources:
+      requests:
+        cpu: 250m
+        memory: 3Gi
+
+# Scheduled taxon-lineage refresh CronJob (ticket #484). Keeps the taxon-lineage ->
+# OpenSearch index fresh BETWEEN deploys by re-running the SAME idempotent load path
+# the deploy-time PreSync Job uses (taxon_lineage_slice:load_slice_if_needed). Cheap
+# by construction: the #476 guard makes each run a no-op skip when the index is
+# already in sync, so it only does real work when there's a newer slice to load.
+# Appended as a NEW top-level key at the END of the file to minimize merge overlap
+# with other in-flight chart PRs.
+taxonRefresh:
+  # Default OFF: rollout is opt-in per env. Enable in an env's infra values once
+  # that env's taxon data is bootstrapped and it wants between-deploy freshness.
+  # The template is additionally gated on (not .Values.suspend) so a cost-spun-down
+  # dev never schedules a run even if this is left on.
+  enabled: false
+  # Every 6 hours. Conservative: frequent enough that a newer slice lands within a
+  # quarter-day, but — because the #476 guard makes in-sync runs a no-op — cheap
+  # enough that the off-peak cost is negligible. Tune per-env in the infra values.
+  schedule: "0 */6 * * *"
+  # Never overlap: a second concurrent run would race the same ES index.
+  concurrencyPolicy: Forbid
+  # Same idempotent task the deploy-time Job runs — do NOT diverge from taxonLoad.
+  command: ["rake", "taxon_lineage_slice:load_slice_if_needed"]
+  # If a scheduled time is missed (node churn), only start within this window;
+  # past it, skip rather than backfill.
+  startingDeadlineSeconds: 300
+  # Keep a small audit trail of recent runs without letting Jobs accumulate.
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  # Single-shot, idempotent load; don't hammer S3 on failure.
+  backoffLimit: 1
+  # Bound each run (2h headroom, mirrors taxonLoad) so a stuck import can't wedge
+  # the next scheduled tick.
+  activeDeadlineSeconds: 7200
+  # Reap finished Jobs after a day (belt-and-suspenders alongside the history limits).
+  ttlSecondsAfterFinished: 86400
+  # Mirror the deploy-time Job: the importer streams the CSV and inserts in chunks,
+  # so give it the same memory headroom.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+
+# Per-PR preview sandbox extras (#616/#617). OFF by default -- dev/staging/prod render
+# nothing here. The preview ApplicationSet sets these per PR. When enabled, a PreSync
+# provision Job (isolated schema + scoped DB user + the sandbox's own SSM path) runs
+# before migrate, and a PostDelete teardown Job reaps them on PR close. App pods still
+# use serviceAccount.roleArn (the scoped seqtoid-web-preview role); the provision/
+# teardown Jobs use a SEPARATE, elevated provisioner SA (seqtoid-web-preview-provisioner).
+preview:
+  enabled: false
+  # PR number -- drives schema (idseq_pr_N), user (sbx_pr_N), SSM (idseq-sandbox-pr-N-web).
+  prNumber: ""
+  # Source chamber service to copy shared config + read master DB creds from.
+  # Empty -> idseq-<environment>-web.
+  srcChamberService: ""
+  provisioner:
+    serviceAccountName: seqtoid-web-provisioner
+    roleArn: ""          # the seqtoid-web-preview-provisioner IRSA role (infra repo)
+  activeDeadlineSeconds: 600
+  backoffLimit: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi

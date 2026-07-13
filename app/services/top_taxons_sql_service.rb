@@ -75,10 +75,10 @@ class TopTaxonsSqlService
     sort = CLIENT_FILTERING_SORT_VALUES[@workflow]
 
     # TODO: (gdingle): how do we protect against SQL injection?
-    # The first query of a session does not work - the session variable @rank do not work, if we do not declare the variables before.
-    # Although I could not find support on MySQL documentation, the first query seems to use always the undefined value instead of updating the variable.
-    # Also guarantees that they are re-initialized to a value that avoids potential corner case issues from the last value from a previous query.
-    ActiveRecord::Base.connection.execute("SET @rank := 0, @current_id := 0;")
+    # Ranking is done with a ROW_NUMBER() window function (see top_n_query),
+    # which is portable (PostgreSQL / MySQL 8+) and plan-independent. There are
+    # no MySQL session variables to prime any more, so the previous
+    # "SET @rank := 0, @current_id := 0" priming statement is gone (bug-#010).
     sql_results = TaxonCount.connection.select_all(
       top_n_query(
         query,
@@ -113,9 +113,9 @@ class TopTaxonsSqlService
         mean,
         stdev_mass_normalized,
         mean_mass_normalized,
-        percent_identity    AS  percentidentity,
-        alignment_length    AS  alignmentlength,
-        COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}) AS logevalue,
+        ROUND(percent_identity, 4)    AS  percentidentity,
+        ROUND(alignment_length, 4)    AS  alignmentlength,
+        ROUND(COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}), 4) AS logevalue,
         -- First pass of ranking in SQL. Second pass in Ruby.
         #{count_per_million_sql} AS rpm,
         #{zscore_sql} AS zscore"
@@ -134,9 +134,9 @@ class TopTaxonsSqlService
         is_phage,
         base_count               AS  b,
         count               AS  r,
-        percent_identity    AS  percentidentity,
-        alignment_length    AS  alignmentlength,
-        COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}) AS logevalue,
+        ROUND(percent_identity, 4)    AS  percentidentity,
+        ROUND(alignment_length, 4)    AS  alignmentlength,
+        ROUND(COALESCE(e_value, #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}), 4) AS logevalue,
         -- First pass of ranking in SQL. Second pass in Ruby.
         #{count_per_million_sql} AS bpm"
     end
@@ -224,17 +224,29 @@ class TopTaxonsSqlService
   def zscore_sql(count_per_million_sql)
     standard_z_score_sql = "(#{count_per_million_sql} - mean) / stdev"
     mass_normalized_zscore_sql = "((count/total_ercc_reads) - mean_mass_normalized) / stdev_mass_normalized"
+    raw_zscore_sql = "CASE WHEN mean_mass_normalized IS NULL THEN #{standard_z_score_sql} ELSE #{mass_normalized_zscore_sql} END"
+    # bug-#011 parity: MySQL's LEAST/GREATEST return NULL if any argument is NULL,
+    # but PostgreSQL ignores NULL arguments. Without the guard below, a taxon that
+    # is absent from the background (NULL mean/stdev -> NULL raw z-score) would clamp
+    # to ZSCORE_MAX on Postgres instead of falling through to ZSCORE_WHEN_ABSENT_FROM_
+    # BACKGROUND. The explicit NULL check restores the MySQL behavior on both engines.
     "COALESCE(
-      GREATEST(#{ReportHelper::ZSCORE_MIN}, LEAST(#{ReportHelper::ZSCORE_MAX},
-        IF(mean_mass_normalized IS NULL, #{standard_z_score_sql}, #{mass_normalized_zscore_sql})
-      )),
+      CASE WHEN (#{raw_zscore_sql}) IS NULL THEN NULL
+           ELSE GREATEST(#{ReportHelper::ZSCORE_MIN}, LEAST(#{ReportHelper::ZSCORE_MAX}, #{raw_zscore_sql})) END,
       #{ReportHelper::ZSCORE_WHEN_ABSENT_FROM_BACKGROUND})"
   end
 
   # This query:
   # 1) assigns a rank to each row within a pipeline run
   # 2) returns rows ranking <= num_results
-  # See http://www.sqlines.com/mysql/how-to/get_top_n_each_group
+  #
+  # Uses a ROW_NUMBER() window function partitioned by pipeline_run_id. This is
+  # the portable, plan-independent equivalent of the old MySQL session-variable
+  # trick (`@rank := IF(@current_id = pipeline_run_id, @rank + 1, 1)`): the
+  # PARTITION BY resets the counter per pipeline run and the window ORDER BY is
+  # the former ranking ORDER BY, so it assigns identical ranks on PostgreSQL or
+  # MySQL 8+ (bug-#010). The `current_id` column was an artifact of the trick
+  # (it only ever echoed pipeline_run_id and nothing consumed it) and is dropped.
   def top_n_query(
     query,
     num_results,
@@ -251,19 +263,20 @@ class TopTaxonsSqlService
 
     count_type_order_clause = count_type.present? ? "count_type = '#{count_type}' DESC," : ""
 
+    # MySQL 8 supports window functions natively (exact per-partition ranking).
     "SELECT *
       FROM (
         SELECT
-          @rank := IF(@current_id = pipeline_run_id, @rank + 1, 1) AS `rank`,
-          @current_id := pipeline_run_id AS current_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY pipeline_run_id
+            ORDER BY
+              #{count_type_order_clause}
+              #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
+          ) AS `rank`,
           x.*
         FROM (
           #{query}
         ) x
-        ORDER BY
-          pipeline_run_id,
-          #{count_type_order_clause}
-          #{sort_field} #{sort_direction == 'highest' ? 'DESC' : 'ASC'}
       ) y
       WHERE `rank` <= #{num_results}
     "

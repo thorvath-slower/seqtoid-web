@@ -3,6 +3,12 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
+  # secret_key_base -- set explicitly here instead of the deprecated config/secrets.yml
+  # (Rails.application.secrets was deprecated in 7.1, removed in 7.2). Value is the same
+  # literal previously used for the `development` env in secrets.yml, so existing dev
+  # signed/encrypted cookies remain valid (no behavior change).
+  config.secret_key_base = "65a7f60b81e0becf08bff85b70a16768559e1737f37922d1807fe5d98ba45e9cf3b8ffcb64d313d0a4f8bae97e1b443c4020f5ea72c9d33984f822f4ccd4332e"
+
   # In the development environment your application's code is reloaded any time
   # it changes. This slows down response time but is perfect for development
   # since you don't have to restart the web server when you make code changes.
@@ -63,6 +69,20 @@ Rails.application.configure do
   # Do not fallback to assets pipeline if a precompiled asset is missed.
   # config.assets.compile = true
 
+  # #544: the deployed dev env runs RAILS_ENV=development and serves assets
+  # dynamically (config.assets.compile defaults true) -- it does NOT run
+  # `assets:precompile` at image build time (that step was tried and reverted in
+  # #204/#210 because it boots RAILS_ENV=production, which this app has no DB
+  # config for). With Sprockets 4 the only precompile source is manifest.js, and
+  # `application.css` is declared there (`//= link application.css`). But with
+  # config.assets.debug = true the stylesheet_link_tag helper takes the
+  # find_debug_asset path and raises AssetNotPrecompiledError (HTTP 500 --
+  # HomeController#landing, DEV-RAILS-PROJECT-B) unless the asset is in the
+  # precompiled manifest, which does not exist without a precompile step.
+  # Disable the precompiled-asset check so dev compiles/serves the stylesheet
+  # dynamically instead of 500ing. Dev-only; leaves staging/prod untouched.
+  config.assets.check_precompiled_asset = false
+
   # Specifies the header that your server uses for sending files.
   # config.action_dispatch.x_sendfile_header = 'X-Sendfile' # for Apache
   # config.action_dispatch.x_sendfile_header = 'X-Accel-Redirect' # for NGINX
@@ -75,9 +95,11 @@ Rails.application.configure do
   # config.action_cable.url = 'wss://example.com/cable'
   # config.action_cable.allowed_request_origins = [ 'http://example.com', /http:\/\/example.*/ ]
 
-  # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  config.force_ssl = true
-  config.ssl_options = { redirect: { exclude: ->(request) { request.path =~ /health_check/ } } }
+  # CZID-279: do NOT force SSL in local development. Puma serves plain http on
+  # localhost and there is no local TLS cert, so force_ssl makes every browser
+  # request 301-redirect to https://localhost and fail to connect. SSL is still
+  # enforced in staging/sandbox/prod (see their environment files).
+  config.force_ssl = false
 
   # Include generic and useful information about system operation, but avoid logging too much
   # information to avoid inadvertent exposure of personally identifiable information (PII).
@@ -133,7 +155,12 @@ Rails.application.configure do
   # config.action_controller.asset_host = proc { |source|
   #   "http://localhost:8080" if source =~ /wp_bundle\.js$/i
   # }
-  config.asset_host = ENV["CZID_CLOUDFRONT_ENDPOINT"] || "dev.seqtoid.org"
+  # CZID-279: when no CDN endpoint is configured (local dev), leave asset_host
+  # unset so assets are served by the local Rails server (relative URLs).
+  # The old hardcoded "dev.seqtoid.org" fallback made the browser fetch the JS/CSS
+  # bundles from a host that doesn't resolve locally, so the React app never loaded
+  # (blank page). A real dev/CDN deploy still sets CZID_CLOUDFRONT_ENDPOINT.
+  config.asset_host = ENV["CZID_CLOUDFRONT_ENDPOINT"]
   # Uncomment if you wish to allow Action Cable access from any origin.
   # config.action_cable.disable_request_forgery_protection = true
 
@@ -201,4 +228,12 @@ Rails.application.configure do
     Bullet.rails_logger = true
     Bullet.skip_html_injection = false
   end
+
+  # Allow web-console's error page (with the full exception body) to render for
+  # requests coming from the Docker bridge network. By default web-console only
+  # trusts loopback, so in local docker-compose dev (client IP is the 172.16/12
+  # bridge, not 127.0.0.1) it blanks the 500 body and hides the real exception.
+  # LOCAL/dev-only -- this file is the development env and is never loaded in a
+  # deployed environment. See CZID-298.
+  config.web_console.permissions = "172.16.0.0/12"
 end

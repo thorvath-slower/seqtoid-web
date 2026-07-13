@@ -13,6 +13,12 @@ const config = {
   output: {
     path: path.resolve(__dirname, "app/assets/"),
     filename: "dist/[name].bundle.min.js",
+    // webpack-5 native output cleaning (CZID-380). Wipes the output dir
+    // (app/assets/dist) before each build so a rebuild can never leave a
+    // stale bundle or orphaned old-hash chunk behind — the compiled output
+    // is always fresh from the current source. `clean` scopes deletion to
+    // webpack's own output.path.
+    clean: true,
   },
   resolve: {
     extensions: [".js", ".jsx", ".ts", ".tsx"],
@@ -49,7 +55,7 @@ const config = {
       },
       {
         // Use CSS modules for new files.
-        test: /\.(sa|sc|c)ss$/,
+        test: /\.(sa|sc)ss$/,
         exclude: [
           path.resolve(__dirname, "node_modules/"),
           path.resolve(__dirname, STYLES_PATH),
@@ -71,9 +77,13 @@ const config = {
           {
             loader: "postcss-loader",
             options: {
-              ident: "postcss",
               sourceMap: true,
-              plugins: loader => [require("cssnano")({ preset: "default" })],
+              // postcss-loader v4+ moved plugins under postcssOptions and dropped
+              // the loader-function form and the `ident` field (postcss-loader v3
+              // -> v8 pull-forward, CZID-318).
+              postcssOptions: {
+                plugins: [require("cssnano")({ preset: "default" })],
+              },
             },
           },
           {
@@ -87,7 +97,7 @@ const config = {
       },
       {
         // Sass / Scss loader for legacy files in assets/src/styles.
-        test: /\.(sa|sc|c)ss$/,
+        test: /\.(sa|sc)ss$/,
         include: [
           path.resolve(__dirname, "node_modules/"),
           path.resolve(__dirname, STYLES_PATH),
@@ -108,9 +118,13 @@ const config = {
           {
             loader: "postcss-loader",
             options: {
-              ident: "postcss",
               sourceMap: true,
-              plugins: loader => [require("cssnano")({ preset: "default" })],
+              // postcss-loader v4+ moved plugins under postcssOptions and dropped
+              // the loader-function form and the `ident` field (postcss-loader v3
+              // -> v8 pull-forward, CZID-318).
+              postcssOptions: {
+                plugins: [require("cssnano")({ preset: "default" })],
+              },
             },
           },
           {
@@ -118,6 +132,35 @@ const config = {
             options: {
               sourceMap: true,
               implementation: require("sass"),
+            },
+          },
+        ],
+      },
+      {
+        // Plain .css (e.g. vendored semantic-ui-css/semantic.min.css) is already
+        // CSS and must NOT pass through sass-loader (Dart Sass rejects minified
+        // CSS). css-loader + postcss only. (webpack 4 -> 5 build modernization.)
+        test: /\.css$/,
+        use: [
+          MiniCssExtractPlugin.loader,
+          {
+            loader: "css-loader",
+            options: {
+              sourceMap: true,
+              importLoaders: 1,
+              modules: { mode: "global" },
+            },
+          },
+          {
+            loader: "postcss-loader",
+            options: {
+              sourceMap: true,
+              // postcss-loader v4+ moved plugins under postcssOptions and dropped
+              // the loader-function form and the `ident` field (postcss-loader v3
+              // -> v8 pull-forward, CZID-318).
+              postcssOptions: {
+                plugins: [require("cssnano")({ preset: "default" })],
+              },
             },
           },
         ],
@@ -168,7 +211,6 @@ const config = {
           keep_fnames: true,
         },
         parallel: true,
-        sourceMap: true,
       }),
     ],
   },

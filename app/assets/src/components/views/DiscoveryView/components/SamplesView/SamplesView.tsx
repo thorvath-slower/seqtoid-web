@@ -31,7 +31,6 @@ import { LoadingPage } from "~/components/common/LoadingPage";
 import csTableRenderer from "~/components/common/TableRenderers/table_renderers.scss";
 import { UserContext } from "~/components/common/UserContext";
 import NarrowContainer from "~/components/layout/NarrowContainer";
-import { SHOULD_READ_FROM_NEXTGEN } from "~/components/utils/features";
 import {
   AMR_PIPELINE,
   isPipelineFeatureAvailable,
@@ -479,17 +478,9 @@ export const SamplesView = forwardRef(function SamplesView(
   const renderNextcladeTrigger = (
     popupPosition: ToolbarPopupPositionOptions,
   ) => {
-    const shouldReadFromNextGen = allowedFeatures.includes(
-      SHOULD_READ_FROM_NEXTGEN,
-    );
     const sendToNextcladeCount = getSendToNextcladeCount();
 
     const getPopupSubtitle = () => {
-      // This is a temporary work-around to disable Nextclade until we are able to convert it to NextGen
-      if (shouldReadFromNextGen) {
-        return "Sending SARS-CoV-2 samples directly to Nexclade is temporarily unavailable.";
-      }
-
       if (sendToNextcladeCount > MAX_NEXTCLADE_SAMPLES) {
         return `Select at most ${MAX_NEXTCLADE_SAMPLES} SARS-CoV-2 samples`;
       } else if (sendToNextcladeCount === 0) {
@@ -505,12 +496,9 @@ export const SamplesView = forwardRef(function SamplesView(
         popupText="Nextclade"
         popupSubtitle={getPopupSubtitle()}
         popupPosition={popupPosition}
-        // TODO: re-enable Nextclade when it's connected to NextGen
         disabled={
-          shouldReadFromNextGen
-            ? true
-            : sendToNextcladeCount === 0 ||
-              sendToNextcladeCount > MAX_NEXTCLADE_SAMPLES
+          sendToNextcladeCount === 0 ||
+          sendToNextcladeCount > MAX_NEXTCLADE_SAMPLES
         }
         onClick={() => setNextcladeModalOpen(true)}
       />
@@ -871,6 +859,17 @@ export const SamplesView = forwardRef(function SamplesView(
       }
       handleClickPhyloTree={handleClickPhyloTree}
       handleClickBenchmark={handleClickBenchmark}
+      // Retry Upload is offered when a selected sample's upload failed. It routes back
+      // into the project's upload flow so the user can re-send that data (re-select the
+      // file today; Options C/B — tickets #490/#491 — will recover it automatically).
+      canRetryUpload={selectedObjects.some(obj =>
+        Boolean(get(["sample", "uploadError"], obj)),
+      )}
+      onRetryUpload={() => {
+        location.href = projectId
+          ? `/samples/upload?projectId=${projectId}`
+          : "/samples/upload";
+      }}
       popupPosition={popupPosition}
     />
   );
@@ -994,7 +993,7 @@ export const SamplesView = forwardRef(function SamplesView(
       workflow,
       metadataFields,
       basicIcon: !!snapshotShareId,
-      showSampleOwnerName: allowedFeatures.includes(SHOULD_READ_FROM_NEXTGEN),
+      showSampleOwnerName: false,
     });
 
     // Note: If the specified sortBy column (ie. a custom metadata field) is not available on this view,

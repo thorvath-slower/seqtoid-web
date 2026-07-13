@@ -1,0 +1,81 @@
+# CloudNativePG cluster for the CZ ID stack (improvement-#005).
+#
+# This is the PostgreSQL the app runs against in the *appliance* edition — a
+# bundled, self-hosted, air-gap-capable database (Constitution Principle VI), so
+# the appliance needs nothing external. The same chart selects RDS/Aurora-Postgres
+# in the cloud edition instead (Principle III: one source of truth → profiles).
+#
+# Requires the CloudNativePG operator (https://cloudnative-pg.io), Apache-2.0
+# (clears Principle II). Apply: `kubectl apply -f cloudnativepg-cluster.yaml`.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: czid-postgres-app
+  namespace: czid
+type: kubernetes.io/basic-auth
+stringData:
+  # Bucket B: real credential is injected by OpenBao / External Secrets
+  # (feature-#004), never committed. This placeholder is for local/appliance bring-up.
+  username: czid
+  password: "REPLACE_VIA_OPENBAO"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: czid-postgres
+  namespace: czid
+spec:
+  # Profile: appliance-minimal = 1; cloud/HA = 3 (one primary + two replicas).
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+
+  # Pin a specific PostgreSQL 16 image. In the air-gapped appliance this is
+  # pulled from the local registry mirror (feature-#007), not ghcr.io.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.4
+
+  bootstrap:
+    initdb:
+      database: idseq_prod
+      owner: czid
+      secret:
+        name: czid-postgres-app
+      # UTF-8 to match the app (was MySQL utf8); C collation for stable sort/index.
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+
+  storage:
+    size: 50Gi
+    # Appliance: a local-path / OpenEBS class. Cloud: gp3. Set by the profile.
+    storageClass: ""
+
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "512MB"
+      work_mem: "16MB"
+      # The TaxonCount ranking + report queries are the hot path — give the
+      # planner room. Tune against real data (Bucket B).
+      effective_cache_size: "2GB"
+      random_page_cost: "1.1"
+
+  # TLS in transit (Principle VII). CloudNativePG issues server certs by default;
+  # the app connects with sslmode=require (see config/database.yml).
+  enableSuperuserAccess: false
+
+  monitoring:
+    enablePodMonitor: true # OpenTelemetry/Prometheus scrape (Principle IV)
+
+  backup:
+    # Reversible delivery (Principle V): continuous WAL archiving + base backups.
+    # Cloud: object store (S3). Appliance: a local PVC/NFS target. Set by profile.
+    retentionPolicy: "30d"
+    barmanObjectStore:
+      destinationPath: "s3://REPLACE-czid-pg-backups/czid-postgres"
+      s3Credentials:
+        inheritFromIAMRole: true
+      wal:
+        compression: gzip
+      data:
+        compression: gzip

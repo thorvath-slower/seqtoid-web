@@ -30,8 +30,8 @@ class SfnGenericDispatchService
     @sfn_arn = AppConfigHelper.get_app_config(AppConfig::SFN_SINGLE_WDL_ARN)
     raise SfnArnMissingError if @sfn_arn.blank?
 
-    @wdl_version = version || AppConfigHelper.get_workflow_version(workflow_name)
-    raise SfnVersionMissingError, workflow_name if @wdl_version.blank?
+    @wdl_version = version || AppConfigHelper.get_workflow_version(@workflow_name)
+    raise SfnVersionMissingError, @workflow_name if @wdl_version.blank?
 
     @wdl_file_name = wdl_file_name || @workflow_name
     raise WdlFileNameMissingError if @wdl_file_name.blank?
@@ -62,7 +62,7 @@ class SfnGenericDispatchService
   rescue StandardError => err
     # Set to failed and re-raise
     LogUtil.log_error(
-      "Error starting SFN pipeline for #{workflow_name} workflow: #{err}",
+      "Error starting SFN pipeline for #{@workflow_name} workflow: #{err}",
       exception: err,
       sfn_execution_arn: sfn_execution_arn
     )

@@ -1,0 +1,52 @@
+# Local CI harness (CZID-109): runs the same checks as GitHub Actions, locally.
+#   make ci-local   (or)   ./bin/ci-local
+# Get this green BEFORE pushing — CI is the final gate, not the dev loop.
+# Version 2 (MySQL): db reverted to MySQL 5.7 (jsims-faithful).
+services:
+  db:
+    image: mysql:8.0
+    platform: linux/amd64
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      MYSQL_DATABASE: idseq_test
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--group_concat_max_len=1073741824', '--default-authentication-plugin=mysql_native_password']
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis
+
+  test:
+    image: ruby:3.3.6
+    # Match CI's architecture (GitHub runners are amd64). Some Python wheels
+    # (e.g. biom-format) have no arm64 build, so on Apple Silicon we emulate
+    # amd64 to mirror CI faithfully. Slower under qemu, but it's the final check.
+    platform: linux/amd64
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      AUTH_TOKEN_SECRET: 'GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ='  # dummy, test-only
+      DB_USERNAME: root
+      DB_PASSWORD: ''
+      DB_HOST: db
+      DB_PORT: '3306'
+      REDIS_URL: redis://redis:6379
+      RAILS_ENV: test
+      AWS_REGION: us-west-2
+      AWS_ACCOUNT_ID: test
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    working_dir: /app
+    volumes:
+      - .:/app
+      - bundle-cache:/app/vendor/bundle
+    command: ["bash", "bin/ci-test"]
+
+volumes:
+  bundle-cache:

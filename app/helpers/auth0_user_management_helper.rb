@@ -130,9 +130,22 @@ module Auth0UserManagementHelper
       Auth0Client.new(
         client_id: ENV["AUTH0_MANAGEMENT_CLIENT_ID"],
         client_secret: ENV["AUTH0_MANAGEMENT_CLIENT_SECRET"],
-        domain: ENV["AUTH0_MANAGEMENT_DOMAIN"],
+        domain: normalize_auth0_domain(ENV["AUTH0_MANAGEMENT_DOMAIN"]),
         api_version: 2
       )
     end
+  end
+
+  # CZID-389: AUTH0_MANAGEMENT_DOMAIN must be a bare host (e.g. "tenant.auth0.com").
+  # The Auth0 client builds its base URL as "https://#{domain}", so if the env var is
+  # accidentally set WITH a scheme ("https://tenant.auth0.com") the result is
+  # "https://https://tenant.auth0.com", whose parsed host is the literal "https" --
+  # this surfaces as SocketError "Failed to open TCP connection to https:443" during
+  # GraphqlController#execute (create_user mutation). Strip any leading scheme and
+  # trailing slash so a mis-set env var can no longer be mistaken for the host.
+  def self.normalize_auth0_domain(domain)
+    return domain if domain.blank?
+
+    domain.strip.sub(%r{\Ahttps?://}i, "").delete_suffix("/")
   end
 end

@@ -30,6 +30,20 @@ class Auth0Controller < ApplicationController
   end
 
   def login
+    # CZID-317 (#274): the home-page "Sign In" button links to /auth0/login. In
+    # local development there is no Auth0 client_id, so the normal Auth0 redirect
+    # below dead-ends offline. When direct dev login is enabled (development env
+    # AND the explicit ALLOW_DIRECT_USER_LOGIN=true opt-in, see
+    # direct_login_enabled?), hand off to the dev-only local sign-in (CZID-280 /
+    # #237) instead. When the flag is off -- including on the internet-facing
+    # deployed dev cluster, which runs the development Rails env but must NOT set
+    # the flag -- this branch is never taken and behavior is UNCHANGED (the Auth0
+    # refresh_token redirect below). The auth0_dev_login route/helper also does
+    # not exist unless the flag is set (see config/routes.rb).
+    if direct_login_enabled?
+      redirect_to auth0_dev_login_path and return
+    end
+
     # Redirecting to the refresh token forcing a login operation
     redirect_to url_for(
       action: :refresh_token,
@@ -37,10 +51,57 @@ class Auth0Controller < ApplicationController
     )
   end
 
-  def direct_user_login
-    user_id = params[:user_id]
-    direct_login(user_id)
-    @token_based_login_request = true
+  # CZID-280 (#237) -- local-development sign-in that does not require a live
+  # Auth0 tenant. Lets a developer running truly-local (development env AND the
+  # explicit ALLOW_DIRECT_USER_LOGIN=true opt-in) sign in with no Auth0 client_id
+  # configured (offline), so the home -> login -> upload flow is reachable locally.
+  #
+  # SECURITY: This is NOT the removed /direct_user_login backdoor (CZID-319 /
+  # #276). The deployed dev cluster runs the development Rails env AND is
+  # internet-facing, so `Rails.env.development?` alone is NOT a sufficient gate.
+  # Three independent guarantees, all requiring the ALLOW_DIRECT_USER_LOGIN=true
+  # opt-in flag (set ONLY in local docker-compose, NEVER in any deployed-env
+  # config), keep this inert in every deployed env:
+  #   1. The route is defined ONLY inside `if Rails.env.development?` AND
+  #      `if ENV["ALLOW_DIRECT_USER_LOGIN"] == "true"` in config/routes.rb, so it
+  #      is absent from every deployed route table entirely (it cannot be reached
+  #      there at all).
+  #   2. This action re-checks `direct_login_enabled?` (dev env AND the flag) at
+  #      runtime and 404s otherwise, as defense-in-depth if the action is ever
+  #      reached by other means. It refuses to run unless the env is truly
+  #      development and the flag is explicitly set.
+  #   3. The `login` hand-off to this action is likewise gated on
+  #      `direct_login_enabled?`, so with the flag off `login` falls through to
+  #      the normal Auth0 redirect.
+  # It also takes NO user_id parameter, so it cannot be used to "become any
+  # user" -- it signs in a single fixed seeded dev user (see dev_login_user).
+  DEV_LOGIN_EMAIL = ENV.fetch("DEV_LOGIN_EMAIL", "dev@czid.local")
+
+  def dev_login
+    # Fail closed: never run unless truly-local (dev env AND the explicit
+    # ALLOW_DIRECT_USER_LOGIN=true opt-in), regardless of how we got here.
+    return head(:not_found) unless direct_login_enabled?
+
+    user = dev_login_user
+    if user.nil?
+      render(
+        plain: "dev_login: no seeded user found. Seed a user (e.g. #{DEV_LOGIN_EMAIL}) first.",
+        status: :not_found
+      ) and return
+    end
+
+    # Traceability (no untraceable logins): a direct dev sign-in bypasses Auth0
+    # entirely, so leave an explicit audit line recording who was signed in.
+    Rails.logger.warn(
+      "DIRECT DEV LOGIN -- no Auth0: signing in seeded user " \
+      "id=#{user.id} email=#{user.email} via auth0#dev_login " \
+      "(ALLOW_DIRECT_USER_LOGIN)"
+    )
+
+    # Mirror the real Auth0 callback: place the user in the :auth0_user warden
+    # scope (the scope ApplicationController#current_user reads from).
+    warden.logout(:user)
+    warden.set_user(user, scope: :auth0_user)
     redirect_to home_path
   end
 
@@ -145,6 +206,27 @@ class Auth0Controller < ApplicationController
   end
 
   private
+
+  # Deny-by-default gate for the dev-only local sign-in (auth0#dev_login and the
+  # auth0#login hand-off to it). Requires BOTH the development Rails env AND the
+  # explicit ALLOW_DIRECT_USER_LOGIN=true opt-in flag. The deployed dev cluster
+  # runs the development env and is internet-facing, so it must NOT set the flag;
+  # the flag is set ONLY in local docker-compose (never in any deployed-env
+  # config). With the flag off this returns false everywhere, so dev_login 404s
+  # and login falls through to the normal Auth0 redirect.
+  def direct_login_enabled?
+    Rails.env.development? && ENV["ALLOW_DIRECT_USER_LOGIN"] == "true"
+  end
+
+  # The single fixed user dev_login signs in. Prefers a conventional seeded dev
+  # account (DEV_LOGIN_EMAIL), then falls back to the first admin, then the first
+  # user -- so a fresh dev DB still works. Deliberately NOT parameterized by
+  # user_id: dev_login cannot be pointed at an arbitrary account.
+  def dev_login_user
+    User.find_by(email: DEV_LOGIN_EMAIL) ||
+      User.where(role: User::ROLE_ADMIN).order(:id).first ||
+      User.order(:id).first
+  end
 
   def filter_value(value, set_of_values)
     value if set_of_values.include?(value)

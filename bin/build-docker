@@ -1,34 +1,126 @@
 #!/bin/bash
 # NOTE: We push all created tags to the Docker repo, but only the commit, branch, and latest tags matter.
 # Cache and compose are noise.
+#
+# CZID-76: the ECR repo is being reconciled from the legacy `idseq-web` name to the go-forward
+# `seqtoid-web` name (the GitOps values reference `czid-<env>/seqtoid-web`). We do NOT rename the
+# live `idseq-web` repo. Instead we build+tag for BOTH names during the transition (dual-push), so a
+# `sha-<commit>` tag resolves under either name at deploy time. The set of repo names is driven by
+# ECR_REPO_NAMES (space-separated) so the cutover is a one-line change: drop `idseq-web` once every
+# consumer (deploy scripts, chart values, GitOps values) references `seqtoid-web`.
+#
+# #482 (multi-arch amd64+arm64): the image is now built for BOTH linux/amd64 and linux/arm64 and
+# pushed to ECR as a MANIFEST LIST, so the dev cluster's Karpenter arm64 (Graviton) nodes can pull a
+# native image instead of crashlooping the amd64 binary ("exec format error"). A multi-arch build
+# CANNOT be `--load`ed into the local docker daemon (the daemon holds a single-arch image), so buildx
+# pushes the manifest list directly (`--push`) under every tag — this script now OWNS the push (the
+# old bin/push-docker `docker push` step is a no-op for multi-arch and is skipped by the workflow).
+#
+# #485 (build-cache lifecycle, redesigned for SELF-HEALING): warmth and freshness are SEPARATE
+# concerns, so they're separate modes and compose — neither replaces the other:
+#   - CACHE_MODE=write   (main builds): `--cache-from` + `--cache-to mode=max`. SELF-HEALING — every
+#     main build writes its updated layers back, so the cache always reflects the latest state and
+#     auto-recovers after any Gemfile / package-lock / requirements / Dockerfile change (no cold-cache
+#     window). cache-to is content-addressed: unchanged layers aren't re-uploaded (a fast manifest
+#     update), so the push cost is paid only when layers actually changed — exactly when it's useful.
+#   - CACHE_MODE=read    (feature / on-demand builds): `--cache-from` ONLY. Reads the shared cache but
+#     never writes it, so branch-specific layers don't pollute the main cache. (DEFAULT — safe.)
+#   - CACHE_MODE=rebuild (the Sunday cron, weekly-cache-refresh.yml): `--no-cache` + `--cache-to
+#     mode=max`. A clean from-scratch rebuild that re-pulls the base image + `apt-get upgrade`, so the
+#     cache picks up the week's security patches + dep drift. This is the FRESHNESS pass — self-heal
+#     keeps the cache WARM, this keeps it CURRENT.
+# Single writer: only main builds (write) + the Sunday cron (rebuild) write the cache; the main
+# build workflow's concurrency guard prevents overlapping writes.
 set -euo pipefail
 
-export REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web"
+# Space-separated ECR repo names to tag (transition: dual-push legacy + go-forward). Override via env.
+ECR_REPO_NAMES="${ECR_REPO_NAMES:-idseq-web seqtoid-web}"
+REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+# #482: single-arch amd64. Multi-arch (arm64) was reverted — building arm64 under QEMU
+# emulation blew the build up ~40x (~70s cached -> 40+ min). arm64/Graviton will be redone
+# with NATIVE arm64 runners (matrix build + manifest combine), never emulation. Pods are
+# amd64-pinned today, so arm64 has no consumer yet. Override PLATFORMS via env if needed.
+PLATFORMS="${PLATFORMS:-linux/amd64}"
+# #485: cache mode — `write` (main, self-heal), `read` (feature, cache-from only), `rebuild` (Sunday
+# clean --no-cache + cache-to). Default `read` is the safe non-writing choice for ad-hoc builds.
+CACHE_MODE="${CACHE_MODE:-read}"
 
 BRANCH="$1"
-BRANCH_CLEANED=$(echo $BRANCH | sed 's/\//-/g')
+BRANCH_CLEANED=$(echo "$BRANCH" | sed 's/\//-/g')
 COMMIT="$2"
-BRANCH_TAG=$REPO:"branch-$BRANCH_CLEANED"
-CACHE_TAG="$REPO:cache"
-COMMIT_TAG=$REPO:"sha-$COMMIT"
-COMPOSE_TAG="$REPO:compose"
-LATEST_TAG="$REPO:latest"
 
-echo "Branch $BRANCH"
-echo "Commit $COMMIT"
-echo "Repo   $REPO"
+# The first repo name is the canonical build/cache repo; the rest are additional tag targets.
+PRIMARY_REPO="$REGISTRY/$(echo "$ECR_REPO_NAMES" | awk '{print $1}')"
+
+echo "Branch    $BRANCH"
+echo "Commit    $COMMIT"
+echo "Repos     $ECR_REPO_NAMES"
+echo "Platforms $PLATFORMS"
+echo "CacheMode $CACHE_MODE"
 echo '--'
 
-# Try to pull the latest image for this branch, otherwise pull latest image for caching
-if ! ( docker pull $BRANCH_TAG && docker tag $BRANCH_TAG $CACHE_TAG ); then
-    # If we fail to fetch the latest image, continue the build without a cache image.
-    (docker pull $LATEST_TAG && docker tag $LATEST_TAG $CACHE_TAG) || true
-fi
+# Hash of the frontend asset source + webpack/babel config, passed as a build-arg so
+# the Dockerfile's asset-build layer cache-busts on any frontend change (CZID-380).
+# Without this the webpack layer could be reused stale and ship an old bundle even
+# though the source changed. Uses git-tracked content (index blobs) so the hash is
+# deterministic and matches what gets committed.
+SRC_HASH=$(git ls-files -s app/assets webpack.config.common.js webpack.config.prod.js .babelrc | git hash-object --stdin)
+echo "Asset SRC_HASH $SRC_HASH"
 
-docker build -t $COMPOSE_TAG --cache-from $CACHE_TAG --build-arg GIT_COMMIT=${COMMIT} .
+# BuildKit registry cache. The old classic `docker build --cache-from <final image>`
+# could NOT cache this MULTI-STAGE build's expensive builder stage (apt/samtools/node/
+# npm ci/webpack/bundle install) — those layers aren't in the final runtime image, so
+# they rebuilt from scratch every run (~9 min). buildx with `--cache-to mode=max`
+# exports ALL stage layers (builder included) to a dedicated `:buildcache` tag in ECR,
+# so the next build restores them and only re-runs what actually changed: a backend-only
+# change becomes ~2-4 min; a frontend change busts just the webpack layer (SRC_HASH); a
+# Gemfile change busts just bundle install. `image-manifest=true` + `oci-mediatypes=true`
+# are REQUIRED for ECR (it rejects buildkit's default cache manifest type). A first build
+# on a fresh cache ref cache-misses gracefully and populates it.
+CACHE_REF="$PRIMARY_REPO:buildcache"
 
-if [ "$BRANCH" == "main" ]; then
-    docker tag $COMPOSE_TAG $LATEST_TAG
-fi
-docker tag $COMPOSE_TAG $COMMIT_TAG
-docker tag $COMPOSE_TAG $BRANCH_TAG
+# The docker-container driver is REQUIRED for registry cache export/import (the default `docker`
+# driver can't do it). Single-arch amd64 (#482 revert), so no QEMU/binfmt needed.
+docker buildx inspect seqtoid-cache-builder >/dev/null 2>&1 \
+  || docker buildx create --name seqtoid-cache-builder --driver docker-container --use
+docker buildx use seqtoid-cache-builder
+
+# Assemble the full set of `-t` tag targets across every repo name.
+TAG_ARGS=()
+for NAME in $ECR_REPO_NAMES; do
+    REPO="$REGISTRY/$NAME"
+    TAG_ARGS+=(-t "$REPO:sha-$COMMIT")
+    TAG_ARGS+=(-t "$REPO:branch-$BRANCH_CLEANED")
+    if [ "$BRANCH" == "main" ]; then
+        TAG_ARGS+=(-t "$REPO:latest")
+    fi
+done
+
+# #485: self-heal on main (write), read-only for feature builds, weekly clean rebuild (rebuild).
+CACHE_TO="type=registry,ref=$CACHE_REF,mode=max,image-manifest=true,oci-mediatypes=true"
+case "$CACHE_MODE" in
+  write)
+    echo "CACHE_MODE=write -> self-healing: read $CACHE_REF AND write it back (mode=max)"
+    CACHE_ARGS=(--cache-from "type=registry,ref=$CACHE_REF" --cache-to "$CACHE_TO")
+    ;;
+  rebuild)
+    echo "CACHE_MODE=rebuild -> clean --no-cache rebuild (base-image patches) + write cache (mode=max)"
+    CACHE_ARGS=(--no-cache --cache-to "$CACHE_TO")
+    ;;
+  *)
+    echo "CACHE_MODE=read -> read-only $CACHE_REF (no --cache-to); feature/on-demand build"
+    CACHE_ARGS=(--cache-from "type=registry,ref=$CACHE_REF")
+    ;;
+esac
+
+# `--push` (not `--load`): the docker-container builder builds off-daemon and the registry cache
+# needs a registry target. buildx builds linux/amd64 and pushes all tags.
+docker buildx build \
+    --platform "$PLATFORMS" \
+    --push \
+    "${TAG_ARGS[@]}" \
+    "${CACHE_ARGS[@]}" \
+    --build-arg GIT_COMMIT="${COMMIT}" \
+    --build-arg SRC_HASH="${SRC_HASH}" \
+    .

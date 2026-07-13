@@ -3,12 +3,24 @@ class BulkDownloadsController < ApplicationController
   include BulkDownloadsHelper
   include PipelineRunsHelper
   include AppConfigHelper
+  include OtelActionLogging
+
+  # CZID-472: per-user action log for support triage (identifiers only, no PII).
+  log_user_actions :create, action: "bulk_download.create",
+                            context: ->(c) { { "czid.download_type" => c.params[:download_type], "czid.workflow" => c.params[:workflow] } }
 
   UPDATE_WITH_TOKEN_ACTIONS = [:success_with_token, :error_with_token, :progress_with_token].freeze
 
   skip_before_action :authenticate_user!, :verify_authenticity_token, only: UPDATE_WITH_TOKEN_ACTIONS
 
   before_action :set_bulk_download_and_validate_access_token, only: UPDATE_WITH_TOKEN_ACTIONS
+
+  # CZID-599 -- LIVE export-control screening at the RESULT-RELEASE backstop: screen before a bulk
+  # download is created (released). Full PASS-THROUGH (no screen call, no hold, normal flow) unless
+  # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 == "1" AND the release toggle is on AND Descartes screening
+  # is enabled -- ships triple-DARK, counsel/vendor-gated (CZID-335). See ExportControlScreeningGate
+  # (included via ApplicationController).
+  before_action :screen_export_control_release, only: [:create]
 
   # GET /bulk_downloads/types
   def types
@@ -69,7 +81,7 @@ class BulkDownloadsController < ApplicationController
         exception: e,
         params: create_params
       )
-      render json: { error: e }, status: :unprocessable_entity
+      render json: { error: e }, status: :unprocessable_content
       return
     end
 
@@ -111,7 +123,7 @@ class BulkDownloadsController < ApplicationController
         error_message: bulk_download.errors.full_messages,
         params: params
       )
-      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_entity
+      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_content
     end
   end
 
@@ -121,7 +133,7 @@ class BulkDownloadsController < ApplicationController
     begin
       workflow_run_ids = get_workflow_run_ids_of_viewable_objects(bulk_download_params)
     rescue StandardError
-      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_entity
+      render json: { error: KICKOFF_FAILURE_HUMAN_READABLE }, status: :unprocessable_content
       return
     end
 
@@ -139,7 +151,7 @@ class BulkDownloadsController < ApplicationController
     sample_ids, = validate_sample_metadata_params(sample_metadata_params, current_user)
 
     unless sample_ids.is_a?(Array)
-      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_entity
+      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_content
       return
     end
     metadata_arr = BulkDownloadsHelper.generate_cg_sample_metadata(sample_ids, current_user)
@@ -152,7 +164,7 @@ class BulkDownloadsController < ApplicationController
       params: sample_metadata_params
     )
 
-    render json: { error: e.message }, status: :unprocessable_entity
+    render json: { error: e.message }, status: :unprocessable_content
   end
 
   # POST /bulk_downloads/sample_metadata.json
@@ -160,7 +172,7 @@ class BulkDownloadsController < ApplicationController
     sample_ids, samples = validate_sample_metadata_params(sample_metadata_params, current_user)
 
     unless sample_ids.is_a?(Array)
-      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_entity
+      render json: { error: MISSING_SAMPLE_IDS_ERROR }, status: :unprocessable_content
       return
     end
     metadata_arr = BulkDownloadsHelper.generate_metadata_arr(samples)
@@ -173,7 +185,7 @@ class BulkDownloadsController < ApplicationController
       params: sample_metadata_params
     )
 
-    render json: { error: e.message }, status: :unprocessable_entity
+    render json: { error: e.message }, status: :unprocessable_content
   end
 
   # GET /bulk_downloads

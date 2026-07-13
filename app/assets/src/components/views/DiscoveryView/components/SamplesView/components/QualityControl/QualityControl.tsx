@@ -134,7 +134,11 @@ function QualityControl({
     hostIds: filters?.host,
     ...filters,
   });
-  const samples = data.samplesList.samples;
+  // Guard against a null/absent samplesList at runtime (#545). The generated type marks
+  // samplesList non-null, but the server can return null (no data / error shape), which threw
+  // "Cannot read properties of undefined (reading 'samples')" here and then compounded in
+  // extractData's `samples.forEach`. Default to [] so PLQC renders an empty state, not a crash.
+  const samples = data.samplesList?.samples ?? [];
 
   const fetchProjectData = useCallback(async () => {
     setLoading(true);

@@ -100,9 +100,27 @@ RSpec.configure do |config|
 
   Aws.config.update(stub_responses: true)
 
-  # Clear the cache between tests since it is stateful (like the db)
+  # OmniAuth.config is process-global mutable state. sign_in_auth0 flips
+  # test_mode on (which bypasses OmniAuth's real OAuth2 CSRF/state check) and
+  # registers a :auth0 mock, but its Minitest-style `teardown` helper is never
+  # wired into an RSpec hook. So test_mode used to be turned on IMPLICITLY by
+  # whichever example ran sign_in_auth0 first and then leaked to the rest of
+  # the process. Serial ordering happened to leave it on before the callback
+  # specs; parallel_tests (and the future matrix shards) run a different
+  # per-process order, so those specs saw test_mode=false and tripped
+  # csrf_detected -> 302 instead of reaching the controller.
+  #
+  # Fix: make test_mode DETERMINISTIC (on from the start of every example, in
+  # every process) and reset only the per-test mock auth hash afterwards so no
+  # auth identity leaks between examples. test_mode stays on; the mock is
+  # per-example state. This removes the order-dependency the shards would hit.
   config.before(:each) do
     Rails.cache.clear
+    OmniAuth.config.test_mode = true
+  end
+
+  config.after(:each) do
+    OmniAuth.config.mock_auth[:auth0] = nil
   end
 end
 
@@ -111,7 +129,10 @@ require 'simplecov'
 require 'webmock/rspec'
 require "support/common_stub_constants"
 
-SimpleCov.command_name "RSpec"
+# Distinct name per parallel_tests worker (TEST_ENV_NUMBER is empty for process 1,
+# "2","3", etc. for the rest) so SimpleCov keeps each process's result separate and
+# merges them into one report. Serial runs get the plain "RSpec" command name.
+SimpleCov.command_name "RSpec#{ENV['TEST_ENV_NUMBER']}"
 
 WebMock.disable_net_connect!(allow_localhost: true)
 

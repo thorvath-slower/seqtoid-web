@@ -1,0 +1,47 @@
+{{- if .Values.blueGreen.analysis.enabled -}}
+# Smoke gate for the blueGreen promotion. Job-based first cut (Prometheus-backed
+# metrics later, #326): curl the PREVIEW color's /health_check (+ any smoke.paths)
+# and require HTTP 200. A failure aborts the rollout -> the active color is untouched.
+# The preview Service name is known at render time, so we target it directly rather
+# than threading an Argo Rollouts arg.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}-smoke
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+spec:
+  metrics:
+    - name: smoke
+      # Try up to failureLimit+1 times before declaring the analysis failed.
+      failureLimit: {{ .Values.smoke.failureLimit }}
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 600
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: smoke
+                    image: {{ .Values.smoke.image | quote }}
+                    env:
+                      - name: HOST
+                        value: {{ printf "%s-preview:%d" (include "seqtoid-web.fullname" .) (int .Values.service.port) | quote }}
+                      - name: PATHS
+                        value: {{ .Values.smoke.paths | join " " | quote }}
+                      - name: TIMEOUT
+                        value: {{ .Values.smoke.timeoutSeconds | quote }}
+                    command:
+                      - sh
+                      - -c
+                      - |
+                        set -eu
+                        for p in $PATHS; do
+                          echo "smoke: GET http://$HOST$p"
+                          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" "http://$HOST$p")
+                          [ "$code" = "200" ] || { echo "FAIL $p -> $code"; exit 1; }
+                        done
+                        echo "smoke OK"
+{{- end }}

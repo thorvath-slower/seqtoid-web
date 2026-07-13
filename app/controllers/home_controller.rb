@@ -97,7 +97,9 @@ class HomeController < ApplicationController
     taxon_list = params[:taxon_list].split(",").map(&:to_i)
     output = {}
     TaxonDescription.where(taxid: taxon_list).each do |taxon|
-      output[taxon[:taxid]] = taxon.slice(:taxid, :title, :summary, :wiki_url)
+      # wiki_url is a computed method (not a column), so `slice` would drop it.
+      # Slice the column attributes and merge in the computed value explicitly.
+      output[taxon[:taxid]] = taxon.slice(:taxid, :title, :summary).merge("wiki_url" => taxon.wiki_url)
     end
     render json: output
   end

@@ -6,25 +6,25 @@ on:
       node-environment:
         type: string
         description: "Environment"
-        required: true
+        required: false
         default: "staging"
       test-category:
         type: string
         description: "Test Category"
-        required: true
+        required: false
         default: "smoke"
       should-run-with-feature-flags:
-        type: string
+        type: boolean
         description: "Run with feature flags?"
-        required: true
-        default: "false"
+        required: false
+        default: false
 
   workflow_dispatch:
     inputs:
       node-environment:
         type: choice
         description: "Environment"
-        required: true
+        required: false
         default: "staging"
         options:
           - staging
@@ -32,7 +32,7 @@ on:
       test-category:
         type: choice
         description: "Test Category"
-        required: true
+        required: false
         default: "smoke"
         options:
           - smoke
@@ -40,7 +40,7 @@ on:
       should-run-with-feature-flags:
         type: choice
         description: "Run with feature flags?"
-        required: true
+        required: false
         default: "false"
         options:
           - "true"
@@ -61,16 +61,20 @@ jobs:
       NODE_ENV: ${{inputs.node-environment}}
       BASESPACE_USERNAME: ${{secrets.BASESPACE_USERNAME}}
       BASESPACE_PASSWORD: ${{secrets.BASESPACE_PASSWORD}}
-      NEXTGEN_FEATURE_FLAGS_ENABLED: ${{inputs.should-run-with-feature-flags}}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: "./.node-version"
+          # Cache the e2e npm downloads keyed on its lockfile (#513). This was the only
+          # gem/node install step in CI still uncached; the app test jobs already cache
+          # vendor/bundle and ~/.npm.
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
 
       - name: Install dependencies
         run: |
@@ -84,8 +88,8 @@ jobs:
           if [[ ${{inputs.should-run-with-feature-flags}} == 'true' ]]; then
             CZID_USERNAME_WITH_FF=${{secrets.CZID_USERNAME_WITH_FF}}
             CZID_PASSWORD_WITH_FF=${{secrets.CZID_PASSWORD_WITH_FF}}
-            echo "CZID_USERNAME=${CZID_USERNAME_WITH_FF}" >> $GITHUB_ENV
-            echo "CZID_PASSWORD=${CZID_PASSWORD_WITH_FF}" >> $GITHUB_ENV
+            echo "CZID_USERNAME=${CZID_USERNAME_WITH_FF}" >> "$GITHUB_ENV"
+            echo "CZID_PASSWORD=${CZID_PASSWORD_WITH_FF}" >> "$GITHUB_ENV"
             echo "Running tests with feature flags"
           else
             echo "Running tests without feature flags"
@@ -98,7 +102,7 @@ jobs:
           npx playwright test -c setup/${{inputs.node-environment}}.config.ts --project="${{inputs.test-category}} test: *"
 
       - name: Upload test result artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: playwright-report-${{inputs.test-category}}-${{ github.run_id }}
@@ -108,8 +112,10 @@ jobs:
       - name: Notify Slack on success
         id: slack_message
         if: ${{ success() }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "blocks": [
@@ -166,14 +172,13 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
       - name: Notify Slack on failure
         if: ${{ failure() }}
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "blocks": [
@@ -230,6 +235,3 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

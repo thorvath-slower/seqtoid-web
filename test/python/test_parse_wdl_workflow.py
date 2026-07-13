@@ -11,15 +11,13 @@ import WDL
 
 from scripts import parse_wdl_workflow
 
-
 # Test cases
 
 
 class TestReadAndParseInput(unittest.TestCase):
     def test_read_stdin_result_type(self):
         with patch("sys.stdin", StringIO(test_wdl)):
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(parse_wdl_workflow.read_stdin("stdin", "", ""))
+            result = asyncio.run(parse_wdl_workflow.read_stdin("stdin", "", ""))
             self.assertIsInstance(result, WDL.ReadSourceResult)
             self.assertEqual(result.source_text, test_wdl)
             self.assertEqual(result.abspath, "stdin")
@@ -92,6 +90,62 @@ class TestJSONOutput(unittest.TestCase):
             self.assertIn(".", value)
             task = key.split(".")[0]
             self.assertNotIn(task, value)
+
+
+class TestWDL11Parsing(unittest.TestCase):
+    """WDL 1.1 coverage: version 1.1 parsing, WDL.Expr.Null (None) handling,
+    None-guarded workflow inputs/outputs, and the WorkflowInput. prefix applied to
+    declarations that reference workflow inputs. miniwdl was bumped to 1.14.2
+    (WDL 1.1 capable) but this parser previously had no 1.1 / Null coverage."""
+
+    def _parse(self, wdl_text):
+        with patch("sys.stdin", StringIO(wdl_text)), patch("sys.stdout", new_callable=StringIO):
+            parse_wdl_workflow.main()
+            return json.loads(sys.stdout.getvalue())
+
+    def test_version_1_1_parses(self):
+        with patch("sys.stdin", StringIO(test_wdl_1_1)):
+            doc = WDL.load("stdin", read_source=parse_wdl_workflow.read_stdin)
+            assert doc.workflow
+            self.assertEqual(doc.workflow.name, "wdl_1_1_example")
+
+    def test_null_input_is_ignored(self):
+        # optional_ref = None parses to WDL.Expr.Null; it must be ignored, not raise.
+        process_inputs = self._parse(test_wdl_1_1)["task_inputs"]["ProcessSample"]
+        self.assertNotIn("WorkflowInput.optional_ref", process_inputs)
+        for prefixed_var in process_inputs:
+            # Every input is a well-formed two-component "Prefix.var" reference.
+            self.assertEqual(len(prefixed_var.split(".")), 2)
+
+    def test_declaration_referencing_workflow_inputs_is_prefixed(self):
+        # selected_fastq is a declaration resolving to bare workflow inputs; after
+        # expansion each must carry the WorkflowInput. prefix, and no phantom
+        # WorkflowInput.selected_fastq (the declaration name) should remain.
+        process_inputs = self._parse(test_wdl_1_1)["task_inputs"]["ProcessSample"]
+        self.assertNotIn("WorkflowInput.selected_fastq", process_inputs)
+        self.assertIn("WorkflowInput.input_fastq", process_inputs)
+        self.assertIn("WorkflowInput.alt_fastq", process_inputs)
+
+    def test_none_inputs_and_outputs_are_guarded(self):
+        # A workflow with no input/output blocks yields None for inputs/outputs in
+        # WDL 1.1; the parser must treat them as empty rather than crash.
+        parsed = self._parse(test_wdl_1_1_no_io)
+        self.assertEqual(parsed["inputs"], {})
+        self.assertEqual(parsed["outputs"], {})
+        self.assertEqual(parsed["task_names"], ["NoOp"])
+
+
+class TestFailFast(unittest.TestCase):
+    """The parser fails fast on genuinely unsupported constructs rather than
+    silently returning None or an empty result."""
+
+    def test_parse_input_item_unsupported_raises(self):
+        with self.assertRaises(Exception):
+            parse_wdl_workflow.parse_input_item(object())
+
+    def test_parse_workflow_task_unsupported_raises(self):
+        with self.assertRaises(Exception):
+            parse_wdl_workflow.parse_workflow_task(object())
 
 
 # Test document
@@ -202,6 +256,79 @@ workflow idseq_host_filter {
     File? gsnap_filter_out_gsnap_filter_merged_fa = RunGsnapFilter.gsnap_filter_merged_fa
     File? gsnap_filter_out_count = RunGsnapFilter.output_read_count
     File? input_read_count = RunValidateInput.input_read_count
+  }
+}
+"""  # noqa
+
+
+# WDL 1.1 document. Exercises: version 1.1 parsing, a None-valued optional call
+# input (WDL.Expr.Null), and a declaration (selected_fastq) that references
+# workflow inputs so its expansion must gain the WorkflowInput. prefix.
+test_wdl_1_1 = """
+version 1.1
+task ProcessSample {
+  input {
+    String docker_image_id
+    File sample
+    File? optional_ref
+  }
+  command <<<
+  echo processing
+  >>>
+  output {
+    File processed = "processed.fa"
+    File? maybe_out = "maybe.fa"
+  }
+  runtime {
+    docker: docker_image_id
+  }
+}
+workflow wdl_1_1_example {
+  input {
+    String docker_image_id
+    File input_fastq
+    File? alt_fastq
+    Boolean use_alt = false
+  }
+  File selected_fastq = if use_alt
+    then select_first([alt_fastq, input_fastq])
+    else input_fastq
+  call ProcessSample {
+    input:
+      docker_image_id = docker_image_id,
+      sample = selected_fastq,
+      optional_ref = None,
+  }
+  output {
+    File processed_out = ProcessSample.processed
+    File? maybe_out = ProcessSample.maybe_out
+  }
+}
+"""  # noqa
+
+
+# WDL 1.1 workflow with no input/output blocks. In 1.1 doc.workflow.inputs and
+# doc.workflow.outputs come back as None here, exercising the "or []" guards.
+test_wdl_1_1_no_io = """
+version 1.1
+task NoOp {
+  input {
+    String docker_image_id
+  }
+  command <<<
+  echo hi
+  >>>
+  output {
+    File result = "result.txt"
+  }
+  runtime {
+    docker: docker_image_id
+  }
+}
+workflow no_inputs_outputs {
+  call NoOp {
+    input:
+      docker_image_id = "img",
   }
 }
 """  # noqa

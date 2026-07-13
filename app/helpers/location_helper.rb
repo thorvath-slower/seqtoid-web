@@ -1,7 +1,10 @@
 module LocationHelper
   # Adapter function to munge responses from Location IQ API to our format
   def self.adapt_location_iq_response(body)
-    address = body["address"]
+    # Degrade instead of crashing on an error/addressless provider payload. LocationIQ can
+    # return {"error": ...} (e.g. reverse-by-osm_id lookups), which has no "address" key;
+    # without this guard the `.include?`/`.key?` calls below raise NoMethodError on nil. See #672.
+    address = body["address"] || {}
     # Note(jsheu): 'type' field may contain a helpful exact name match, but not
     # necessarily. Ex: city, state, administrative, river, university, station..
     category = body["type"]
@@ -120,13 +123,13 @@ module LocationHelper
     # Plain text locations in string_validated_value + multi-geo-level location search
     if locations_by_geo_level.present?
       samples.where(
-        "`metadata`.`string_validated_value` IN (BINARY ?)"\
-      " OR #{locations_by_geo_level.keys.map { |k| "`locations`.`#{k}_id` IN (?)" }.join(' OR ')}",
+        "metadata.string_validated_value IN (?)"\
+      " OR #{locations_by_geo_level.keys.map { |k| "locations.#{k}_id IN (?)" }.join(' OR ')}",
         query,
         *locations_by_geo_level.values
       )
     else
-      samples.where("`metadata`.`string_validated_value` IN (BINARY ?)", query)
+      samples.where("metadata.string_validated_value IN (?)", query)
     end
   end
 

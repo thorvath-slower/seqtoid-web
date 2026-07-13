@@ -69,10 +69,7 @@ local-init: ## Set up a local dev environment
 		$(MAKE) .env.localdev; \
 		$(MAKE) local-pull; \
 		. .env.localdev; \
-	fi 
-	exit
-
-	
+	fi
 	if [ "$$(uname -s)" == "Darwin" ]; then \
 		OFFLINE=$(OFFLINE) ./bin/setup-macos; \
 	else \
@@ -84,7 +81,7 @@ local-migrate: .env.localdev ## Run database schema and data migrations
 	$(docker_compose) run --rm web bin/rails db:migrate:with_data RAILS_ENV=development
 
 .PHONY: local-bundle
-local-bundle: .env.localdev ## Run database schema and data migrations
+local-bundle: .env.localdev ## Install Ruby gem dependencies (bundle install)
 	$(docker_compose) run --rm web bin/rails bundle install
 
 .PHONY: local-migrate-down
@@ -237,11 +234,6 @@ local-clean: local-stop ## Wipe out the local dev environment (including the db!
 local-pull: local-ecr-login ## Pull down the latest upstream docker images to this computer
 	$(docker_compose) pull --ignore-pull-failures
 
-.PHONY: local-update-gql-schema
-local-update-gql-schema: ## updates gql schema
-	npx get-graphql-schema http://localhost:3000/graphqlfed > graphql_schema/czid_graphql_federation_schema.graphql -h "x-graphql-yoga-csrf=csrf"
-	$(docker_compose) run web bin/rails czid_graphql_federation:update_schema
-
 .PHONY: rspec
 rspec: .env.localdev ## Run rspec
 	$(docker_compose_simple) exec web rspec
@@ -282,3 +274,19 @@ local-start-webapp: local-start ## Start docker containers & webpack server. Web
 local-setup-admin-user: .env.localdev ## Set up a user for local development; Usage: make local-setup-admin-user user_email="user_email_address" user_name="user name" user_password='password'
 	$(docker_compose) run --rm web sh -c 'bin/rails local_user_creation:admin["$(user_email)","$(user_name)"]'
 	make -C ./e2e set-local-credentials username='$(user_email)' password='$(user_password)'
+
+.PHONY: ci-local
+ci-local: ## Run the full CI test suite locally in Docker (Postgres) — green this before pushing
+	./bin/ci-local
+
+.PHONY: check
+check: ## Run the full local test+lint suite (ruby+js+python), mirroring CI
+	@./bin/check-all
+
+.PHONY: check-fast
+check-fast: ## Fast local checks only (eslint+tsc+flake8) — seconds
+	@./bin/check-all --fast
+
+.PHONY: install-git-hooks
+install-git-hooks: ## Install the opt-in fast pre-push hook
+	@./bin/install-git-hooks

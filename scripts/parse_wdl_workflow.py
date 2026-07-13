@@ -60,7 +60,13 @@ def insert_declarations(task_inputs, decls):
         for task in task_inputs.keys():
             if f"WorkflowInput.{decl}" in task_inputs[task]:
                 task_inputs[task].remove(f"WorkflowInput.{decl}")
-                task_inputs[task].extend(map(lambda input: f"WorkflowInput.{input}", inputs))
+                # A declaration may resolve to bare workflow-input names or to
+                # already-qualified "Task.output" references. Prefix only the bare
+                # names with "WorkflowInput." (mirroring read_call_task); leave
+                # already-dotted task-output references untouched.
+                task_inputs[task].extend(
+                    ref if "." in ref else f"WorkflowInput.{ref}" for ref in inputs
+                )
     return task_inputs
 
 
@@ -100,12 +106,11 @@ def parse_workflow_task(task):
     raise Exception(f"Unsupported task [{task}] type [{type(task)}]")
 
 
-def read_call_task(call) -> list[dict]:
-    task = {
-        "name": call.name,
-        "inputs": [],
-        "type": type(call)
-    }
+def read_call_task(call):
+    task = {}
+    task["name"] = call.name
+    task["inputs"] = []
+    task["type"] = type(call)
     for short_name, reference in call.inputs.items():
         reference_strings = parse_input_item(reference)
         for reference_string in reference_strings:
@@ -126,21 +131,20 @@ def read_call_task(call) -> list[dict]:
     return [task]
 
 
-def read_conditional_task(conditional) -> list[dict]:
+def read_conditional_task(conditional):
     tasks = []
     for item in conditional.body:
         tasks.extend(parse_workflow_task(item))
     return tasks
 
 
-def read_declaration_task(declaration) -> list[dict]:
-    decl = {
-        "name": declaration.name,
-        "inputs": [],
-        "type": type(declaration)
-    }
+def read_declaration_task(declaration):
+    decl = {}
+    decl["name"] = declaration.name
+    decl["inputs"] = []
+    decl["type"] = type(declaration)
     expression = declaration.expr
-    if expression is WDL.Expr.IfThenElse:
+    if isinstance(expression, WDL.Expr.IfThenElse):
         decl["inputs"].extend(parse_input_item(expression.consequent))
         decl["inputs"].extend(parse_input_item(expression.alternative))
     return [decl]
@@ -210,7 +214,7 @@ def get_output_aliases(outputs):
     aliases = {}
     for output in outputs:
         # add parsing for arrays
-        if isinstance(output.type, (WDL.Type.File, WDL.Type.Array)):
+        if type(output.type) in [WDL.Type.File, WDL.Type.Array]:
             alias = output.expr.expr.name
             aliases[output.name] = alias
     return aliases

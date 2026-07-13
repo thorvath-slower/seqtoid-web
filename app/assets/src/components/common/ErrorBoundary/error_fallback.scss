@@ -1,0 +1,41 @@
+@import "~styles/themes/colors";
+@import "~styles/themes/typography";
+@import "~@czi-sds/components/dist/variables";
+
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 240px;
+  padding: 40px 20px;
+  box-sizing: border-box;
+}
+
+.inlineContainer {
+  width: 100%;
+  padding: 12px 0;
+  box-sizing: border-box;
+}
+
+.notification {
+  max-width: 520px;
+  width: 100%;
+}
+
+.title {
+  @include font-header-s;
+  margin-bottom: 6px;
+}
+
+.message {
+  @include font-body-s;
+  color: $sds-color-gray-600;
+  margin-bottom: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}

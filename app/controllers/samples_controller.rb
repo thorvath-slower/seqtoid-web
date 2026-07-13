@@ -9,6 +9,11 @@ class SamplesController < ApplicationController
   include SamplesHelper
   include ReportsHelper
   include ParameterSanitization
+  include OtelActionLogging
+
+  # CZID-472: per-user action log for support triage (identifiers only, no PII).
+  log_user_actions :bulk_upload_with_metadata, action: "sample.bulk_upload",
+                                               context: ->(c) { { "czid.project.id" => c.params[:project_id], "czid.sample_count" => Array(c.params[:samples]).size } }
 
   ########################################
   # Note to developers:
@@ -26,8 +31,17 @@ class SamplesController < ApplicationController
                   :results_folder, :show_taxid_alignment, :metadata, :amr,
                   :taxid_contigs_for_blast, :taxid_contigs_download, :taxon_five_longest_reads, :coverage_viz_summary,
                   :coverage_viz_data, :upload_credentials, :pipeline_logs,].freeze
-  EDIT_ACTIONS = [:edit, :update, :reupload_source, :kickoff_pipeline,
+  EDIT_ACTIONS = [:edit, :update, :reupload_source, :kickoff_pipeline, :retry_pipeline_run,
                   :pipeline_runs, :save_metadata, :save_metadata_v2, :kickoff_workflow, :move_to_project, :cancel_pipeline_run,].freeze
+
+  # Owner-triggered recovery actions (self-service, not admin). kickoff_pipeline = full re-run
+  # (new pipeline run, daily-capped); retry_pipeline_run = cheap reconcile of the existing run
+  # from its already-produced S3 outputs (uncapped). Scoped to the run creator (or admin) via
+  # check_owner, on top of the updatable_samples power scope. See CZID-676 Phase C.
+  RECOVERY_ACTIONS = [:kickoff_pipeline, :retry_pipeline_run].freeze
+  # Soft cap: at most this many owner-triggered full re-runs per sample per 24h (retry is
+  # uncapped since it re-uses cached compute). Admins are exempt.
+  RERUN_DAILY_LIMIT = 3
 
   OTHER_ACTIONS = [:bulk_upload_with_metadata, :bulk_import, :index, :index_v2, :details,
                    :dimensions, :all, :show_sample_names, :cli_user_instructions, :metadata_fields,
@@ -42,7 +56,7 @@ class SamplesController < ApplicationController
   skip_before_action :verify_authenticity_token, only: TOKEN_AUTH_ACTIONS
   prepend_before_action :token_based_login_support, only: TOKEN_AUTH_ACTIONS
 
-  before_action :admin_required, only: [:reupload_source, :kickoff_pipeline, :pipeline_runs, :move_to_project, :pipeline_logs, :cancel_pipeline_run, :benchmark, :benchmark_ground_truth_files]
+  before_action :admin_required, only: [:reupload_source, :pipeline_runs, :move_to_project, :pipeline_logs, :cancel_pipeline_run, :benchmark, :benchmark_ground_truth_files]
   before_action :login_required, only: [:bulk_import]
 
   # Read actions are mapped to viewable_samples scope and Edit actions are mapped to updatable_samples.
@@ -50,7 +64,11 @@ class SamplesController < ApplicationController
 
   before_action :set_sample, only: READ_ACTIONS + EDIT_ACTIONS + OWNER_ACTIONS
   before_action :assert_access, only: OTHER_ACTIONS # Actions which don't require access control check
-  before_action :check_owner, only: OWNER_ACTIONS
+  # Recovery (kickoff_pipeline re-run, retry_pipeline_run) is owner-scoped (creator or admin),
+  # not admin-only -- runs after set_sample so @sample is available. The daily cap gates only the
+  # full re-run (retry is uncapped). See CZID-676 Phase C.
+  before_action :check_owner, only: OWNER_ACTIONS + RECOVERY_ACTIONS
+  before_action :enforce_rerun_daily_cap, only: [:kickoff_pipeline]
   before_action :check_access
   before_action only: :amr do
     allowed_feature_required("AMR")
@@ -269,7 +287,7 @@ class SamplesController < ApplicationController
       span = (max_date - min_date + 1).to_i
       if span <= MAX_BINS
         # we group by day if the span is shorter than MAX_BINS days
-        bins_map = samples.group("DATE(`samples`.`created_at`)").count.map do |timestamp, count|
+        bins_map = samples.group("DATE(samples.created_at)").count.map do |timestamp, count|
           [timestamp.strftime("%Y-%m-%d"), count]
         end.to_h
         time_bins = (0...span).map do |offset|
@@ -286,7 +304,9 @@ class SamplesController < ApplicationController
         bins_map = samples.group(
           ActiveRecord::Base.send(
             :sanitize_sql_array,
-            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `samples`.`created_at`)/:step)", { min_date: min_date, step: step }]
+            # MySQL 8 has no Postgres `::` casts or date subtraction; TIMESTAMPDIFF(DAY, ...) gives
+            # whole days, and FLOOR(.../step) is an Integer GROUP BY key matching bins_map[bucket].
+            ["FLOOR(TIMESTAMPDIFF(DAY, :min_date, `samples`.`created_at`) / :step)", { min_date: min_date, step: step }]
           )
         ).count
         time_bins = (0...MAX_BINS).map do |bucket|
@@ -353,7 +373,7 @@ class SamplesController < ApplicationController
       avg_total_reads, avg_remaining_reads = PipelineRun
                                              .where(id: pipeline_run_ids)
                                              .non_deleted
-                                             .pick(Arel.sql("ROUND(AVG(`pipeline_runs`.`total_reads`)), ROUND(AVG(`pipeline_runs`.`adjusted_remaining_reads`))"))
+                                             .pick(Arel.sql("ROUND(AVG(pipeline_runs.total_reads)), ROUND(AVG(pipeline_runs.adjusted_remaining_reads))"))
                                              &.map(&:to_i)
     end
 
@@ -557,17 +577,7 @@ class SamplesController < ApplicationController
     error = validated_objects[:error]
 
     if error.nil? && !invalid_sample_ids.empty?
-      # Handle case where `invalid_sample_ids` is an array of CG UUIDs from NextGen.
-      invalid_sample_ids_rails = []
-      if !BulkDeletionServiceNextgen.nextgen_workflow?(workflow, invalid_sample_ids)
-        invalid_sample_ids_rails = invalid_sample_ids
-      else
-        result = BulkDeletionServiceNextgen.get_invalid_samples(current_user.id, invalid_sample_ids)
-        invalid_sample_ids_rails += result[:invalid_sample_ids_rails]
-        invalid_sample_names += result[:invalid_sample_names] # sample names from nextgen
-      end
-      invalid_sample_names += current_power.samples.where(id: invalid_sample_ids_rails).pluck(:name)
-
+      invalid_sample_names += current_power.samples.where(id: invalid_sample_ids).pluck(:name)
     end
 
     render json: {
@@ -635,12 +645,12 @@ class SamplesController < ApplicationController
     @project_id = params[:project_id]
     @project = Project.find(@project_id)
     unless current_power.updatable_project?(@project)
-      render json: { status: "Sorry, your email doesn’t have permissions to upload to this project." }, status: :unprocessable_entity
+      render json: { status: "Sorry, your email doesn’t have permissions to upload to this project." }, status: :unprocessable_content
       return
     end
 
     unless current_user.can_upload(params[:bulk_path])
-      render json: { status: "Sorry, it looks like your email doesn’t have permissions to this s3 bucket." }, status: :unprocessable_entity
+      render json: { status: "Sorry, it looks like your email doesn’t have permissions to this s3 bucket." }, status: :unprocessable_content
       return
     end
 
@@ -652,7 +662,7 @@ class SamplesController < ApplicationController
         if @samples.present?
           render json: { samples: @samples }
         else
-          render json: { status: "Sorry, we couldn’t find any valid samples in this s3 bucket. There may be an issue with permissions or the file format. Click the \"More Info\" link above for more detailed instructions." }, status: :unprocessable_entity
+          render json: { status: "Sorry, we couldn’t find any valid samples in this s3 bucket. There may be an issue with permissions or the file format. Click the \"More Info\" link above for more detailed instructions." }, status: :unprocessable_content
         end
       end
     end
@@ -800,26 +810,6 @@ class SamplesController < ApplicationController
         }
       end
       resp = { samples: v2_samples, errors: errors }
-    end
-
-    # Create entities in nextGen for WGS samples
-    if current_user.allowed_feature?("create_next_gen_entities")
-      all_sample_ids = samples.pluck(:id)
-      cg_sample_ids = Sample
-                      .where(id: all_sample_ids)
-                      .joins(:workflow_runs)
-                      .where(
-                        workflow_runs: {
-                          workflow: WorkflowRun::WORKFLOW[:consensus_genome],
-                          deprecated: false,
-                        }
-                      )
-                      .pluck(:id)
-                      .uniq
-      cg_samples = samples.select { |sample| cg_sample_ids.include?(sample.id) }
-      cg_samples.each do |sample|
-        SampleEntityCreationService.call(current_user.id, sample, sample.workflow_runs.last)
-      end
     end
 
     samples.each do |sample|
@@ -1051,7 +1041,9 @@ class SamplesController < ApplicationController
 
   def taxid_contigs_download
     taxid = params[:taxid]
-    return if HUMAN_TAX_IDS.include? taxid.to_i
+    # #562: fail closed on human taxids with a clean empty 200 rather than a bare
+    # `return`, which left no render and raised MissingExactTemplate (500-class).
+    return head :ok if HUMAN_TAX_IDS.include? taxid.to_i
 
     pr = select_pipeline_run(@sample, params[:pipeline_version])
     contigs = pr.get_contigs_for_taxid(taxid.to_i)
@@ -1108,7 +1100,9 @@ class SamplesController < ApplicationController
   end
 
   def show_taxid_fasta
-    return if HUMAN_TAX_IDS.include? params[:taxid].to_i
+    # #562: fail closed on human taxids with a clean empty 200 rather than a bare
+    # `return`, which left no render and raised MissingExactTemplate (500-class).
+    return head :ok if HUMAN_TAX_IDS.include? params[:taxid].to_i
 
     pr = select_pipeline_run(@sample, params[:pipeline_version])
     if params[:hit_type] == "NT_or_NR"
@@ -1396,18 +1390,11 @@ class SamplesController < ApplicationController
 
     respond_to do |format|
       if @sample.update(sample_params)
-        if current_user.allowed_feature?("create_next_gen_entities")
-          # Call service object to create file entity and link to sequencing read for WGS samples
-          if @sample.workflow_runs.any? { |wr| wr.workflow == WorkflowRun::WORKFLOW[:consensus_genome] }
-            SampleFileEntityLinkCreationService.call(current_user.id, @sample)
-          end
-        end
-
         format.html { redirect_to @sample, notice: 'Sample was successfully updated.' }
         format.json { render :show, status: :ok, location: @sample }
       else
         format.html { render :edit }
-        format.json { render json: @sample.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @sample.errors.full_messages, status: :unprocessable_content }
       end
     end
   end
@@ -1431,9 +1418,26 @@ class SamplesController < ApplicationController
         format.json { head :no_content }
       else
         format.html { redirect_to pipeline_runs_sample_path(@sample), notice: 'No pipeline run in progress.' }
-        format.json { render json: @sample.errors.full_messages, status: :unprocessable_entity }
+        format.json { render json: @sample.errors.full_messages, status: :unprocessable_content }
       end
     end
+  end
+
+  # PUT /samples/:id/retry_pipeline_run
+  # Owner-triggered cheap retry: reconcile the sample's latest mNGS pipeline run from its
+  # already-produced S3 outputs (PipelineRun#retry, via STATUS_RETRY_PR) instead of a full
+  # re-run. No new compute, so it is uncapped. Only applies to mNGS samples (PipelineRun);
+  # samples with no pipeline run (e.g. CG/AMR) get a 422 and should use re-run instead.
+  def retry_pipeline_run
+    pipeline_run = @sample.first_pipeline_run
+    if pipeline_run.nil?
+      render json: { message: "No pipeline run to retry for this sample." }, status: :unprocessable_content
+      return
+    end
+
+    @sample.status = Sample::STATUS_RETRY_PR
+    @sample.save
+    render json: { status: "retry queued", pipeline_run_id: pipeline_run.id }
   end
 
   def cancel_pipeline_run
@@ -1460,7 +1464,11 @@ class SamplesController < ApplicationController
     else
       respond_to do |format|
         format.html {}
-        format.json { @sample.first_pipeline_run.get_pipeline_run_logs }
+        # The json format must explicitly render. Previously the block only
+        # computed get_pipeline_run_logs and returned it without rendering, so
+        # Rails fell through to default template lookup and raised
+        # ActionController::UnknownFormat (no pipeline_logs.json template).
+        format.json { render json: @sample.first_pipeline_run.get_pipeline_run_logs }
       end
     end
   end
@@ -1472,12 +1480,7 @@ class SamplesController < ApplicationController
   def kickoff_workflow
     workflow = collection_params[:workflow]
     inputs_json = collection_params[:inputs_json].to_json
-    workflow_run = @sample.create_and_dispatch_workflow_run(workflow, current_user.id, inputs_json: inputs_json)
-    if current_user.allowed_feature?("create_next_gen_entities")
-      # Create the entities/workflowRun under the sample owner
-      SampleEntityCreationService.call(@sample.user_id, workflow_run.sample, workflow_run)
-      SampleFileEntityLinkCreationService.call(@sample.user_id, workflow_run.sample)
-    end
+    @sample.create_and_dispatch_workflow_run(workflow, current_user.id, inputs_json: inputs_json)
     render json: @sample.workflow_runs_info
   end
 
@@ -1768,6 +1771,22 @@ class SamplesController < ApplicationController
       }, status: :unauthorized
       # Rendering halts the filter chain
     end
+  end
+
+  # Soft rate-limit on owner-triggered full re-runs: at most RERUN_DAILY_LIMIT pipeline runs
+  # created for the sample in the last 24h (each full re-run creates one). Cheap retry does not
+  # create a run and is not gated here. Admins are exempt (support can always re-run). Rendering
+  # halts the filter chain.
+  def enforce_rerun_daily_cap
+    return if current_user.admin?
+
+    recent_runs = @sample.pipeline_runs.where("created_at > ?", 24.hours.ago).count
+    return if recent_runs < RERUN_DAILY_LIMIT
+
+    render json: {
+      message: "This sample has reached its daily re-run limit (#{RERUN_DAILY_LIMIT}). " \
+               "Please try again later, or use Report to our team if it keeps failing.",
+    }, status: :too_many_requests
   end
 
   def warn_if_large_bulk_upload(samples)

@@ -1,4 +1,13 @@
 # LOGGING: This runs within shoryuken. To find logs, go to the latest ecs-log-{env} -> idseq-shoryuken/idseq-shoryuken/* log streams.
+#
+# RETRY / DEAD-LETTER (#496): this Shoryuken worker's retry + DLQ is handled by SQS,
+# not in-process. A message is only deleted (sqs_msg.delete) once it is successfully
+# handled; on an unhandled/rescued error the message is left on the queue and SQS
+# redelivers it after the visibility timeout (retry). Exhausted messages are routed
+# to a dead-letter queue by the SQS redrive policy, which is configured in the infra
+# repo (maxReceiveCount + DLQ ARN), not here. The Resque-side retry/DLQ helper
+# (ResqueRetryWithDeadLetter / DeadLetterQueue) is the equivalent for forked Resque
+# jobs; the two are intentionally separate because their queues are separate.
 
 class HandleSfnNotifications
   include Shoryuken::Worker

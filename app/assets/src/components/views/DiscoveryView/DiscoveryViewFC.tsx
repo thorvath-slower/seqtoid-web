@@ -44,20 +44,20 @@ import {
 import {
   DiscoveryViewFCFedWorkflowsTotalCountQuery as DiscoveryViewFCFedWorkflowsTotalCountQueryType,
   DiscoveryViewFCFedWorkflowsTotalCountQuery$data,
-  queryInput_fedWorkflowRunsAggregateTotalCount_input_where_collectionId_Input,
+  IntListInFilter as AggregateTotalCountIntListInFilter,
 } from "./__generated__/DiscoveryViewFCFedWorkflowsTotalCountQuery.graphql";
 import {
   DiscoveryViewFCSequencingReadIdsQuery as DiscoveryViewFCSequencingReadIdsQueryType,
   DiscoveryViewFCSequencingReadIdsQuery$data,
   queryInput_fedSequencingReads_input_Input,
-  queryInput_fedSequencingReads_input_orderBy_Input,
+  queryInput_fedSequencingReads_input_orderByArray_items_Input,
 } from "./__generated__/DiscoveryViewFCSequencingReadIdsQuery.graphql";
 import { DiscoveryViewFCSequencingReadsQuery as DiscoveryViewFCSequencingReadsQueryType } from "./__generated__/DiscoveryViewFCSequencingReadsQuery.graphql";
 import {
   DiscoveryViewFCWorkflowsQuery as DiscoveryViewFCWorkflowsQueryType,
   queryInput_fedWorkflowRuns_input_Input,
   queryInput_fedWorkflowRuns_input_orderByArray_items_Input,
-  queryInput_fedWorkflowRuns_input_where_collectionId_Input,
+  IntListInFilter,
 } from "./__generated__/DiscoveryViewFCWorkflowsQuery.graphql";
 
 /**
@@ -342,9 +342,7 @@ async function queryWorkflowRuns(
   environment: RelayModernEnvironment,
   projectIds?: number[],
 ): Promise<WorkflowRunRow[]> {
-  let collectionIdInput:
-    | queryInput_fedWorkflowRuns_input_where_collectionId_Input
-    | undefined;
+  let collectionIdInput: IntListInFilter | undefined;
   if (projectId != null && projectIds !== undefined) {
     collectionIdInput = {
       _in: projectIds.includes(parseInt(projectId))
@@ -837,7 +835,7 @@ function getWorkflowRunsOrderBys(
 function getSequencingReadsOrderBys(
   orderBy?: (typeof SEQUENCING_READS_SORT_KEYS)[number],
   orderDir?: string,
-): queryInput_fedSequencingReads_input_orderBy_Input[] | undefined {
+): queryInput_fedSequencingReads_input_orderByArray_items_Input[] | undefined {
   const nextGenOrderDir =
     orderDir === "ASC" ? "asc_nulls_first" : "desc_nulls_last";
   switch (orderBy) {
@@ -996,7 +994,7 @@ async function querySequencingReadObjects(
           // TODO: Use NextGen ID when samples are no longer dual-written.
           id: sample.railsSampleId?.toString() ?? "",
           railsSampleId: sample.railsSampleId ?? undefined,
-          name: sample.name,
+          name: sample.name ?? "",
           project: sample.collection?.name ?? undefined,
           publicAccess: sample.collection?.public ?? undefined,
           uploadError: sample.uploadError ?? undefined,
@@ -1005,7 +1003,7 @@ async function querySequencingReadObjects(
           // fetch user names by IDs. The owner's name is accessible from the Rails sample though.
           user: sample.ownerUserName ?? undefined,
         },
-        host: sample.hostOrganism?.name,
+        host: sample.hostOrganism?.name ?? undefined,
         notes: sample.notes ?? undefined,
         medakaModel: sequencingRead.medakaModel ?? undefined,
         technology: sequencingRead.technology,
@@ -1013,9 +1011,9 @@ async function querySequencingReadObjects(
           sequencingRead.protocol != null
             ? formatWetlabProtocol(sequencingRead.protocol)
             : undefined,
-        collection_location_v2: sample.collectionLocation ?? undefined,
+        collection_location_v2: sample.collectionLocation ?? "",
         nucleotide_type: sequencingRead.nucleicAcid,
-        sample_type: sample.sampleType ?? undefined,
+        sample_type: sample.sampleType ?? "",
         water_control:
           sample.waterControl != null
             ? sample.waterControl
@@ -1025,7 +1023,7 @@ async function querySequencingReadObjects(
         referenceAccession:
           sequencingRead.taxon != null
             ? {
-                taxonName: sequencingRead.taxon.name,
+                taxonName: sequencingRead.taxon.name ?? undefined,
               }
             : undefined,
       };
@@ -1151,8 +1149,9 @@ const parseAggregateCounts = (
 
   const projectCounts = {};
   aggregateCounts.filter(isNotNullish).forEach(({ count, groupBy }) => {
-    const { collectionId, workflowVersion } = groupBy;
-    const { name } = workflowVersion.workflow;
+    const collectionId = groupBy?.collectionId;
+    const name = groupBy?.workflowVersion?.workflow?.name;
+    if (collectionId == null || name == null) return;
     projectCounts[collectionId] = {
       ...projectCounts[collectionId],
       [name]: count,
@@ -1169,9 +1168,7 @@ async function queryWorkflowRunsTotalCount(
   selectedProjectId?: string,
 ): Promise<WorkflowCount | undefined> {
   // collection id should be either project ids or a single project id
-  let collectionIdInput:
-    | queryInput_fedWorkflowRunsAggregateTotalCount_input_where_collectionId_Input
-    | undefined;
+  let collectionIdInput: AggregateTotalCountIntListInFilter | undefined;
   if (selectedProjectId != null) {
     collectionIdInput = { _in: [parseInt(selectedProjectId)] };
   } else if (projectIds !== undefined) {
@@ -1216,8 +1213,8 @@ const parseTotalCounts = (
 
   const workflowCounts = {};
   totalCounts.filter(isNotNullish).forEach(({ count, groupBy }) => {
-    const { workflowVersion } = groupBy;
-    const { name } = workflowVersion.workflow;
+    const name = groupBy?.workflowVersion?.workflow?.name;
+    if (name == null) return;
     workflowCounts[name] = count;
   });
   return workflowCounts;

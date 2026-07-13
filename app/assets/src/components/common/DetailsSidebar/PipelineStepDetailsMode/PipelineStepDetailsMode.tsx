@@ -1,7 +1,7 @@
 import cx from "classnames";
+import Linkify from "linkify-react";
 import moment from "moment";
 import React, { ReactNode } from "react";
-import Linkify from "react-linkify";
 import ReactMarkdown from "react-markdown";
 import { Accordion } from "~/components/layout";
 import { sampleErrorInfo } from "~/components/utils/sample";
@@ -91,10 +91,9 @@ const PipelineStepDetailsMode = ({
         <Accordion header={header} className={cs.accordion} open={true}>
           <div className={cx(cs.description, cs.accordionContent)}>
             <Linkify>
-              <ReactMarkdown
-                source={descriptionWithoutIndentation}
-                className={cs.description}
-              />
+              <div className={cs.description}>
+                <ReactMarkdown>{descriptionWithoutIndentation}</ReactMarkdown>
+              </div>
             </Linkify>
           </div>
         </Accordion>

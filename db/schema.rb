@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
+ActiveRecord::Schema[7.0].define(version: 2025_07_13_000001) do
   create_table "accession_coverage_stats", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.bigint "pipeline_run_id", null: false, comment: "The id of the pipeline run the coverage stats were generated from"
     t.string "accession_id", null: false, comment: "The NCBI GenBank id of the accession the coverage stats were created for"
@@ -195,6 +195,64 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.index ["pipeline_run_id", "name"], name: "index_ercc_counts_on_pipeline_run_id_and_name", unique: true
   end
 
+  create_table "export_control_attestations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "decision", null: false
+    t.string "attestation_version", null: false
+    t.string "ip_address"
+    t.string "viewer_country"
+    t.string "user_agent", limit: 1024
+    t.datetime "created_at", precision: 6, null: false
+    t.index ["user_id", "attestation_version", "decision"], name: "idx_export_attest_user_version_decision"
+    t.index ["user_id"], name: "index_export_control_attestations_on_user_id"
+  end
+
+  create_table "device_location_attestations", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "attestation_status", null: false
+    t.string "failure_reason"
+    t.string "device_provider"
+    t.string "attestation_ref"
+    t.string "asserted_country"
+    t.string "attestation_policy_version", null: false
+    t.string "ip_address"
+    t.string "viewer_country"
+    t.string "user_agent", limit: 1024
+    t.datetime "created_at", precision: 6, null: false
+    t.index ["user_id", "attestation_policy_version", "attestation_status"], name: "idx_device_attest_user_version_status"
+    t.index ["user_id"], name: "index_device_location_attestations_on_user_id"
+  end
+
+  create_table "export_control_clearances", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "verification_status", null: false
+    t.string "screening_result", null: false
+    t.string "idv_provider"
+    t.string "screening_provider"
+    t.string "idv_evidence_ref"
+    t.string "screening_evidence_ref"
+    t.string "clearance_version", null: false
+    t.string "ip_address"
+    t.string "viewer_country"
+    t.string "user_agent", limit: 1024
+    t.datetime "created_at", precision: 6, null: false
+    t.index ["user_id", "clearance_version", "verification_status", "screening_result"], name: "idx_export_clearance_user_version_status"
+    t.index ["user_id"], name: "index_export_control_clearances_on_user_id"
+  end
+
+  create_table "holds", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "subject_ref", null: false
+    t.string "subject_type"
+    t.string "reason", null: false
+    t.bigint "screening_result_id"
+    t.datetime "released_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "trace_id"
+    t.index ["screening_result_id"], name: "index_holds_on_screening_result_id"
+    t.index ["subject_ref", "released_at"], name: "index_holds_on_subject_ref_and_released_at"
+  end
+
   create_table "host_genomes", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
     t.string "name", null: false, comment: "Friendly name of host genome. May be common name or scientific name of species. Must be unique and start with a capital letter."
     t.string "s3_star_index_path", default: "s3://#{S3_DATABASE_BUCKET}/host_filter/ercc/2017-09-01-utc-1504224000-unixtime__2017-09-01-utc-1504224000-unixtime/STAR_genome.tar", null: false, comment: "The path to the index file to be used in the pipeline by star for host filtering."
@@ -332,19 +390,6 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.bigint "metadata_field_id", null: false
     t.index ["metadata_field_id"], name: "metadata_fields_projects_metadata_field_id_fk"
     t.index ["project_id", "metadata_field_id"], name: "index_projects_metadata_fields", unique: true
-  end
-
-  create_table "nextgen_deletion_logs", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
-    t.bigint "user_id", null: false, comment: "The user id of the user who deleted the object"
-    t.string "user_email", comment: "The email of the user who deleted the object"
-    t.bigint "rails_object_id", comment: "The id of the object that was deleted (Rails ID)"
-    t.string "object_id", null: false, comment: "The id of the object that was deleted (NextGen UUID)"
-    t.string "object_type", null: false, comment: "The type of object deleted, e.g. Sample, Workflow"
-    t.datetime "soft_deleted_at", precision: nil, comment: "When the object was marked as soft deleted"
-    t.datetime "hard_deleted_at", precision: nil, comment: "When the object was successfully hard deleted"
-    t.string "metadata_json", comment: "Generic JSON-string format for recording additional information about the object"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
   end
 
   create_table "output_states", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
@@ -531,6 +576,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.bigint "truncated_bases"
     t.datetime "deleted_at", precision: nil, comment: "When the user triggered deletion of the pipeline run"
     t.bigint "mapped_reads"
+    t.integer "results_load_retry_count", default: 0, null: false, comment: "Times results-loading has been auto-retried after the SFN succeeded but outputs failed to load. Bounds the finalize_results cheap-retry auto-heal."
     t.index ["adjusted_remaining_reads"], name: "index_pipeline_runs_on_adjusted_remaining_reads"
     t.index ["alignment_config_id"], name: "pipeline_runs_alignment_config_id_fk"
     t.index ["compression_ratio"], name: "index_pipeline_runs_on_compression_ratio"
@@ -626,6 +672,25 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_14_221527) do
     t.bigint "sample_id", null: false
     t.index ["sample_id"], name: "index_samples_visualizations_on_sample_id"
     t.index ["visualization_id"], name: "index_samples_visualizations_on_visualization_id"
+  end
+
+  create_table "screening_results", charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|
+    t.string "subject_ref", null: false
+    t.string "subject_type"
+    t.string "soptionalid"
+    t.string "transstatus"
+    t.string "alert_level", null: false
+    t.integer "risk_country"
+    t.string "list"
+    t.string "sdistributedid"
+    t.string "incident_id"
+    t.string "provider"
+    t.datetime "screened_at", null: false
+    t.string "raw_response_ref"
+    t.datetime "created_at", precision: 6, null: false
+    t.string "trace_id"
+    t.index ["incident_id"], name: "index_screening_results_on_incident_id"
+    t.index ["subject_ref", "screened_at"], name: "index_screening_results_on_subject_ref_and_screened_at"
   end
 
   create_table "seed_migrations", id: :integer, charset: "utf8", collation: "utf8_unicode_ci", force: :cascade do |t|

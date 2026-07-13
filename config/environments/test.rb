@@ -8,6 +8,12 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
+  # secret_key_base -- set explicitly here instead of the deprecated config/secrets.yml
+  # (Rails.application.secrets was deprecated in 7.1, removed in 7.2). Value is the same
+  # literal previously used for the `test` env in secrets.yml, so signed/encrypted
+  # cookies remain byte-identical. Test data is scratch space; this only signs cookies.
+  config.secret_key_base = "5e9a3de728388328a66b622f9473edc0fb0559ae6b0c2e496f040353faa10b6152c902aa81898fedd235c7785d096a57701ba93760a37f7e4a84b4cf6c1b2632"
+
   # Turn false under Spring and add config.action_view.cache_template_loading = true.
   config.cache_classes = true
 
@@ -29,7 +35,7 @@ Rails.application.configure do
   config.cache_store = :null_store
 
   # Raise exceptions instead of rendering exception templates.
-  config.action_dispatch.show_exceptions = false
+  config.action_dispatch.show_exceptions = :none
 
   # Disable request forgery protection in test environment.
   config.action_controller.allow_forgery_protection = false

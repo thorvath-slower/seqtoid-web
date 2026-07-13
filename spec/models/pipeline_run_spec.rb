@@ -774,4 +774,121 @@ describe PipelineRun, type: :model do
       end
     end
   end
+
+  describe "#finalize_results results-load auto-heal (CZID-676)" do
+    let(:pipeline_run) { create(:pipeline_run, executed_at: 1.minute.ago) }
+
+    def set_outputs!(states)
+      pipeline_run.output_states.destroy_all
+      states.each { |output, state| pipeline_run.output_states.create!(output: output, state: state) }
+    end
+
+    def stub_sfn_status(status)
+      allow(pipeline_run).to receive(:sfn_execution)
+        .and_return(instance_double(SfnExecution, description: { status: status }))
+    end
+
+    before do
+      set_outputs!("taxon_counts" => PipelineRun::STATUS_FAILED, "ercc_counts" => PipelineRun::STATUS_LOADED)
+      allow(pipeline_run).to receive(:input_error).and_return(nil)
+      allow(MetricUtil).to receive(:log_analytics_event)
+    end
+
+    context "when the compute (SFN) succeeded but an output failed to load, under the retry budget" do
+      before { stub_sfn_status(WorkflowRun::STATUS[:succeeded]) }
+
+      it "auto-heals instead of failing: re-opens the run, resets non-loaded outputs, bumps the counter" do
+        pipeline_run.finalize_results(nil)
+        pipeline_run.reload
+        expect(pipeline_run.results_finalized).to eq(PipelineRun::IN_PROGRESS)
+        expect(pipeline_run.results_load_retry_count).to eq(1)
+        expect(pipeline_run.output_states.find_by(output: "taxon_counts").state).to eq(PipelineRun::STATUS_UNKNOWN)
+        expect(pipeline_run.output_states.find_by(output: "ercc_counts").state).to eq(PipelineRun::STATUS_LOADED)
+      end
+
+      it "does not emit a pipeline-run analytics event while healing" do
+        expect(MetricUtil).not_to receive(:log_analytics_event)
+        pipeline_run.finalize_results(nil)
+      end
+    end
+
+    context "when the retry budget is exhausted" do
+      before do
+        pipeline_run.update_column(:results_load_retry_count, PipelineRun::RESULTS_LOAD_RETRY_LIMIT) # rubocop:disable Rails/SkipsModelValidations
+        stub_sfn_status(WorkflowRun::STATUS[:succeeded])
+      end
+
+      it "fails for real (no infinite auto-heal loop)" do
+        pipeline_run.finalize_results(nil)
+        expect(pipeline_run.reload.results_finalized).to eq(PipelineRun::FINALIZED_FAIL)
+      end
+    end
+
+    context "when the failure is a known user error" do
+      before do
+        pipeline_run.update_column(:known_user_error, "InsufficientReadsError") # rubocop:disable Rails/SkipsModelValidations
+        stub_sfn_status(WorkflowRun::STATUS[:succeeded])
+      end
+
+      it "does not auto-heal a deterministic failure" do
+        pipeline_run.finalize_results(nil)
+        pipeline_run.reload
+        expect(pipeline_run.results_finalized).to eq(PipelineRun::FINALIZED_FAIL)
+        expect(pipeline_run.results_load_retry_count).to eq(0)
+      end
+    end
+
+    context "when the compute (SFN) did not succeed" do
+      before { stub_sfn_status("FAILED") }
+
+      it "does not auto-heal (a real failure, not a transient load error)" do
+        pipeline_run.finalize_results(nil)
+        expect(pipeline_run.reload.results_finalized).to eq(PipelineRun::FINALIZED_FAIL)
+      end
+    end
+
+    context "when SFN status cannot be determined" do
+      before do
+        allow(pipeline_run).to receive(:sfn_execution).and_raise(StandardError, "boom")
+        allow(LogUtil).to receive(:log_error)
+      end
+
+      it "does not auto-heal and fails safely" do
+        pipeline_run.finalize_results(nil)
+        expect(pipeline_run.reload.results_finalized).to eq(PipelineRun::FINALIZED_FAIL)
+      end
+    end
+
+    context "when all outputs loaded" do
+      before do
+        set_outputs!("taxon_counts" => PipelineRun::STATUS_LOADED, "ercc_counts" => PipelineRun::STATUS_LOADED)
+        allow(pipeline_run).to receive(:ready_for_cache?).and_return(false)
+      end
+
+      it "finalizes success without consulting auto-heal" do
+        expect(pipeline_run).not_to receive(:results_load_auto_heal_eligible?)
+        pipeline_run.finalize_results(nil)
+        expect(pipeline_run.reload.results_finalized).to eq(PipelineRun::FINALIZED_SUCCESS)
+      end
+    end
+
+    context "D2: taxon re-index on a healed finalize (CZID-676)" do
+      before do
+        set_outputs!("taxon_counts" => PipelineRun::STATUS_LOADED, "ercc_counts" => PipelineRun::STATUS_LOADED)
+        allow(pipeline_run).to receive(:ready_for_cache?).and_return(false)
+        allow(Resque).to receive(:enqueue)
+      end
+
+      it "re-indexes taxa when the run was auto-healed (retry count > 0)" do
+        pipeline_run.update_column(:results_load_retry_count, 1) # rubocop:disable Rails/SkipsModelValidations
+        pipeline_run.finalize_results(nil)
+        expect(Resque).to have_received(:enqueue).with(IndexTaxons, anything, pipeline_run.id)
+      end
+
+      it "does not re-index a normal (non-healed) success -- avoids double-indexing" do
+        pipeline_run.finalize_results(nil)
+        expect(Resque).not_to have_received(:enqueue).with(IndexTaxons, anything, anything)
+      end
+    end
+  end
 end

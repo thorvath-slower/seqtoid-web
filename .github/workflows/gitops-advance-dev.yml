@@ -1,0 +1,191 @@
+name: gitops-advance-dev
+
+# CD trigger for the Argo CD blue/green delivery (#444). When a build+push to main
+# succeeds (image idseq-web:<sha8> in ECR, Trivy+Cosign passed), advance image.tag in
+# the DEV env values in cypherid-web-infra. Argo CD (dev, autoPromotionEnabled: true)
+# then syncs and Argo Rollouts promotes on smoke pass. This replaces the czecs deploy
+# for dev — the app never applies to the cluster directly; it just moves a Git pointer.
+#
+# Chained off the build via workflow_run so it only fires on a *successful* build of
+# the exact commit that produced the image.
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Images"]
+    types:
+      - completed
+
+concurrency:
+  group: gitops-advance-dev
+  cancel-in-progress: false
+
+jobs:
+  advance:
+    # Only on a successful build of main.
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout infra (the GitOps values repo)
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          # GITOPS_TOKEN (#74): scoped write to the infra repo + PR create.
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Install yq
+        run: |
+          YQ=v4.44.3
+          curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ}/yq_linux_amd64" -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Advance dev image.tag to the built commit
+        id: advance
+        env:
+          BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          # Match the pushed image tag exactly: bin/push-docker pushes `<repo>:sha-<sha8>`, and the
+          # chart renders `{{ .repository }}:{{ .tag }}` verbatim (no prefix added), so image.tag must
+          # be the full `sha-<sha8>` or Argo pulls a tag that doesn't exist in ECR.
+          TAG="sha-${BUILT_SHA:0:8}"
+          FILE=deploy/argocd/values/seqtoid-web/dev.yaml
+          CURRENT="$(yq '.image.tag' "$FILE")"
+          echo "current=$CURRENT  new=$TAG"
+          if [ "$CURRENT" = "$TAG" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "dev already at $TAG — nothing to advance."
+            exit 0
+          fi
+          yq -i ".image.tag = \"$TAG\"" "$FILE"
+          echo "changed=true"  >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"       >> "$GITHUB_OUTPUT"
+
+      - name: Close stale dev tag-advance PRs (self-cleaning, #560)
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          INFRA_REPO: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          KEEP_BRANCH: gitops/advance-dev-${{ steps.advance.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Each build opens a fresh gitops/advance-dev-<tag> PR that edits dev.yaml. If an
+          # earlier advance never merged (red checks, or a human paused it), it lingers as an
+          # orphan branch whose dev.yaml edit now conflicts with every newer advance, and they
+          # pile up (#560). Before opening the current one, close any still-open advance PRs and
+          # delete their branches so at most one dev-advance PR exists at a time. The branch we
+          # are about to open (KEEP_BRANCH) is skipped defensively; it does not exist yet here.
+          gh pr list --repo "$INFRA_REPO" --state open --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("gitops/advance-dev-")) | [.number, .headRefName] | @tsv' \
+          | while IFS="$(printf '\t')" read -r num br; do
+              [ "$br" = "$KEEP_BRANCH" ] && continue
+              echo "closing stale dev-advance PR #${num} (${br})"
+              gh pr close "$num" --repo "$INFRA_REPO" --delete-branch \
+                --comment "Superseded by a newer dev tag-advance; closing to prevent conflicting orphans (#560)."
+            done
+
+      - name: Open the tag-advance PR
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          TAG: ${{ steps.advance.outputs.tag }}
+        run: |
+          set -euo pipefail
+          BRANCH="gitops/advance-dev-${TAG}"
+          git config user.name  "seqtoid-gitops"
+          git config user.email "gitops@seqtoid.local"
+          git checkout -b "$BRANCH"
+          git add deploy/argocd/values/seqtoid-web/dev.yaml
+          git commit -m "gitops(dev): advance seqtoid-web image.tag -> ${TAG}"
+          git push -u origin "$BRANCH" --force-with-lease
+          gh pr create \
+            --title "gitops(dev): advance seqtoid-web -> ${TAG}" \
+            --body "Automated dev tag-advance from a green seqtoid-web build (${TAG}). Auto-merges once its checks pass; Argo CD then syncs (dev auto-promotes on smoke pass). Source build: ${{ github.event.workflow_run.html_url }}" \
+            --base main --head "$BRANCH" || echo "PR may already exist for $BRANCH"
+
+      - name: Auto-merge the dev tag-advance (wait for green, then merge)
+        if: steps.advance.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          TAG: ${{ steps.advance.outputs.tag }}
+          INFRA_REPO: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+        run: |
+          set -euo pipefail
+          BRANCH="gitops/advance-dev-${TAG}"
+          # DEV-ONLY continuous delivery. The image already passed build + Trivy + Cosign
+          # before this workflow fired (it is chained off that success), so the tag-advance
+          # only moves the dev Git pointer. Wait for the PR's own infra checks (validate /
+          # tflint / trivy / checkov) to go green, then squash-merge. If ANY check fails,
+          # --fail-fast exits non-zero and the PR is left OPEN for a human — never force-merged.
+          # Staging/prod are NOT auto-advanced (that stays a separate, gated path).
+          sleep 30  # give the PR's checks time to register before watching
+          gh pr checks "$BRANCH" --repo "$INFRA_REPO" --watch --fail-fast --interval 20
+          gh pr merge "$BRANCH" --repo "$INFRA_REPO" --squash --delete-branch
+          echo "Dev advanced to ${TAG} and merged; Argo CD will sync."
+
+  # Sentry release + dev deploy tracking (CZID-552). Runs on the same successful
+  # main build as the advance above, keyed to the exact commit that produced the
+  # image. Creates a Sentry release, associates commits (suspect commits), and
+  # records a dev deploy so new issues get accurate regression windows and can use
+  # "resolve in next release" instead of manual board grooming.
+  #
+  # DEV-ONLY: this workflow only fires for main builds and hard-codes -e dev. When
+  # the staging/prod pipelines are un-held, mirror this with their own gated deploy
+  # environments -- do NOT broaden this step to those envs here.
+  #
+  # Isolated from `advance`: this is a separate job with no needs/dependency, so a
+  # Sentry API hiccup or unprovisioned secret can NEVER block the dev rollout.
+  sentry-release:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    env:
+      # Provision these in the seqtoid-web repo before this does anything (ops half
+      # of CZID-552): SENTRY_AUTH_TOKEN (secret, release scope), SENTRY_ORG +
+      # SENTRY_PROJECT (vars). Until then the step self-skips green (see guard below).
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      SENTRY_CLI_VERSION: "2.33.1"
+      BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout seqtoid-web at the built commit (full history for suspect commits)
+        uses: actions/checkout@v6
+        with:
+          # This job's default repo is seqtoid-web (no repository: override), unlike the
+          # advance job which checks out the infra repo. Full history + the exact built
+          # ref is what `sentry-cli releases set-commits --auto` needs to compute the
+          # commit range for suspect commits.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Register Sentry release + dev deploy for the built commit
+        run: |
+          set -euo pipefail
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "Sentry CD credentials not provisioned (need SENTRY_AUTH_TOKEN secret + SENTRY_ORG/SENTRY_PROJECT vars)."
+            echo "Skipping Sentry release/deploy tracking -- see CZID-552 ops steps. This is not a failure."
+            exit 0
+          fi
+          # Release name == the 8-char commit SHA. This is exactly the value baked into
+          # the image as GIT_VERSION (backend config.release) and GIT_RELEASE_SHA
+          # (frontend Sentry.init release), so runtime events on both tiers tag to the
+          # release we register here.
+          RELEASE="${BUILT_SHA:0:8}"
+          echo "Registering Sentry release ${RELEASE} (org=${SENTRY_ORG} project=${SENTRY_PROJECT})"
+
+          # Pinned sentry-cli install (matches the pinned-yq/pinned-tool convention in
+          # this repo -- no floating "latest"). The get-cli script honors SENTRY_CLI_VERSION.
+          curl -sSfL https://sentry.io/get-cli/ | INSTALL_DIR=/usr/local/bin bash
+
+          sentry-cli releases new "$RELEASE"
+          # Suspect commits: --auto uses the checked-out git history + the Sentry repo
+          # integration to associate the commit range since the previous release.
+          sentry-cli releases set-commits "$RELEASE" --auto
+          sentry-cli releases finalize "$RELEASE"
+          # Record the dev deploy for this release so Sentry knows what shipped to dev
+          # and can resolve-in-next-release / window regressions correctly.
+          sentry-cli releases deploys "$RELEASE" new -e dev
+          echo "Sentry release ${RELEASE} finalized + dev deploy recorded."

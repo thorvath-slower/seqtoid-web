@@ -20,6 +20,10 @@
 
 source 'https://rubygems.org'
 
+# Runtime pinned via .ruby-version (bug-#001: Ruby 3.1 EOL -> 3.3). Keep these
+# in lockstep; bundler enforces the version below from that file.
+ruby file: '.ruby-version'
+
 # -- AWS resources:
 # TODO: We want to replace 'aws-sdk' with only the service gems we use.
 gem 'aws-sdk'
@@ -44,21 +48,22 @@ gem 'silencer'
 # these are the latest versions that work with opensearch https://opensearch.org/docs/1.0/clients/index/#legacy-clients
 gem 'elasticsearch', '7.10.1'
 gem 'elasticsearch-model', '7.1.1'
-# Use mysql as the database for Active Record
-gem 'mysql2'
+# MySQL 8 is the database for Active Record (native MySQL — CZID-331).
+gem 'mysql2', '~> 0.5'
 gem 'oj'
 gem 'parallel', '1.14.0'
-# Use Puma as the app server
-gem 'puma', '~> 5.6'
+# Use Puma as the app server. SMP-1297: 6 -> 7, floor at 7.2.1 (HTTP-parsing CVEs
+# CVE-2026-47736/47737); ~> 7.2 alone allows 7.2.0, so the >= floor is secondary.
+gem 'puma', '~> 7.2', '>= 7.2.1'
 # Use Redis adapter to run Action Cable in production
 gem 'redis', '~> 4.3'
 # Sprockets
 gem 'sprockets-rails'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
-gem 'rails', '~>7.0.0'
+gem 'rails', '~> 7.2.0', '>= 7.2.3.1' # bug-#002: Rails 7.0 EOL; SMP-1297: 7.1 -> 7.2, floor at 7.2.3.1 (activestorage/activesupport CVEs)
 gem 'rails-controller-testing', '~> 1.0', '>= 1.0.5'
-gem 'railties', '~> 7.0'
+gem 'railties', '~> 7.2'
 gem 'rake'
 # Worker/Scheduler management
 gem 'resque', '~> 2.3'
@@ -66,13 +71,19 @@ gem 'resque-lock'
 gem 'resque-retry', '~>1.8'
 gem 'resque-scheduler', '~> 4.6'
 gem 'thread'
-# SentryIO
-gem "sentry-raven"
+# SentryIO — sentry-raven is EOL; use the maintained sentry-ruby SDK.
+# sentry-rails auto-instruments Rack/controllers (no manual middleware insert). (CZID-154)
+gem "sentry-ruby", "~> 5.17"
+gem "sentry-rails", "~> 5.17"
+# OpenTelemetry — vendor-neutral traces exported via OTLP to the in-cluster ADOT
+# collector (cypherid-web-infra terraform/modules/otel-collector, #426). Inert unless
+# OTEL_EXPORTER_OTLP_ENDPOINT is set (see config/initializers/opentelemetry.rb).
+gem "opentelemetry-sdk", "~> 1.8"
+gem "opentelemetry-exporter-otlp", "~> 0.30"
+gem "opentelemetry-instrumentation-all", "~> 0.76"
 # Use SCSS for stylesheets
 gem 'sprockets-es6'
 gem "strong_migrations"
-# Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
-gem 'turbolinks', '~> 5'
 # Use Uglifier as compressor for JavaScript assets
 gem 'uglifier', '~> 4.1'
 # Redirect
@@ -138,11 +149,14 @@ group :development, :test do
   # Adds support for Capybara system testing and selenium driver
   gem 'capybara', '~> 2.17', '>= 2.17.0'
   gem 'guard', '~> 2.15'
-  gem 'rspec-rails', '~> 5.1'
-  gem 'rubocop', '~> 0.92'
-  gem "rubocop-graphql", "~> 0.14.5"
-  gem 'rubocop-performance'
-  gem 'rubocop-rails'
+  # Runs the RSpec suite across multiple processes (one test DB per process) to cut
+  # CI wall-clock; each worker owns idseq_test<TEST_ENV_NUMBER>. See bin/ci-test.
+  gem 'parallel_tests', '~> 4.7'
+  gem 'rspec-rails', '~> 6.1' # bug-#002: rspec-rails 6.x is the Rails 7.1-compatible line
+  gem 'rubocop', '~> 1.88'
+  gem "rubocop-graphql", "~> 1.6"
+  gem 'rubocop-performance', '~> 1.26'
+  gem 'rubocop-rails', '~> 2.35'
   gem 'selenium-webdriver'
   gem 'simplecov', require: false
 end
@@ -176,7 +190,6 @@ gem "shoryuken"
 # GraphQL-related
 gem 'graphiql-rails', group: :development
 gem "graphql"
-gem 'graphql-client'
 
 # required for Ruby 3 upgrade
 # https://stackoverflow.com/questions/70500220/rails-7-ruby-3-1-loaderror-cannot-load-such-file-net-smtp
@@ -184,6 +197,13 @@ gem 'graphql-client'
 gem 'net-imap', require: false
 gem 'net-pop', require: false
 gem 'net-smtp', require: false
+
+# SMP-1297: pin these Ruby default gems forward so the patched versions land in
+# the image (they ship with Ruby, so they are not otherwise in the lockfile).
+# uri stays on the 0.13 line (0.13.1 default -> 0.13.3, minimal risk) rather than
+# jumping to 1.x. CVE-2025-61594 (uri), CVE-2026-27820 (zlib).
+gem 'uri', '~> 0.13', '>= 0.13.3'
+gem 'zlib', '~> 3.2', '>= 3.2.3'
 
 # need version >= 1.2.3 for M1 macs - https://github.com/cotag/http-parser/issues/12
 gem 'http-parser', '~> 1.2.3'

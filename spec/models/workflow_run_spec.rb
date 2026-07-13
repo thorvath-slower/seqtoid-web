@@ -211,6 +211,54 @@ describe WorkflowRun, type: :model do
       expect(@workflow_running.status).to eq(WorkflowRun::STATUS[:succeeded])
       expect(@workflow_running.time_to_finalized).to be_within(5.seconds).of fake_runtime
     end
+
+    context "auto-restart on transient failure (CZID-676)" do
+      it "records the failure and auto-restarts once when eligible (fresh sample, non-input error)" do
+        # @second_workflow_running's sample has no prior failed run -> eligible
+        @mock_aws_clients[:states].stub_responses(:describe_execution, fake_failed_sfn_execution_description)
+        @mock_aws_clients[:states].stub_responses(:get_execution_history, fake_error_sfn_execution_history)
+        expect(@second_workflow_running).to receive(:rerun)
+        expect(Rails.logger).not_to receive(:error).with(match(/SampleFailedEvent/))
+
+        @second_workflow_running.update_status
+        expect(@second_workflow_running.status).to eq(WorkflowRun::STATUS[:failed])
+      end
+
+      it "does not auto-restart once the sample+workflow has already hit the budget" do
+        # @workflow_running's sample already has @workflow_failed -> not eligible
+        @mock_aws_clients[:states].stub_responses(:describe_execution, fake_failed_sfn_execution_description)
+        @mock_aws_clients[:states].stub_responses(:get_execution_history, fake_error_sfn_execution_history)
+        expect(@workflow_running).not_to receive(:rerun)
+        expect(Rails.logger).to receive(:error).with(match(/SampleFailedEvent/))
+
+        @workflow_running.update_status
+        expect(@workflow_running.status).to eq(WorkflowRun::STATUS[:failed])
+      end
+
+      it "does not auto-restart an input-error failure even when otherwise eligible" do
+        @mock_aws_clients[:states].stub_responses(:describe_execution, fake_failed_sfn_execution_description)
+        @mock_aws_clients[:states].stub_responses(:get_execution_history, fake_bad_input_sfn_execution_history)
+        expect(@second_workflow_running).not_to receive(:rerun)
+
+        @second_workflow_running.update_status
+        expect(@second_workflow_running.status).to eq(WorkflowRun::STATUS[:succeeded_with_issue])
+      end
+    end
+  end
+
+  describe "#auto_restart_after_failure_eligible?" do
+    it "is true for a fresh sample+workflow with no prior failed run" do
+      expect(@second_workflow_running.auto_restart_after_failure_eligible?).to be(true)
+    end
+
+    it "is false once a prior run for the sample+workflow has failed (bounded)" do
+      expect(@workflow_running.auto_restart_after_failure_eligible?).to be(false)
+    end
+
+    it "is false when the run is already deprecated" do
+      @second_workflow_running.update!(deprecated: true)
+      expect(@second_workflow_running.auto_restart_after_failure_eligible?).to be(false)
+    end
   end
 
   describe "#error_message_display" do

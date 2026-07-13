@@ -745,6 +745,11 @@ RSpec.describe SamplesController, type: :controller do
           :assume_role,
           credentials: {
             access_key_id: fake_access_key_id,
+            # aws-sdk-core 3.248 validates the stubbed response shape: assume_role
+            # credentials require these fields too, else ArgumentError. (CZID-119)
+            secret_access_key: "fake-secret-access-key",
+            session_token: "fake-session-token",
+            expiration: Time.zone.now + 3600,
           }
         )
         mock_client.stub_responses(:assume_role, creds)
@@ -990,50 +995,6 @@ RSpec.describe SamplesController, type: :controller do
                                    pipeline_runs_data: [{ finalized: 0, technology: illumina }])
 
         @sample_ids = [@sample1.id, @sample2.id]
-
-        # NextGen mocks: 1 workflow belonging to the user, the rest do not. Workflow UUID3 also
-        # has a pointer to rails_sample_id, which means we should fetch the sample name from Rails.
-        get_workflow_runs = JSON.parse({
-          "data": {
-            "workflow_runs": [
-              { "id": "Workflow-UUID1", "owner_user_id": @joe.id, "rails_workflow_run_id": "123" },
-              { "id": "Workflow-UUID2", "owner_user_id": 111, "rails_workflow_run_id": "456" },
-              { "id": "Workflow-UUID3", "owner_user_id": 111, "rails_workflow_run_id": "456" },
-            ],
-            "workflow_run_entity_inputs": [
-              { "workflow_run": { "id": "Workflow-UUID1" }, "input_entity_id": "Sample-UUID1" },
-              { "workflow_run": { "id": "Workflow-UUID2" }, "input_entity_id": "Sample-UUID2" },
-              { "workflow_run": { "id": "Workflow-UUID3" }, "input_entity_id": "Sample-UUID3" },
-            ],
-          },
-        }.to_json, object_class: OpenStruct)
-
-        get_samples = JSON.parse({
-          "data": {
-            "samples": [
-              { "id": "Sample-UUID2", "rails_sample_id": nil, "name": "Sample 2 in NextGen" },
-              { "id": "Sample-UUID3", "rails_sample_id": @sample2.id, "name": "Sample 3 in NextGen" },
-            ],
-          },
-        }.to_json, object_class: OpenStruct)
-
-        allow(CzidGraphqlFederation).to receive(:query_with_token).with(@joe.id, BulkDeletionServiceNextgen::GetWorkflowRuns, { variables: { run_ids: ["Workflow-UUID1", "Workflow-UUID2", "Workflow-UUID3"] } }).and_return(get_workflow_runs)
-        allow(CzidGraphqlFederation).to receive(:query_with_token).with(@joe.id, BulkDeletionServiceNextgen::GetSamples, { variables: { sample_ids: ["Sample-UUID2", "Sample-UUID3"] } }).and_return(get_samples)
-      end
-
-      context "when workflow is CG and NextGen UUIDs are passed in" do
-        it "returns valid UUIDs and invalid sample names" do
-          params = {
-            workflow: "consensus-genome",
-            selectedIds: ["Workflow-UUID1", "Workflow-UUID2", "Workflow-UUID3"],
-          }
-
-          post :validate_user_can_delete_objects, params: params
-          expect(response).to have_http_status(:ok)
-          json_response = JSON.parse(response.body, symbolize_names: true)
-          expect(json_response[:validIds]).to eq(["Workflow-UUID1"])
-          expect(json_response[:invalidSampleNames]).to eq(["Sample 2 in NextGen", @sample2.name])
-        end
       end
 
       context "when the workflow is mNGS and sample ids are passed in" do
@@ -1326,6 +1287,65 @@ RSpec.describe SamplesController, type: :controller do
           put :cancel_pipeline_run, params: { id: @completed_sample.id }
           expect(response).to redirect_to(pipeline_runs_sample_path(@completed_sample.id))
         end
+      end
+    end
+  end
+
+  # CZID-676 Phase C: owner-scoped self-service recovery (not admin-only).
+  context "owner-scoped recovery (CZID-676)" do
+    before do
+      @collaborator = create(:user)
+      # @collaborator has project view access but did not create the sample.
+      @project = create(:project, users: [@joe, @collaborator])
+      @sample = create(:sample, project: @project, user: @joe,
+                       pipeline_runs_data: [{ finalized: 1, job_status: PipelineRun::STATUS_FAILED }])
+    end
+
+    describe "PUT retry_pipeline_run (cheap retry)" do
+      it "lets the owner queue a retry" do
+        sign_in @joe
+        put :retry_pipeline_run, params: { id: @sample.id }
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["status"]).to eq("retry queued")
+      end
+
+      it "forbids a non-owner project collaborator" do
+        sign_in @collaborator
+        put :retry_pipeline_run, params: { id: @sample.id }
+        expect(response).to have_http_status(:unauthorized)
+      end
+
+      it "returns 422 when the sample has no pipeline run" do
+        sign_in @joe
+        no_run_sample = create(:sample, project: @project, user: @joe)
+        put :retry_pipeline_run, params: { id: no_run_sample.id }
+        expect(response).to have_http_status(:unprocessable_content)
+      end
+    end
+
+    describe "PUT kickoff_pipeline (owner-scoped full re-run)" do
+      it "lets the owner (non-admin) trigger a re-run" do
+        sign_in @joe
+        allow_any_instance_of(Sample).to receive(:kickoff_pipeline) # isolate auth from dispatch
+        put :kickoff_pipeline, params: { id: @sample.id, format: :json }
+        expect(response).not_to have_http_status(:unauthorized)
+        expect(response).to have_http_status(:no_content)
+      end
+
+      it "forbids a non-owner project collaborator" do
+        sign_in @collaborator
+        put :kickoff_pipeline, params: { id: @sample.id, format: :json }
+        expect(response).to have_http_status(:unauthorized)
+      end
+
+      it "enforces the daily re-run cap for the owner" do
+        sign_in @joe
+        capped_sample = create(:sample, project: @project, user: @joe,
+                               pipeline_runs_data: Array.new(SamplesController::RERUN_DAILY_LIMIT) do
+                                 { finalized: 1, job_status: PipelineRun::STATUS_CHECKED }
+                               end)
+        put :kickoff_pipeline, params: { id: capped_sample.id, format: :json }
+        expect(response).to have_http_status(:too_many_requests)
       end
     end
   end

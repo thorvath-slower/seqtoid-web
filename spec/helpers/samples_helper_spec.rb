@@ -26,6 +26,11 @@ RSpec.describe SamplesHelper, type: :helper do
         :assume_role,
         credentials: {
           access_key_id: fake_access_key_id,
+          # aws-sdk-core 3.248 validates the stubbed response shape: assume_role
+          # credentials require these fields too, else ArgumentError. (CZID-119)
+          secret_access_key: "fake-secret-access-key",
+          session_token: "fake-session-token",
+          expiration: Time.zone.now + 3600,
         }
       )
       mock_client.stub_responses(:assume_role, creds)
@@ -34,7 +39,9 @@ RSpec.describe SamplesHelper, type: :helper do
       }
 
       creds = get_upload_credentials([@sample_one])
-      expect(creds[:credentials][:access_key_id]).to be fake_access_key_id
+      # Value equality, not object identity: the stubbed SDK returns a distinct
+      # String instance with the same value. (CZID-119)
+      expect(creds[:credentials][:access_key_id]).to eq fake_access_key_id
       expect(mock_client.api_requests.length).to be 1
       request = mock_client.api_requests.first
 

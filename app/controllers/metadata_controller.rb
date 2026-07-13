@@ -84,6 +84,6 @@ class MetadataController < ApplicationController
       status: "error",
       # Wrapped for consistency with success response
       issues: { errors: [err] },
-    }, status: :unprocessable_entity
+    }, status: :unprocessable_content
   end
 end

@@ -112,13 +112,6 @@ RSpec.describe GraphqlController, type: :request do
                 hostGenomeName
                 privateUntil
               }
-              metadata {
-                collectionDate
-                collectionLocationV2
-                nucleotideType
-                sampleType
-                waterControl
-              }
               derivedSampleOutput {
                 pipelineRun {
                   id
@@ -266,59 +259,8 @@ GQL
                                           ])
   end
 
-  it "returns basic samples with correctly formatted date" do
-    project = create(:project, users: [@joe])
-    create(:sample, name: "Mosquito Sample", project: project, user: @joe, host_genome_name: "Mosquito", metadata_fields: { collection_date: "2019-01-01" })
-
-    post "/graphql", headers: { "Content-Type" => "application/json" }, params: {
-      query: query,
-      context: { current_user: @joe },
-      variables: { projectId: project.id },
-    }.to_json
-
-    json_response = JSON.parse(response.body)
-    json_response = json_response["data"]["samplesList"]
-
-    expect(json_response["samples"].length).to eq(1)
-    expect(json_response).to include_json({
-                                            "samples" => [
-                                              {
-                                                "name" => "Mosquito Sample",
-                                                "details" => {
-                                                  "metadata" => {
-                                                    "collectionDate" => "2019-01-01",
-                                                  },
-                                                },
-                                              },
-                                            ],
-                                          })
-  end
-
-  it "for human samples, truncates date metadata to month" do
-    project = create(:project, users: [@joe])
-    create(:sample, name: "Human Sample", project: project, user: @joe, host_genome_name: "Human", metadata_fields: { collection_date: "2019-01" })
-
-    post "/graphql", headers: { "Content-Type" => "application/json" }, params: {
-      query: query,
-      context: { current_user: @joe },
-      variables: { projectId: project.id },
-    }.to_json
-
-    json_response = JSON.parse(response.body)
-    json_response = json_response["data"]["samplesList"]
-
-    expect(json_response["samples"].length).to eq(1)
-    expect(json_response).to include_json({
-                                            "samples": [
-                                              {
-                                                "name" => "Human Sample",
-                                                "details" => {
-                                                  "metadata" => {
-                                                    "collectionDate" => "2019-01",
-                                                  },
-                                                },
-                                              },
-                                            ],
-                                          })
-  end
+  # NOTE: the GraphQL `sample.details.metadata` projection (and its summary
+  # `SampleMetadata` type) was removed in CZID-308 — it was frontend-unused. The
+  # human-sample collection-date truncation it used to assert here is model-level
+  # (Metadatum#parse_date) and is covered by spec/requests/sample_request_spec.rb.
 end

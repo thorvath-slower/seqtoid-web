@@ -59,9 +59,10 @@ export const AmrView = ({ workflowRun, sample }: AmrViewProps) => {
   }, [dataFilterFunc, reportTableData]);
 
   const isValidNullResult = (reportTableData: IdMap<AmrResult>) => {
-    return (
-      reportTableData === null || Object.keys(reportTableData).length === 0
-    );
+    // `reportTableData` can be null OR undefined when the AMR results response is
+    // missing/empty — Object.keys(undefined) throws, so treat any nil value as a
+    // valid null result (#386).
+    return reportTableData == null || Object.keys(reportTableData).length === 0;
   };
 
   // Get state and dispatch from the amrContext

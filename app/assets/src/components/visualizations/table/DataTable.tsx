@@ -216,8 +216,9 @@ class DataTable extends React.Component<DataTableProps, DataTableState> {
                   data-testid={column.toLowerCase().replace(/ /g, "-")}
                 >
                   {/* If we want to display an object (e.g. location object), provide a 'name' field */}
-                  {isObject(row[column]) && row[column].name !== undefined
-                    ? row[column].name
+                  {isObject(row[column]) &&
+                  (row[column] as $TSFixMe).name !== undefined
+                    ? (row[column] as $TSFixMe).name
                     : row[column]}
                 </td>
               );

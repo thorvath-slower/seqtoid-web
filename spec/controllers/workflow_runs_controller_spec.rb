@@ -660,15 +660,6 @@ RSpec.describe WorkflowRunsController, type: :controller do
 
             it "filters out workflow runs with non-nil deleted_at in domain '#{domain}' with mode '#{mode}'" do
               allow(HardDeleteObjects).to receive(:perform)
-              allow(BulkDeletionServiceNextgen).to receive(:call).and_return(
-                {
-                  rails_ids: {
-                    workflow_run_ids: [@deleting_wr.id],
-                    sample_ids: [@deleting_wr.sample.id],
-                  },
-                  nextgen_ids: {},
-                }
-              )
               BulkDeletionService.call(
                 object_ids: [@deleting_wr.id],
                 user: @user,
@@ -845,6 +836,19 @@ RSpec.describe WorkflowRunsController, type: :controller do
           expect(JSON.parse(response.body, symbolize_names: true)[:status]).to eq("Workflow Run action not supported")
         end
       end
+
+      context "when the SFN execution description is missing" do
+        it "returns a graceful results-not-available response instead of a 500" do
+          workflow_run = create(:workflow_run, sample: @sample, workflow: WorkflowRun::WORKFLOW[:consensus_genome])
+          allow_any_instance_of(ConsensusGenomeWorkflowRun).to receive(:results)
+            .and_raise(SfnExecution::SfnDescriptionNotFoundError.new("s3://fake/sfn-desc/path"))
+
+          get :results, params: { id: workflow_run.id }
+
+          expect(response).to have_http_status :not_found
+          expect(JSON.parse(response.body, symbolize_names: true)[:status]).to eq("Results not available")
+        end
+      end
     end
 
     describe "GET /zip_link" do
@@ -910,57 +914,6 @@ RSpec.describe WorkflowRunsController, type: :controller do
         expect(json_response["validIds"]).to contain_exactly(@successful_workflow_run1.id, @successful_workflow_run2.id)
         expect(json_response["invalidSampleNames"]).to contain_exactly(@sample2.name)
         expect(json_response["error"]).to be_nil
-      end
-    end
-
-    describe "POST /valid_consensus_genome_workflow_runs" do
-      before do
-        project = create(:project, users: [@joe])
-        @sample1 = create(:sample, name: "Joe's good sample", project: project, user: @joe)
-        @valid_workflow_run1 = create(:workflow_run, user_id: @joe.id, sample: @sample1, deprecated: false, status: WorkflowRun::STATUS[:succeeded])
-        @valid_workflow_run2 = create(:workflow_run, sample: @sample1, deprecated: false, status: WorkflowRun::STATUS[:running])
-        @valid_workflow_run3 = create(:workflow_run, sample: @sample1, deprecated: false, status: WorkflowRun::STATUS[:failed])
-
-        @sample2 = create(:sample, name: "Joe's bad sample", project: project, user: @joe)
-        @invalid_workflow_run1 = create(:workflow_run, sample: @sample2, deprecated: true, status: WorkflowRun::STATUS[:failed])
-
-        other_project = create(:project, users: [@admin])
-        @other_sample = create(:sample, name: "Admin's sample", project: other_project, user: @admin)
-        @invalid_workflow_run2 = create(:workflow_run, sample: @other_sample, deprecated: false, status: WorkflowRun::STATUS[:succeeded])
-        @invalid_workflow_run3 = create(:workflow_run, sample: @other_sample, deprecated: false, status: WorkflowRun::STATUS[:running])
-        @invalid_workflow_run4 = create(:workflow_run, sample: @other_sample, deprecated: false, status: WorkflowRun::STATUS[:failed])
-      end
-
-      it "should filter out workflow runs that the user does not have access to" do
-        post :valid_consensus_genome_workflow_runs, params: { workflowRunIds: [@valid_workflow_run1.id, @invalid_workflow_run1.id] }
-
-        expect(response).to have_http_status(200)
-        json_response = JSON.parse(response.body)
-
-        expect(json_response["workflowRuns"].length).to eq(1)
-      end
-
-      it "should return a list of workflow objects with id, owner and status fields" do
-        post :valid_consensus_genome_workflow_runs, params: { workflowRunIds: [@valid_workflow_run1.id] }
-
-        expect(response).to have_http_status(200)
-        json_response = JSON.parse(response.body)
-
-        expect(json_response["workflowRuns"].length).to eq(1)
-        expect(json_response["workflowRuns"][0]["id"]).to eq(@valid_workflow_run1.id)
-        expect(json_response["workflowRuns"][0]["owner_user_id"]).to eq(@joe.id)
-        expect(json_response["workflowRuns"][0]["status"]).to eq(WorkflowRun::STATUS[:succeeded])
-      end
-
-      it "should return a list of all workflowRuns that are accessible to the user and not deprecated" do
-        post :valid_consensus_genome_workflow_runs, params: { workflowRunIds: [*@sample1.workflow_runs.pluck(:id), *@sample2.workflow_runs.pluck(:id), *@other_sample.workflow_runs.pluck(:id)] }
-
-        expect(response).to have_http_status(200)
-        json_response = JSON.parse(response.body)
-
-        expect(json_response["workflowRuns"].length).to eq(3)
-        expect(json_response["workflowRuns"].map { |wr| wr["id"] }).to contain_exactly(@valid_workflow_run1.id, @valid_workflow_run2.id, @valid_workflow_run3.id)
-        expect(json_response["workflowRuns"].map { |wr| wr["status"] }).to contain_exactly(WorkflowRun::STATUS[:succeeded], WorkflowRun::STATUS[:running], WorkflowRun::STATUS[:failed])
       end
     end
 
@@ -1212,6 +1165,40 @@ RSpec.describe WorkflowRunsController, type: :controller do
 
         expect(result_workflow_runs[1].deprecated).to eq(false)
       end
+    end
+  end
+
+  # CZID-676 Phase C: rerun is owner-scoped (creator or admin), not admin-only.
+  context "Owner-scoped rerun (CZID-676)" do
+    before do
+      @collaborator = create(:user)
+      # @collaborator has project view access but is not the run creator.
+      @project = create(:project, users: [@joe, @collaborator])
+      @sample = create(:sample, project: @project, user: @joe)
+      @workflow_run = create(:workflow_run, sample: @sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:consensus_genome])
+    end
+
+    it "lets the run creator (non-admin) re-run their own workflow" do
+      sign_in @joe
+      expect_any_instance_of(WorkflowRun).to receive(:rerun)
+      put :rerun, params: { id: @workflow_run.id }
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "forbids a non-owner (project collaborator, non-admin) from re-running" do
+      sign_in @collaborator
+      expect_any_instance_of(WorkflowRun).not_to receive(:rerun)
+      put :rerun, params: { id: @workflow_run.id }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "enforces the daily re-run cap for the owner" do
+      sign_in @joe
+      create_list(:workflow_run, WorkflowRunsController::WORKFLOW_RERUN_DAILY_LIMIT,
+                  sample: @sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:consensus_genome])
+      expect_any_instance_of(WorkflowRun).not_to receive(:rerun)
+      put :rerun, params: { id: @workflow_run.id }
+      expect(response).to have_http_status(:too_many_requests)
     end
   end
 end

@@ -1,0 +1,25 @@
+{{- if .Values.autoscaling.enabled -}}
+# HPA targeting the Rollout directly (Argo Rollouts supports scaleTargetRef ->
+# kind: Rollout). Off in dev/staging (fixed replicaCount); flip on per-env at
+# cutover (#457) if the Node backend takes production load.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "seqtoid-node-backend.fullname" . }}
+  labels:
+    {{- include "seqtoid-node-backend.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: {{ include "seqtoid-node-backend.fullname" . }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

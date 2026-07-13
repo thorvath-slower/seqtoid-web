@@ -33,11 +33,24 @@ class JsonWebToken
     @jwks_hash_cache[kid]
   end
 
-  # Fetches the jwks hash from auth0
+  # Fetches the jwks hash from auth0.
+  #
+  # Resilience (#467c): Auth0 is a third-party SaaS on the auth hot path. The bare
+  # `Net::HTTP.get` had NO connect/read timeout, so an Auth0 hang would stall the
+  # verifying thread indefinitely. Wrap the fetch in a shared circuit breaker +
+  # bounded timeouts + transient retries (HttpResilience). We do NOT swallow the
+  # failure here: JWKS is required to verify a signature, so an outage must surface
+  # (the caller rejects the token / returns 401) rather than silently accept — but it
+  # fails FAST (open circuit) instead of hanging every request during an outage. The
+  # per-kid cache (@jwks_hash_cache) means a healthy key set keeps working without a
+  # network hit even while Auth0 is briefly down.
   def self.jwks_hash
     Rails.logger.info("Fetching jwks_hash at #{JWT_JWKS_KEYS_URL}")
 
-    jwks_raw = Net::HTTP.get URI(JWT_JWKS_KEYS_URL)
+    resp = HttpResilience.breaker(:auth0_jwks).run do
+      HttpResilience.get(JWT_JWKS_KEYS_URL, open_timeout: 3, read_timeout: 5)
+    end
+    jwks_raw = resp.body
 
     jwks_keys = Array(JSON.parse(jwks_raw)['keys'])
     Hash[

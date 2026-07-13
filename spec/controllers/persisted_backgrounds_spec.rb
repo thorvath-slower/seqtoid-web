@@ -93,7 +93,7 @@ RSpec.describe PersistedBackgroundsController, type: :controller do
         create(:persisted_background, user_id: @joe.id, project_id: @new_project.id, background_id: @public_bg.id)
         post :create, params: { projectId: @new_project.id, backgroundId: @public_bg.id }
 
-        expect(response).to have_http_status :unprocessable_entity
+        expect(response).to have_http_status :unprocessable_content
         json_response = JSON.parse(response.body)
 
         expect(json_response["error"]).to eq("Validation failed: User #{@joe.id} already has a background persisted for project #{@new_project.id}")
@@ -104,7 +104,7 @@ RSpec.describe PersistedBackgroundsController, type: :controller do
       it "should fail to create the persisted background" do
         post :create, params: { projectId: @admin_project.id, backgroundId: @public_bg.id }
 
-        expect(response).to have_http_status :unprocessable_entity
+        expect(response).to have_http_status :unprocessable_content
         json_response = JSON.parse(response.body)
 
         expected_error_message = "Validation failed: User #{@joe.id} does not have read access to Project #{@admin_project.id}"
@@ -116,7 +116,7 @@ RSpec.describe PersistedBackgroundsController, type: :controller do
       it "shoud fail to create the persisted background" do
         post :create, params: { projectId: @new_project.id, backgroundId: @admin_private_background.id }
 
-        expect(response).to have_http_status :unprocessable_entity
+        expect(response).to have_http_status :unprocessable_content
         json_response = JSON.parse(response.body)
 
         expected_error_message = "Validation failed: User #{@joe.id} does not have read access to Background #{@admin_private_background.id}"
@@ -128,7 +128,7 @@ RSpec.describe PersistedBackgroundsController, type: :controller do
       it "should fail to create the persisted background" do
         post :create, params: { projectId: @admin_project.id, backgroundId: @admin_private_background.id }
 
-        expect(response).to have_http_status :unprocessable_entity
+        expect(response).to have_http_status :unprocessable_content
         json_response = JSON.parse(response.body)
 
         expected_error_message = "Validation failed: User #{@joe.id} does not have read access to Background #{@admin_private_background.id}, User #{@joe.id} does not have read access to Project #{@admin_project.id}"
@@ -167,7 +167,7 @@ RSpec.describe PersistedBackgroundsController, type: :controller do
       it "should fail to update the persisted background" do
         put :update, params: { projectId: @project1.id, backgroundId: @admin_private_background.id }
 
-        expect(response).to have_http_status :unprocessable_entity
+        expect(response).to have_http_status :unprocessable_content
         json_response = JSON.parse(response.body)
 
         expected_error_message = "Validation failed: User #{@joe.id} does not have read access to Background #{@admin_private_background.id}"

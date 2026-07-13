@@ -1,6 +1,8 @@
 @use "sass:math";
 
-@import url("https://fonts.googleapis.com/css?family=Open+Sans:300,400,400i,600,600i,700,700i,800");
+// CZID-316: Open Sans is loaded once via the HTML <link> in application.html.erb. Importing it here
+// duplicated the @import into every component bundle (~207 copies) — all ignored by the browser,
+// since @import must be at the very top of a stylesheet. Rely on the single HTML <link> instead.
 @import "~@czi-sds/components/dist/variables";
 
 $font-family-sans-serif: $sds-font-font-family, "Helvetica Neue", Arial,

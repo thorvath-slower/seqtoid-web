@@ -106,14 +106,16 @@ export const initiateBulkUploadLocalWithMetadata = async ({
   // They contain information pertaining to the sample itself (metadata) as well as presigned S3 URL links
   // The sample files that need to be uploaded to S3 are in the samples argument passed into initiateBulkUploadLocalWithMetadata
   // So we need to fetch the files from samples argument and copy them over to response.samples where they're later uploaded to S3 via uploadSampleFilesToPresignedURL
-  response.samples.forEach(
-    createdSample => {
-      const filesToUpload = get("files", find({name: createdSample.name}, samples))
-      createdSample.input_files?.forEach(
-        inputFile => { inputFile.file_to_upload = filesToUpload[inputFile.source!] }
-      )
-    }
-  );
+  response.samples.forEach(createdSample => {
+    const filesToUpload = get(
+      "files",
+      find({ name: createdSample.name }, samples),
+    );
+    createdSample.input_files?.forEach(
+      inputFile =>
+        (inputFile.file_to_upload = filesToUpload[inputFile.source!]),
+    );
+  });
   return response.samples;
 };
 
@@ -173,10 +175,17 @@ const bulkUploadWithMetadata = async (
 // Local uploads go directly from the browser to S3, so we don't know if an upload was interrupted.
 // Ping a heartbeat periodically to say the browser is actively uploading the samples.
 export const startUploadHeartbeat = async () => {
-  const sendHeartbeat = () => sendHeartbeat(); // Send first heartbeat immediately so we know it is working
+  // NOTE: there is no server-side upload-heartbeat endpoint yet, so this is a placeholder. It
+  // previously read `const sendHeartbeat = () => sendHeartbeat()` — an infinite self-recursion that
+  // crashed the tab with "too much recursion" whenever the interval fired (Sentry, #386). It sent
+  // nothing, so making it a no-op changes no server behavior; the interval/clearInterval lifecycle in
+  // LocalUploadProgressModal is kept so a real ping can slot in here once an endpoint exists.
+  const sendHeartbeat = () => {
+    // no-op until a server-side upload-heartbeat endpoint exists
+  };
 
   const minutes = 10; // Picked arbitrarily, adjust as needed.
-  const milliseconds = minutes * 60 * 10000;
+  const milliseconds = minutes * 60 * 1000; // was * 10000 (= 100 min); correct 10 min
   return setInterval(sendHeartbeat, milliseconds);
 };
 

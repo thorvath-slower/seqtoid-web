@@ -1,0 +1,24 @@
+seqtoid-node-backend ({{ .Values.environment }}) deployed as a blueGreen Rollout.
+
+  Rollout:    {{ include "seqtoid-node-backend.fullname" . }}   (api: node dist/main.js)
+  Worker:     {{ include "seqtoid-node-backend.fullname" . }}-worker   (node dist/jobs/worker.js: BullMQ + SFN-notifications consumer)
+  Namespace:  {{ .Release.Namespace }}
+  Image:      {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Host:       {{ .Values.ingress.host }} ({{ .Values.ingress.scheme }})   <-- SEPARATE from the Rails ingress (strangler seam)
+  Promotion:  {{ if .Values.blueGreen.autoPromotionEnabled }}AUTOMATED (promotes on smoke pass){{ else }}MANUAL (pauses after smoke; run `kubectl argo rollouts promote`){{ end }}
+
+STRANGLER: this runs ALONGSIDE Rails, sharing the same Aurora / S3 / SWIPE / SQS.
+Point test traffic at the host above; Rails keeps serving everything else. In dev,
+give the worker its own SFN-notifications SQS queue (or pause dev Rails Shoryuken)
+so the monitors don't race. Prod is untouched until the full-cutover ticket (#457).
+
+Watch the rollout:
+  kubectl argo rollouts get rollout {{ include "seqtoid-node-backend.fullname" . }} -n {{ .Release.Namespace }} --watch
+
+{{- if not .Values.blueGreen.autoPromotionEnabled }}
+
+Promote (after eyeballing the preview color):
+  kubectl argo rollouts promote {{ include "seqtoid-node-backend.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+
+Cutover driver guide: cypherid-web-infra/deploy/EKS-CUTOVER-RUNBOOK.md

@@ -1,0 +1,70 @@
+{{- if and .Values.migrate.enabled (not .Values.suspend) -}}
+# Pre-sync DB migration — replaces the ECS run-task `rails db:migrate:with_data`.
+# Argo CD runs this as a PreSync hook (before the Rollout syncs), so schema is
+# migrated before the new color comes up.
+#
+# Interruption safety (#481): rapid/overlapping Argo syncs must never kill an
+# in-flight migration mid-run — that leaves a partial migration (table created but
+# its schema_migrations row unrecorded) that then wedges retries with "table
+# already exists". Guardrails:
+#   * hook-delete-policy is BeforeHookCreation ONLY. The previous Job is reaped
+#     right before a NEW sync creates one; it is NEVER deleted on HookSucceeded/
+#     HookFailed, so an already-running Job is left to finish.
+#   * NO `sync-options: Replace=true` — Argo would otherwise recreate (delete+create)
+#     the Job on the next sync, killing an in-flight migration.
+#   * restartPolicy Never + backoffLimit lets K8s (not Argo) retry the pod; each
+#     `db:migrate` run is idempotent and safely resumes an interrupted migration.
+#   * activeDeadlineSeconds bounds a stuck migration so it fails cleanly instead of
+#     wedging the sync forever.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}-migrate
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    # BeforeHookCreation ONLY — see the header comment. Do NOT add HookSucceeded/
+    # HookFailed here; those can delete a Job that is still running under an
+    # overlapping sync.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: {{ .Values.migrate.backoffLimit }}
+  # Bound the Job so a stuck migration fails cleanly rather than wedging the sync.
+  activeDeadlineSeconds: {{ .Values.migrate.activeDeadlineSeconds }}
+  # Reap the completed migration Job after a day.
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      annotations:
+        # Don't let Karpenter consolidate the node out from under an in-flight migration
+        # (aggressive consolidateAfter on the dev/preview NodePools would otherwise evict
+        # the pod mid-run and, on a small pool, it may fail to reschedule -> backoff).
+        karpenter.sh/do-not-disrupt: "true"
+      labels:
+        {{- include "seqtoid-web.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      # Default = the app SA. A preview sandbox overrides this to the provisioner SA:
+      # the migrate PreSync hook runs BEFORE the Sync phase, so on a brand-new sandbox
+      # namespace the app SA (a Sync-phase resource) does not exist yet and migrate would
+      # deadlock. The provisioner SA is a PreSync hook (already present), and can read the
+      # sandbox SSM path chamber needs -- so migrate runs against the sandbox schema.
+      serviceAccountName: {{ .Values.migrate.serviceAccountName | default (include "seqtoid-web.serviceAccountName" .) }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- toYaml .Values.migrate.command | nindent 12 }}
+          env:
+            {{- include "seqtoid-web.commonEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrate.resources | nindent 12 }}
+{{- end }}

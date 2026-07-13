@@ -10,6 +10,11 @@
 # Ignore bundler config.
 /.bundle
 
+# Vendored gems — the local Docker CI harness (docker-compose.ci.yml) mounts a
+# bundle-cache volume at /app/vendor/bundle, surfacing this dir in the host tree.
+# Keep it out of commits (CZID-109).
+/vendor/bundle
+
 # Ignore yarn.lock because we manage packages using npm
 /yarn.lock
 /node_modules
@@ -26,7 +31,10 @@
 
 ### Rails ###
 /app/assets/dist
-/app/assets/fonts
+# CZID-313: app/assets/fonts holds webpack-emitted vendored fonts (build output, ignored), but the
+# dir must exist for `link_tree ../fonts` (manifest.js) — keep an empty .keep tracked.
+/app/assets/fonts/*
+!/app/assets/fonts/.keep
 .irb_history
 
 # Ignore awscli bundle files

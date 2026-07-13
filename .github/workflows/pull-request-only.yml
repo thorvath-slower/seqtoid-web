@@ -1,7 +1,15 @@
 name: idseq-web pull-request-only
 on:
-#  - pull_request
+  pull_request:
   workflow_dispatch:
+
+# ReviewDog's github-pr-review reporter posts inline comments, which needs
+# pull-requests: write. Without an explicit permissions block the default token
+# is read-only, so reviewdog 403s ("Resource not accessible by integration").
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
 
 
 jobs:
@@ -10,14 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1
         with:
           # No need to set `ruby-version`, it gets automatically set to the .ruby-version if it is not specified.
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
       - name: ReviewDog Brakeman
-        uses: reviewdog/action-brakeman@v2
+        uses: reviewdog/action-brakeman@5083efd49634e26645a0736681b618ccc3fb7f14 # v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           brakeman_version: gemfile
@@ -30,14 +38,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1
         with:
           # No need to set `ruby-version`, it gets automatically set to the .ruby-version if it is not specified.
           bundler-cache: true # runs 'bundle install' and caches installed gems automatically
       - name: ReviewDog Rubocop
-        uses: reviewdog/action-rubocop@v2
+        uses: reviewdog/action-rubocop@b6d5e953a5fc0bf3ab65254e77730ea2174d6d6d # v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           rubocop_version: gemfile

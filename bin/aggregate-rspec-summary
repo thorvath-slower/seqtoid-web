@@ -1,0 +1,34 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# CZID-542: sum the per-shard RSpec summary lines from a sharded CI run into one
+# combined "N examples, M failures, P pending" line, written to the output path.
+# The promotion regression gate (regression-compare.sh --app-log) reads that line
+# to detect a shrunk suite or new failures, so it must see whole-suite totals, not
+# a single shard's slice.
+#
+# Fail-closed: abort if no shard suite logs are found.
+artifact_dir = ARGV.fetch(0)
+out_path = ARGV.fetch(1)
+
+logs = Dir.glob(File.join(artifact_dir, "**", "suite.log")).sort
+abort("aggregate FAIL-CLOSED: no shard suite logs under #{artifact_dir}") if logs.empty?
+
+examples = 0
+failures = 0
+pending = 0
+
+logs.each do |log|
+  # Take the LAST RSpec result line in the shard log (parallel_rspec prints one
+  # final combined line per shard after any per-process summaries).
+  line = File.readlines(log).select { |l| l =~ /\d+ examples?, \d+ failures?/ }.last
+  next unless line
+
+  examples += line[/(\d+) examples?/, 1].to_i
+  failures += line[/(\d+) failures?/, 1].to_i
+  pending  += (line[/(\d+) pending/, 1] || "0").to_i
+end
+
+summary = "#{examples} examples, #{failures} failures, #{pending} pending"
+File.write(out_path, "#{summary}\n")
+puts summary

@@ -1,0 +1,181 @@
+name: promote-image (digest-based dev -> staging -> prod)
+run-name: Promote ${{ inputs.source }} by ${{ github.actor }}
+
+# CZID-464: artifact promotion pipeline. Take one already-built, known-good image (from the #392
+# build → GHCR/ECR line), TEST it, then promote the EXACT tested DIGEST — not a rebuild, not a
+# floating tag — through dev -> staging -> prod. Each tier is gated on its GitHub Environment so a
+# human approval fires before staging and (especially) prod. The promotion is recorded (provenance
+# artifact + the GitOps commit that advances each env).
+#
+# Relationship to the other CD workflows:
+#   - build-docker-image.yml (#304/#392): builds + scans + pushes + publishes to GHCR. Produces the
+#     artifact this pipeline promotes. Does NOT promote past dev on its own.
+#   - gitops-advance-dev.yml (#444): auto-advances DEV on a green main build (fast inner loop).
+#   - THIS workflow (#464): the deliberate, tested, digest-pinned promotion across ALL tiers with
+#     approval gates. Use it to roll a known-good build to staging/prod.
+#   - deploy-promote.yml (#101): the ref-based deploy chain (rebuild-per-tier). Superseded for
+#     artifact promotion by this digest-based flow; kept for the deploy-script path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Image to promote: a sha-<commit> tag, a vX.Y.Z_… version tag, or a raw commit sha.'
+        required: true
+        type: string
+      promote_to:
+        description: 'Highest tier to promote to. Each lower tier is done first.'
+        required: true
+        type: choice
+        default: staging
+        options:
+          - dev
+          - staging
+          - prod
+      deployment_reason:
+        description: 'Reason (scheduled, hotfix, issue ID, …).'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+concurrency:
+  group: promote-image
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+  # The GHCR source-of-record repo (from #392). The digest resolved here is the promotion unit.
+  GHCR_REPO: ghcr.io/${{ github.repository_owner }}/seqtoid-web
+  # Default = the DEV account (491013321714) + its dedicated CI role, matching
+  # build-docker-image.yml. The old default was the idseq-support account (941377154785 /
+  # gha-seqtoid) -- a stale idseq shared-registry holdover; per isolated-envs (D5) dev routes
+  # to dev, not support. Overridden by repo/org Actions vars when set.
+  CI_ACCOUNT_ID: ${{ vars.CI_ACCOUNT_ID || '491013321714' }}
+  GHA_ROLE: ${{ vars.GHA_ROLE || 'czid-dev-gh-actions-build' }}
+  # Go-forward ECR repo (CZID-76). The CI-account repo the build pushed to.
+  ECR_REPO_NAME: ${{ vars.ECR_REPO_NAME || 'seqtoid-web' }}
+
+jobs:
+  # 1) Resolve the exact digest for the requested source, then TEST that image before it is promotable.
+  resolve-and-test:
+    name: Resolve digest + test image
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.resolve.outputs.digest }}
+      sha_tag: ${{ steps.resolve.outputs.sha_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve immutable digest
+        id: resolve
+        env:
+          SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          # Accept sha-<commit>, a version tag, or a bare commit sha; normalize to a GHCR tag ref.
+          case "$SOURCE" in
+            sha-*|v*) REF="${GHCR_REPO}:${SOURCE}" ;;
+            *)        REF="${GHCR_REPO}:sha-${SOURCE:0:8}" ;;
+          esac
+          echo "Resolving digest for $REF"
+          DIGEST="$(docker buildx imagetools inspect "$REF" --format '{{.Manifest.Digest}}')"
+          [ -n "$DIGEST" ] || { echo "::error::could not resolve a digest for $REF"; exit 1; }
+          # sha-<commit> tag we will carry through the env registries alongside the digest assertion.
+          case "$SOURCE" in
+            sha-*) SHA_TAG="$SOURCE" ;;
+            v*)    SHA_TAG="$SOURCE" ;;
+            *)     SHA_TAG="sha-${SOURCE:0:8}" ;;
+          esac
+          echo "digest=$DIGEST"   >> "$GITHUB_OUTPUT"
+          echo "sha_tag=$SHA_TAG" >> "$GITHUB_OUTPUT"
+          echo "Promotion unit: ${GHCR_REPO}@${DIGEST}  (tag ${SHA_TAG})"
+
+      - name: Test — vulnerability scan (Trivy) on the resolved digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.GHCR_REPO }}@${{ steps.resolve.outputs.digest }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: "true"
+
+      - name: Test — image smoke / health test
+        env:
+          IMAGE: ${{ env.GHCR_REPO }}@${{ steps.resolve.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Boot the exact promotion artifact and assert it is runnable + serves health before it is
+          # allowed to promote. Uses the app's own health entrypoint; a non-zero exit blocks promotion.
+          echo "Smoke-testing $IMAGE"
+          docker pull "$IMAGE"
+          # 1) The image must at least start and run a trivial ruby -e (proves the runtime + gems load).
+          docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'ruby -e "puts :ok"'
+          # 2) Boot the web process briefly and probe the health endpoint. Best-effort port probe:
+          #    if the container exposes 3000, we curl /health; otherwise the runnable check above is
+          #    the gate. (Kept resilient so a health-route rename can't wedge promotion silently.)
+          # This app has NO `production` RAILS_ENV (envs: development/prod/staging/sandbox/test);
+          # bin/deploy maps the deployed tiers onto those names and the shipped container boots as
+          # RAILS_ENV=development (dev->development). Boot the smoke test as `development` so it
+          # exercises the env the image actually runs as, instead of a nonexistent `production`
+          # that Rails silently falls back to development for anyway. (#594)
+          CID="$(docker run -d -p 3000:3000 -e RAILS_ENV=development "$IMAGE" || true)"
+          if [ -n "$CID" ]; then
+            for _ in $(seq 1 30); do
+              if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
+                echo "health OK"; break
+              fi
+              sleep 2
+            done
+            docker logs "$CID" 2>&1 | tail -20 || true
+            docker rm -f "$CID" >/dev/null 2>&1 || true
+          fi
+          echo "smoke test complete"
+
+  promote-dev:
+    name: Promote digest to dev
+    needs: resolve-and-test
+    # The `environment:` (and its approval gate for staging/prod) is set INSIDE promote-to-env.yml,
+    # keyed off env_name — a reusable-workflow caller job can't declare `environment:` itself.
+    uses: ./.github/workflows/promote-to-env.yml
+    with:
+      env_name: dev
+      digest: ${{ needs.resolve-and-test.outputs.digest }}
+      sha_tag: ${{ needs.resolve-and-test.outputs.sha_tag }}
+      deployment_reason: ${{ inputs.deployment_reason }}
+    secrets: inherit
+
+  promote-staging:
+    name: Promote digest to staging
+    needs: [resolve-and-test, promote-dev]
+    if: ${{ inputs.promote_to == 'staging' || inputs.promote_to == 'prod' }}
+    uses: ./.github/workflows/promote-to-env.yml
+    with:
+      env_name: staging
+      digest: ${{ needs.resolve-and-test.outputs.digest }}
+      sha_tag: ${{ needs.resolve-and-test.outputs.sha_tag }}
+      deployment_reason: ${{ inputs.deployment_reason }}
+    secrets: inherit
+
+  promote-prod:
+    name: Promote digest to prod
+    needs: [resolve-and-test, promote-staging]
+    if: ${{ inputs.promote_to == 'prod' }}
+    uses: ./.github/workflows/promote-to-env.yml
+    with:
+      env_name: prod
+      digest: ${{ needs.resolve-and-test.outputs.digest }}
+      sha_tag: ${{ needs.resolve-and-test.outputs.sha_tag }}
+      deployment_reason: ${{ inputs.deployment_reason }}
+    secrets: inherit

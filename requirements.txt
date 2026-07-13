@@ -1,6 +1,12 @@
 aegea==4.5.3
-pyOpenSSL>=26.0.0
-setuptools==82.0.1
+# awscli provides the `aws` CLI binary used at runtime by app/lib/s3_tar_writer.rb
+# (`aws s3 cp`) and lib/tasks/pipeline_monitor.rake. It used to be pulled in
+# transitively by aegea (<4 required awscli>=1.17.14); aegea 4.x dropped that
+# dependency, so it must be declared explicitly here or the binary disappears
+# from the prod image and CI. (CZID-146 follow-up.)
+awscli==1.45.31
+pyOpenSSL>=19.1.0
+setuptools>=70
 miniwdl==1.14.2
 biom-format==2.1.17
 jwcrypto==1.5.7

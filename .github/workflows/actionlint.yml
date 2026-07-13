@@ -1,0 +1,37 @@
+name: actionlint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+  push:
+    branches: [main, integration]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        # Enforces workflow STRUCTURE (bad uses:/needs:/outputs, unknown labels,
+        # input typing) AND shellcheck on run: scripts. Image pinned by digest
+        # (supply-chain).
+        #  shellcheck    : enabled — the SC2086/SC2046/SC2006/SC2002 quoting
+        #    backlog in run: scripts has been swept clean, so the gate now ratchets
+        #    shellcheck on. A handful of intentional word-splits carry inline
+        #    `# shellcheck disable=...` directives with rationale at the call site.
+        #    (The former `-ignore` for `should-run-with-feature-flags` is gone: the
+        #    reusable input is now `type: boolean` and callers pass unquoted `false`,
+        #    so actionlint's bool-vs-string false-positive no longer fires — #425-adjacent
+        #    hygiene, no suppression needed.)
+        run: |
+          docker run --rm -v "$PWD":/repo -w /repo \
+            rhysd/actionlint@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 \
+            -color

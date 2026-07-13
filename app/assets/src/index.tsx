@@ -8,8 +8,9 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "semantic-ui-css/semantic.min.css";
 import "url-search-params-polyfill";
+import ErrorFallback from "~/components/common/ErrorBoundary/ErrorFallback";
+import SupportPortal from "~/components/common/SupportPortal/SupportPortal";
 import { UserContext } from "~/components/common/UserContext";
-import { SHOULD_READ_FROM_NEXTGEN } from "./components/utils/features";
 import { initialGlobalContextState } from "./globalContext/initialState";
 import { GlobalContext, globalContextReducer } from "./globalContext/reducer";
 import UserContextType from "./interface/allowedFeatures";
@@ -18,11 +19,30 @@ import RelayEnvironment from "./relay/RelayEnvironment";
 import "./styles/appcues.scss";
 import "./styles/core.scss";
 
+// CZID-391: the Relay GraphQL fetch client (generateFetchFn) used to log every
+// request/response — and non-fatal field-level GraphQL errors — to Sentry as
+// Info-level events, drowning the dashboard (~74 `generateFetchFn.req=` /
+// `generateFetchFn.res=` / `[GQL Error]` Info entries). The source-side logging is
+// removed in relay/environment.ts; this beforeSend is a defense-in-depth filter that
+// also suppresses any residual Info-level generateFetchFn/GQL noise still emitted by
+// older deployed bundles. Only `level: "info"` req/res breadcrumbs are dropped —
+// warnings, errors, and captured exceptions pass through untouched so real
+// regressions stay visible.
+const isGenerateFetchFnInfoNoise = (event: Sentry.Event): boolean => {
+  // Sentry v7+ removed the Severity enum; event.level is a SeverityLevel string literal.
+  if (event.level !== "info") return false;
+  const message = event.message ?? "";
+  return (
+    message.includes("generateFetchFn") || message.startsWith("[GQL Error]")
+  );
+};
+
 // Sentry Basic Configuration Options: https://docs.sentry.io/platforms/javascript/guides/react/config/basics/
 Sentry.init({
   dsn: window.SENTRY_DSN_FRONTEND,
   environment: window.ENVIRONMENT,
   release: window.GIT_RELEASE_SHA,
+  beforeSend: event => (isGenerateFetchFnInfoNoise(event) ? null : event),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -68,13 +88,21 @@ const ReactComponentWithGlobalContext = ({
     globalContextReducer,
     initialGlobalContextState,
   );
-  const shouldReadFromNextGen = userContext?.allowedFeatures?.includes(
-    SHOULD_READ_FROM_NEXTGEN,
-  );
   return (
-    <Sentry.ErrorBoundary fallback={"An error has occured"}>
+    // App-root catch-all (#466): any view mounted via react_component that is
+    // not already wrapped by its own ErrorBoundary (report/heatmap/downloads)
+    // still lands here. Render the shared friendly ErrorFallback instead of the
+    // old bare "An error has occured" string, so a thrown render error shows a
+    // clean message + retry rather than a blank/technical page. Sentry.ErrorBoundary
+    // keeps reporting the exception to Sentry (#382) and exposes resetError for
+    // the retry.
+    <Sentry.ErrorBoundary
+      fallback={({ error, resetError }) => (
+        <ErrorFallback error={error} onRetry={resetError} />
+      )}
+    >
       <BrowserRouter>
-        <RelayEnvironment shouldReadFromNextGen={shouldReadFromNextGen}>
+        <RelayEnvironment>
           <UserContext.Provider value={userContext}>
             <GlobalContext.Provider
               value={{ globalContextState, globalContextDispatch }}
@@ -83,6 +111,10 @@ const ReactComponentWithGlobalContext = ({
                 <EmotionThemeProvider theme={defaultTheme}>
                   <ThemeProvider theme={defaultTheme}>
                     {React.createElement(matchedComponent, props)}
+                    {/* In-app self-help portal (#440): floating Help/Diagnostics
+                        button, rendered on every authenticated page. It reads
+                        UserContext and no-ops for signed-out visitors. */}
+                    <SupportPortal />
                   </ThemeProvider>
                 </EmotionThemeProvider>
               </StyledEngineProvider>

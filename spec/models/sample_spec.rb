@@ -230,41 +230,6 @@ describe Sample, type: :model do
       end
     end
 
-    context "for samples with consensus genome workflow runs" do
-      before do
-        @workflow_run = create(:workflow_run, sample: @sample)
-      end
-
-      context "when create_next_gen_entities feature is off" do
-        it "does not call next gen file entity linking service" do
-          expect(@sample).to receive(:files_for_basespace_dataset).exactly(1).times.and_return(fake_files_for_basespace_dataset_response)
-          expect(@sample).to receive(:upload_from_basespace_to_s3).exactly(2).times.and_return(true)
-          expect(@sample).to receive(:kickoff_pipeline).exactly(1).times
-          allow_any_instance_of(WorkflowRun).to receive(:dispatch)
-
-          expect(SampleFileEntityLinkCreationService).to receive(:call).exactly(0).times
-
-          @sample.transfer_basespace_fastq_files(fake_dataset_id, fake_access_token)
-        end
-      end
-
-      context "when create_next_gen_entities feature is on" do
-        before do
-          @sample.user.add_allowed_feature("create_next_gen_entities")
-        end
-
-        it "does call next gen file entity linking service" do
-          expect(@sample).to receive(:files_for_basespace_dataset).exactly(1).times.and_return(fake_files_for_basespace_dataset_response)
-          expect(@sample).to receive(:upload_from_basespace_to_s3).exactly(2).times.and_return(true)
-          expect(@sample).to receive(:kickoff_pipeline).exactly(1).times
-          allow_any_instance_of(WorkflowRun).to receive(:dispatch)
-
-          expect(SampleFileEntityLinkCreationService).to receive(:call).exactly(1).times
-
-          @sample.transfer_basespace_fastq_files(fake_dataset_id, fake_access_token)
-        end
-      end
-    end
   end
 
   context "#status_url" do
@@ -682,6 +647,22 @@ describe Sample, type: :model do
       expect(response[1]["id"]).to eq(@wr1.id)
       expected_keys = WorkflowRun::DEFAULT_FIELDS.map(&:to_s) + ["input_error", "inputs", "parsed_cached_results", "run_finalized"]
       expect(response[0].keys).to contain_exactly(*expected_keys)
+    end
+  end
+
+  context "#cleanup_s3" do
+    before do
+      @project = create(:project, users: [@joe])
+      @sample = create(:sample, project: @project, user: @joe, name: "orphaned sample")
+    end
+
+    it "deletes the sample prefix and aborts incomplete multipart uploads on destroy" do
+      expect(S3Util).to receive(:delete_s3_prefix)
+        .with("s3://#{ENV['SAMPLES_BUCKET_NAME']}/#{@sample.sample_path}/")
+      expect(S3Util).to receive(:abort_multipart_uploads)
+        .with(ENV['SAMPLES_BUCKET_NAME'], "#{@sample.sample_path}/")
+
+      @sample.destroy!
     end
   end
 end

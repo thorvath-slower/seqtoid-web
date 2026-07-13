@@ -96,7 +96,11 @@ class CheckPipelineRuns
     # metadata.json is produced by idseq-bench
     s3_path = "s3://#{s3_bucket}/#{s3_key}"
     raw_metadata = `aws s3 cp #{s3_path}/metadata.json -`
-    metadata = JSON.parse(raw_metadata)
+    metadata = parse_json_or_nil(raw_metadata, "benchmark metadata #{s3_path}")
+    if metadata.nil? || metadata['fastqs'].nil?
+      raise "Refusing to create benchmark sample: missing or unparseable metadata.json at #{s3_path}."
+    end
+
     input_files_attributes = metadata['fastqs'].map do |fq|
       {
         name: fq,
@@ -159,9 +163,33 @@ class CheckPipelineRuns
     defaults[property]
   end
 
+  # Parse JSON that originates from an external command (e.g. `aws s3 cp ... -`).
+  # If the command fails, the object is missing, or credentials/network hiccup,
+  # the body comes back blank and `JSON.parse('')` raises
+  # `JSON::ParserError: 859: unexpected token at ''`. This was the single highest-
+  # volume Sentry error for the pipeline monitor (Forgejo #388). Treat a blank or
+  # unparseable body as "no config available" and let the caller skip gracefully.
+  def self.parse_json_or_nil(raw, context)
+    if raw.blank?
+      Rails.logger.warn("Skipping JSON parse for #{context}: empty/blank body.")
+      return nil
+    end
+    JSON.parse(raw)
+  rescue JSON::ParserError => exception
+    LogUtil.log_error(
+      "Failed to parse JSON for #{context}: #{exception.message}",
+      exception: exception
+    )
+    nil
+  end
+
   def self.benchmark_update(t_now)
     Rails.logger.info("Benchmark update.")
-    config = JSON.parse(`aws s3 cp s3://#{IDSEQ_BENCH_BUCKET}/#{IDSEQ_BENCH_KEY_CONFIG} -`)
+    config = parse_json_or_nil(`aws s3 cp s3://#{IDSEQ_BENCH_BUCKET}/#{IDSEQ_BENCH_KEY_CONFIG} -`, "benchmark config")
+    unless config && config['active_benchmarks']
+      Rails.logger.info("Benchmark config unavailable or empty; skipping benchmark update.")
+      return
+    end
     defaults = config['defaults']
     web_commit = ENV['GIT_VERSION'] || ""
     config['active_benchmarks'].each do |bm_props|
@@ -190,12 +218,12 @@ class CheckPipelineRuns
         SELECT
           id,
           project_id,
-          unix_timestamp(created_at) as unixtime_of_creation
+          EXTRACT(EPOCH FROM created_at) as unixtime_of_creation
         FROM samples
         WHERE
               project_id = #{bm_proj.id}
-          AND created_at > from_unixtime(#{t_now - bm_frequency_seconds})
-          AND name LIKE \"#{bm_name_prefix}%\"
+          AND created_at > to_timestamp(#{t_now - bm_frequency_seconds})
+          AND name LIKE '#{bm_name_prefix}%'
       "
       bm_pipeline_branch = prop_get(bm_props, "pipeline_branch", defaults)
       pipeline_commit = Sample.pipeline_commit(bm_pipeline_branch) || ""
@@ -338,7 +366,12 @@ task "pipeline_monitor", [:duration] => :environment do |_t, args|
     until CheckPipelineRuns.shutdown_requested
       system("rake pipeline_monitor[finite_duration]")
       sleep wait_before_respawn
-      unless $CHILD_STATUS.exitstatus.zero?
+      # $CHILD_STATUS is nil if the child never spawned, and exitstatus is nil when
+      # the child was terminated by a signal (e.g. SIGTERM on shutdown). Treat any
+      # non-clean exit (nil status, nil/non-zero exitstatus) as a failure and back off
+      # (Forgejo #388: NoMethodError undefined method `zero?' for nil).
+      exit_status = $CHILD_STATUS&.exitstatus
+      unless exit_status&.zero?
         sleep additional_wait_after_failure
       end
     end

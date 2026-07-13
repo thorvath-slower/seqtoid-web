@@ -1,73 +1,119 @@
 {
   "ignored_warnings": [
     {
-      "warning_type": "File Access",
-      "warning_code": 16,
-      "fingerprint": "415f387f9b709a2ebe146a7ffc4884ad89798b04139ab3b60cbe25dd6b21d29f",
-      "check_name": "FileAccess",
-      "message": "Model attribute used in file name",
-      "file": "app/models/pipeline_run.rb",
-      "line": 748,
-      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
-      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3))",
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "81578335b21dc00e5c310d66089abda9dabca9c889b93dafdb4da9836499b1d9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/controllers/concerns/projects_discovery.rb",
+      "line": 73,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"BIT_OR(CASE WHEN users.id=#{current_user.id} OR #{current_user.admin?} THEN 1 ELSE 0 END) AS editable\")",
       "render_path": null,
       "location": {
         "type": "method",
-        "class": "PipelineRun",
-        "method": "db_load_contigs"
+        "class": "ProjectsDiscovery",
+        "method": "format_discovery_projects"
       },
-      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3)",
+      "user_input": "current_user.admin?",
       "confidence": "Medium",
       "cwe_id": [
-        22
+        89
       ],
-      "note": ""
+      "note": "False positive (CZID-189 triage 2026-07-08). Interpolates current_user.id (integer) and current_user.admin? (boolean) -- server-derived, type-constrained values, not user-controlled strings. Not injectable."
+    },
+    {
+      "warning_type": "Redirect",
+      "warning_code": 18,
+      "fingerprint": "3c19f8c4cca49fc1de2a47ba0888c2fae999dd42ba9a79d7ed34ef017ac6403c",
+      "check_name": "Redirect",
+      "message": "Possible unprotected redirect",
+      "file": "app/controllers/projects_controller.rb",
+      "line": 359,
+      "link": "https://brakemanscanner.org/docs/warning_types/redirect/",
+      "code": "redirect_to(projects_scope.find(params[:id]), :notice => \"Project was successfully updated.\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "ProjectsController",
+        "method": "update"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        601
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). redirect_to receives an ActiveRecord model object (from the authorized *_scope.find), not a user-controlled URL string; url_for derives the resource path. An open redirect requires a user-supplied URL, which is not present."
     },
     {
       "warning_type": "File Access",
       "warning_code": 16,
-      "fingerprint": "4a752372cc62ef064ed256615d6d0e95ec1fd5775a13da24b2d9b8b1e80abe25",
+      "fingerprint": "a8253bb3b6a9ec710d4a4cfd0db87385d24dbf23003418eadf1dd5e4230dbfe8",
       "check_name": "FileAccess",
-      "message": "Model attribute used in file name",
-      "file": "app/models/pipeline_run.rb",
-      "line": 741,
+      "message": "Parameter value used in file name",
+      "file": "app/controllers/samples_controller.rb",
+      "line": 1192,
       "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
-      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contigs\"), \"/tmp/results_json\", 3))",
+      "code": "File.read(select_pipeline_run(samples_scope.find(params[:id]), params[:pipeline_version]).generate_contig_mapping_table_file)",
       "render_path": null,
       "location": {
         "type": "method",
-        "class": "PipelineRun",
-        "method": "db_load_contigs"
+        "class": "SamplesController",
+        "method": "contigs_summary"
       },
-      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contigs\"), \"/tmp/results_json\", 3)",
-      "confidence": "Medium",
+      "user_input": "params[:pipeline_version]",
+      "confidence": "Weak",
       "cwe_id": [
         22
       ],
-      "note": ""
+      "note": "False positive (CZID-189 triage 2026-07-08). The filename is server-generated (contig-mapping / workflow-run output path); the params only select an authorized record through the scoped finder. No user input reaches the file path."
     },
     {
-      "warning_type": "Command Injection",
-      "warning_code": 14,
-      "fingerprint": "4e2874c123067d3edd77f123977654277a6c62e5b5e9b9885cfddb22c8762a78",
-      "check_name": "Execute",
-      "message": "Possible command injection",
-      "file": "app/controllers/identity_controller.rb",
-      "line": 137,
-      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
-      "code": "Open3.capture3((((\"python3 #{\"scripts/token_auth.py\"} --create_token --userid #{User.find(user_id).id.to_s}\" + \" --project-claims '#{project_claims.to_json}'\") + \" --service-identity #{service_identity}\") + \" --expiration #{expires_after}\"))",
+      "warning_type": "Redirect",
+      "warning_code": 18,
+      "fingerprint": "39c9908e23fa65dacac34bf38922c94d49bf469b3bc695cb322db50fb1323c46",
+      "check_name": "Redirect",
+      "message": "Possible unprotected redirect",
+      "file": "app/controllers/samples_controller.rb",
+      "line": 1380,
+      "link": "https://brakemanscanner.org/docs/warning_types/redirect/",
+      "code": "redirect_to(samples_scope.find(params[:id]), :notice => \"Sample was successfully updated.\")",
       "render_path": null,
       "location": {
         "type": "method",
-        "class": "IdentityController",
-        "method": "generate_token"
+        "class": "SamplesController",
+        "method": "update"
       },
-      "user_input": "User.find(user_id)",
-      "confidence": "High",
+      "user_input": "params[:id]",
+      "confidence": "Weak",
       "cwe_id": [
-        77
+        601
       ],
-      "note": "The userId is safe and not a risk for command injection. We double check that current_user is a valid user in the DB before using it in the token_auth service"
+      "note": "False positive (CZID-189 triage 2026-07-08). redirect_to receives an ActiveRecord model object (from the authorized *_scope.find), not a user-controlled URL string; url_for derives the resource path. An open redirect requires a user-supplied URL, which is not present."
+    },
+    {
+      "warning_type": "Redirect",
+      "warning_code": 18,
+      "fingerprint": "25976e7476824edba3327e848f960c81911f2fca0ade22fa468ec87b9d0c39b1",
+      "check_name": "Redirect",
+      "message": "Possible unprotected redirect",
+      "file": "app/controllers/samples_controller.rb",
+      "line": 1393,
+      "link": "https://brakemanscanner.org/docs/warning_types/redirect/",
+      "code": "redirect_to(samples_scope.find(params[:id]), :notice => \"Sample is being uploaded if it hasn't been.\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "SamplesController",
+        "method": "reupload_source"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        601
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). redirect_to receives an ActiveRecord model object (from the authorized *_scope.find), not a user-controlled URL string; url_for derives the resource path. An open redirect requires a user-supplied URL, which is not present."
     },
     {
       "warning_type": "Mass Assignment",
@@ -76,7 +122,7 @@
       "check_name": "PermitAttributes",
       "message": "Potentially dangerous key allowed for mass assignment",
       "file": "app/controllers/users_controller.rb",
-      "line": 194,
+      "line": 198,
       "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
       "code": "params.require(:user).permit(:role, :email, :institution, :name, :send_activation, :segments, :archetypes, :profile_form_version, :project_ids => ([]))",
       "render_path": null,
@@ -90,32 +136,933 @@
       "cwe_id": [
         915
       ],
-      "note": "role is filtered out if current_user is nonadmin"
+      "note": "False positive (CZID-189 triage 2026-07-08). user_params (which permits :role) is used only by the create/update actions, both gated by `before_action :admin_required`. Non-admin actions use user_params_for_nonadmin / profile_params, which do NOT permit :role. Role escalation is not reachable by non-admin users."
     },
     {
-      "warning_type": "Mass Assignment",
-      "warning_code": 105,
-      "fingerprint": "db65d2bccba89c9d3aed06645479b515031f4dd50969619e5c522c9b8fe54b83",
-      "check_name": "PermitAttributes",
-      "message": "Potentially dangerous key allowed for mass assignment",
-      "file": "app/controllers/users_controller.rb",
-      "line": 95,
-      "link": "https://brakemanscanner.org/docs/warning_types/mass_assignment/",
-      "code": "params.require(:user).permit(:role, :email, :institution, :name, :send_activation, :segments, :archetypes, :project_ids => ([]))",
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "10a6f06e76281736cb62fa0e6f6448bbb01af459b480e5f452cdb7c9447d79ce",
+      "check_name": "SendFile",
+      "message": "Parameter value used in file name",
+      "file": "app/controllers/workflow_runs_controller.rb",
+      "line": 374,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "send_file((nil.download_gene_level_contigs(params.permit(:downloadType, :indexId, :geneName)[:indexId]) or nil.download_gene_level_reads(params.permit(:downloadType, :indexId, :geneName)[:indexId])), :filename => (\"amr-#{(\"download-contigs\" or \"download-reads\")}-#{params.permit(:downloadType, :indexId, :geneName)[:geneName]}.fasta\"))",
       "render_path": null,
       "location": {
         "type": "method",
-        "class": "UsersController",
-        "method": "user_params"
+        "class": "WorkflowRunsController",
+        "method": "amr_gene_level_downloads"
       },
-      "user_input": ":role",
+      "user_input": "params.permit(:downloadType, :indexId, :geneName)[:indexId]",
+      "confidence": "Weak",
+      "cwe_id": [
+        22
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The filename is server-generated (contig-mapping / workflow-run output path); the params only select an authorized record through the scoped finder. No user input reaches the file path."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "d9f5bd40673bed5374e192d9daf45258ac3fbd8408297fb81bd513b1d5be8ed6",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/heatmap_helper.rb",
+      "line": 295,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.connection.select_all(\"\\n      SELECT\\n        taxon_counts.pipeline_run_id          AS  pipeline_run_id,\\n        taxon_counts.tax_id                   AS  tax_id,\\n        taxon_counts.count_type               AS  count_type,\\n        taxon_counts.tax_level                AS  tax_level,\\n        taxon_counts.genus_taxid              AS  genus_taxid,\\n        taxon_counts.family_taxid             AS  family_taxid,\\n        taxon_counts.name                     AS  name,\\n        taxon_lineages.genus_name             AS  genus_name,\\n        taxon_counts.superkingdom_taxid       AS  superkingdom_taxid,\\n        taxon_counts.is_phage                 AS  is_phage,\\n        taxon_counts.count                    AS  r,\\n        taxon_summaries.stdev                 AS  stdev,\\n        taxon_summaries.mean                  AS  mean,\\n        taxon_summaries.stdev_mass_normalized AS  stdev_mass_normalized,\\n        taxon_summaries.mean_mass_normalized  AS  mean_mass_normalized,\\n        taxon_counts.percent_identity         AS  percentidentity,\\n        taxon_counts.alignment_length         AS  alignmentlength,\\n        CASE WHEN taxon_counts.e_value IS NOT NULL\\n          THEN taxon_counts.e_value\\n          ELSE #{ReportHelper::DEFAULT_SAMPLE_LOGEVALUE}\\n        END                                   AS  logevalue\\n      FROM taxon_counts\\n      JOIN taxon_lineages ON taxon_counts.tax_id = taxon_lineages.taxid\\n      LEFT OUTER JOIN taxon_summaries ON\\n        #{background_id.to_i}   = taxon_summaries.background_id   AND\\n        taxon_counts.count_type = taxon_summaries.count_type      AND\\n        taxon_counts.tax_level  = taxon_summaries.tax_level       AND\\n        taxon_counts.tax_id     = taxon_summaries.tax_id\\n      WHERE\\n        pipeline_run_id IN (#{pr_id_to_sample_id.keys.join(\",\")})\\n        AND taxon_counts.genus_taxid != #{TaxonLineage::BLACKLIST_GENUS_ID}\\n        AND taxon_counts.count_type IN ('NT', 'NR')\\n        AND (taxon_counts.tax_id IN (#{taxon_ids.join(\",\")})\\n        #{parent_ids_clause}\\n        OR taxon_counts.genus_taxid IN (#{taxon_ids.join(\",\")}))\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HeatmapHelper",
+        "method": "s(:self).samples_taxons_counts_query"
+      },
+      "user_input": "pr_id_to_sample_id.keys.join(\",\")",
       "confidence": "Medium",
       "cwe_id": [
-        915
+        89
       ],
-      "note": ""
+      "note": "False positive (CZID-189 triage 2026-07-08). Interpolated values are server/DB-derived integer ids (pipeline_run_id / background_id / joined pipeline-run id lists), not user-controlled strings. Fix-forward hardening (bind ids as query parameters) tracked in backlog #294."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "47844114059fdba89c9e0ec8c2644bdfda0953e0d36c94ddc7d2f005b398a733",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/heatmap_helper.rb",
+      "line": 323,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.connection.select_all(\"\\n      SELECT\\n        taxon_counts.pipeline_run_id          AS  pipeline_run_id,\\n        taxon_counts.tax_id                   AS  tax_id,\\n        taxon_counts.count_type               AS  count_type,\\n        taxon_counts.tax_level                AS  tax_level,\\n        taxon_counts.count                    AS  r,\\n        taxon_summaries.stdev_mass_normalized AS  stdev_mass_normalized,\\n        taxon_summaries.mean_mass_normalized  AS  mean_mass_normalized,\\n        taxon_summaries.stdev                 AS  stdev,\\n        taxon_summaries.mean                  AS  mean\\n      FROM taxon_counts\\n      LEFT OUTER JOIN taxon_summaries ON\\n        #{background_id.to_i}   = taxon_summaries.background_id   AND\\n        taxon_counts.count_type = taxon_summaries.count_type      AND\\n        taxon_counts.tax_level  = taxon_summaries.tax_level       AND\\n        taxon_counts.tax_id     = taxon_summaries.tax_id\\n      WHERE\\n        pipeline_run_id IN (#{pr_id_to_sample_id.keys.join(\",\")})\\n        AND taxon_counts.genus_taxid != #{TaxonLineage::BLACKLIST_GENUS_ID}\\n        AND taxon_counts.count_type IN ('NT', 'NR')\\n        AND (taxon_counts.tax_id IN (#{taxon_ids.join(\",\")}))\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HeatmapHelper",
+        "method": "s(:self).background_metrics_query"
+      },
+      "user_input": "pr_id_to_sample_id.keys.join(\",\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Interpolated values are server/DB-derived integer ids (pipeline_run_id / background_id / joined pipeline-run id lists), not user-controlled strings. Fix-forward hardening (bind ids as query parameters) tracked in backlog #294."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "8b3c7eaf76950c422a1914df8e5c804e137619dc1329d5f7b50eada1bf272aab",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/location_helper.rb",
+      "line": 124,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "samples_with_metadata.includes(:metadata => :location).where(\"metadata.string_validated_value IN (?) OR #{Location.where(:name => query).pluck(:id, :geo_level).group_by do\n geo_level\n end.map do\n [field, values.map do\n id[0]\n end]\n end.to_h.keys.map do\n \"locations.#{k}_id IN (?)\"\n end.join(\" OR \")}\", query, *Location.where(:name => query).pluck(:id, :geo_level).group_by do\n geo_level\n end.map do\n [field, values.map do\n id[0]\n end]\n end.to_h.values)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "LocationHelper",
+        "method": "s(:self).filter_by_name"
+      },
+      "user_input": "Location.where(:name => query).pluck(:id, :geo_level)",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The user query is bound as a parameter (name => query); the interpolated fragment is built from Location.pluck(:id, :geo_level) -- server/DB-derived integer ids and enum geo-levels, not user strings."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "7873603b15a3ebd096180c0a916a8d123d88e41a60e26667488de29c92f76ca6",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/helpers/samples_helper.rb",
+      "line": 981,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Contig.where(:pipeline_run_id => nil, :\"#{\"#{level}_taxid_#{type}\"}\" => ((nil or nil))).select(\"DISTINCT pipeline_run_id, #{\"#{level}_taxid_#{type}\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "SamplesHelper",
+        "method": "add_sample_count_to_taxa_with_contigs"
+      },
+      "user_input": "level",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The interpolated token is a column/level name from a fixed, code-controlled set (e.g. species/genus x nr/nt; the static taxon_summaries column list) -- never user input. Row values are bound via connection.quote."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "1c2e23db9b6f8f638a731b4d9dc916a1c22aaf784b1a55e7af4b1d709142a7e4",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/background.rb",
+      "line": 172,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "ActiveRecord::Base.connection.execute(\"        INSERT INTO taxon_summaries (#{chunk.first.keys.join(\",\")}) VALUES #{chunk.map do\n hash.values.map do\n ActiveRecord::Base.connection.quote(value)\n end\n end.map do\n \"(#{values.join(\",\")})\"\n end.join(\", \")}\\n\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Background",
+        "method": "store_summary"
+      },
+      "user_input": "chunk.first.keys.join(\",\")",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The interpolated token is a column/level name from a fixed, code-controlled set (e.g. species/genus x nr/nt; the static taxon_summaries column list) -- never user input. Row values are bound via connection.quote."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "c927a31ec02d1cba0a2392906d1254047724023ad735d751c9caf51ffef3233e",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "app/models/pipeline_run.rb",
+      "line": 442,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"ls\", \"#{host_filter_output_s3_path}/#{ercc_output_path}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_ercc_counts"
+      },
+      "user_input": "host_filter_output_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Open3.capture3 is invoked in its multi-argument (array) form, so arguments are passed straight to execve and never through a shell -- shell metacharacters cannot be interpreted. The interpolated S3 path is model-derived, not user input. Not injectable."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "dc9ff7c06118bd264d4206475a859f654f06401e5134a6661e8e398fb78aa082",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "app/models/pipeline_run.rb",
+      "line": 482,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"ls\", \"#{host_filter_output_s3_path}/#{\"picard_insert_metrics.txt\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_insert_size_metrics"
+      },
+      "user_input": "host_filter_output_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Open3.capture3 is invoked in its multi-argument (array) form, so arguments are passed straight to execve and never through a shell -- shell metacharacters cannot be interpreted. The interpolated S3 path is model-derived, not user input. Not injectable."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "f1726efbe55738943735cdd4cd7a2c942a24032beb22948f2e554a58235022da",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 626,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.open(PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{m8_file}\", \"#{\"/tmp/results_json\"}/#{id}\", 2), \"r\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "get_m8_mapping"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{m8_file}\", \"#{\"/tmp/results_json\"}/#{id}\", 2)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The local filename is the fixed destination of PipelineRun.download_file_with_retries (/tmp/results_json[/#{id}], where id is the model's own integer id); the S3 source is model-derived. No user input reaches the path."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "df01f04c1bc5f5d617d4cbe6ba0b41eacde6cc91509b6c7ff3fcd1de827a4525",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 695,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contig_counts\"), \"/tmp/results_json\", 3))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_contig_counts"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contig_counts\"), \"/tmp/results_json\", 3)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The local filename is the fixed destination of PipelineRun.download_file_with_retries (/tmp/results_json[/#{id}], where id is the model's own integer id); the S3 source is model-derived. No user input reaches the path."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "4a752372cc62ef064ed256615d6d0e95ec1fd5775a13da24b2d9b8b1e80abe25",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 716,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contigs\"), \"/tmp/results_json\", 3))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_contigs"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contigs\"), \"/tmp/results_json\", 3)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The local filename is the fixed destination of PipelineRun.download_file_with_retries (/tmp/results_json[/#{id}], where id is the model's own integer id); the S3 source is model-derived. No user input reaches the path."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "415f387f9b709a2ebe146a7ffc4884ad89798b04139ab3b60cbe25dd6b21d29f",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 723,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.read(PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_contigs"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(s3_file_for(\"contig_bases\"), \"/tmp/results_json\", 3)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The local filename is the fixed destination of PipelineRun.download_file_with_retries (/tmp/results_json[/#{id}], where id is the model's own integer id); the S3 source is model-derived. No user input reaches the path."
+    },
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "b3e3d154a2d72440a804ea518bad7f5b8f9363f7ecaf451cdcb73c9c2ef75938",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/models/pipeline_run.rb",
+      "line": 756,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "File.open(PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{\"contigs.fasta\"}\", \"/tmp/results_json\", 3), \"r\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "db_load_contigs"
+      },
+      "user_input": "PipelineRun.download_file_with_retries(\"#{assembly_s3_path}/#{\"contigs.fasta\"}\", \"/tmp/results_json\", 3)",
+      "confidence": "Medium",
+      "cwe_id": [
+        22
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The local filename is the fixed destination of PipelineRun.download_file_with_retries (/tmp/results_json[/#{id}], where id is the model's own integer id); the S3 source is model-derived. No user input reaches the path."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "f689ae38c51a880055ffb8d6a3855369f8a9c233e339656fa2c8ed10962ec8d8",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/pipeline_run.rb",
+      "line": 1484,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.connection.execute(\"REPLACE INTO taxon_counts(pipeline_run_id, tax_id, name,\\n                                tax_level, count_type, count,\\n                                percent_identity, alignment_length, e_value,\\n                                species_total_concordant, genus_total_concordant, family_total_concordant,\\n                                percent_concordant, created_at, updated_at)\\n       SELECT #{id},\\n              IF(\\n                taxon_lineages.#{tax_level_name}_taxid IS NOT NULL,\\n                taxon_lineages.#{tax_level_name}_taxid,\\n                #{TaxonLineage::MISSING_LINEAGE_ID.fetch(tax_level_name.to_sym, -9999)}\\n              ),\\n              IF(\\n                taxon_lineages.#{tax_level_name}_taxid IS NOT NULL,\\n                taxon_lineages.#{tax_level_name}_name,\\n                '#{\"Uncategorizable as a #{tax_level_name}\"}'\\n              ),\\n              #{TaxonCount::NAME_2_LEVEL[tax_level_name]},\\n              taxon_counts.count_type,\\n              sum(taxon_counts.count),\\n              sum(taxon_counts.percent_identity * taxon_counts.count) / sum(taxon_counts.count),\\n              sum(taxon_counts.alignment_length * taxon_counts.count) / sum(taxon_counts.count),\\n              sum(taxon_counts.e_value * taxon_counts.count) / sum(taxon_counts.count),\\n              /* We use AVG below because an aggregation function is needed, but all the entries being grouped are the same */\\n              AVG(species_total_concordant),\\n              AVG(genus_total_concordant),\\n              AVG(family_total_concordant),\\n              CASE #{TaxonCount::NAME_2_LEVEL[tax_level_name]}\\n                WHEN #{TaxonCount::TAX_LEVEL_SPECIES} THEN AVG(100.0 * taxon_counts.species_total_concordant) / sum(taxon_counts.count)\\n                WHEN #{TaxonCount::TAX_LEVEL_GENUS} THEN AVG(100.0 * taxon_counts.genus_total_concordant) / sum(taxon_counts.count)\\n                WHEN #{TaxonCount::TAX_LEVEL_FAMILY} THEN AVG(100.0 * taxon_counts.family_total_concordant) / sum(taxon_counts.count)\\n              END,\\n              '#{Time.now.utc.to_s(:db)}',\\n              '#{Time.now.utc.to_s(:db)}'\\n       FROM  taxon_lineages, taxon_counts\\n       WHERE (#{alignment_config.lineage_version} BETWEEN taxon_lineages.version_start AND taxon_lineages.version_end) AND\\n             taxon_lineages.taxid = taxon_counts.tax_id AND\\n             taxon_counts.pipeline_run_id = #{id} AND\\n             taxon_counts.tax_level = #{TaxonCount::TAX_LEVEL_SPECIES}\\n      GROUP BY 1,2,3,4,5\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineRun",
+        "method": "generate_aggregate_counts"
+      },
+      "user_input": "tax_level_name",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). The interpolated token is a column/level name from a fixed, code-controlled set (e.g. species/genus x nr/nt; the static taxon_summaries column list) -- never user input. Row values are bound via connection.quote."
+    },
+    {
+      "warning_type": "Command Injection",
+      "warning_code": 14,
+      "fingerprint": "61a2a72ea28e39760b3a217e2eedbde81156d6b3987be32be4c813c78ff887fe",
+      "check_name": "Execute",
+      "message": "Possible command injection",
+      "file": "app/models/sample.rb",
+      "line": 434,
+      "link": "https://brakemanscanner.org/docs/warning_types/command_injection/",
+      "code": "Open3.capture3(\"aws\", \"s3\", \"cp\", File.join(File.dirname(input_file.source.to_s), \"total_reads.json\"), \"#{sample_input_s3_path}/#{\"total_reads.json\"}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Sample",
+        "method": "initiate_fastq_files_s3_cp"
+      },
+      "user_input": "sample_input_s3_path",
+      "confidence": "Medium",
+      "cwe_id": [
+        77
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Open3.capture3 is invoked in its multi-argument (array) form, so arguments are passed straight to execve and never through a shell -- shell metacharacters cannot be interpreted. The interpolated S3 path is model-derived, not user input. Not injectable."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "f8885c750bb15c63b626ef1be9fb2f37e11677fc264b69b00650147d604a95a9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/pipeline_report_service.rb",
+      "line": 494,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.joins(\"LEFT OUTER JOIN taxon_summaries ON taxon_counts.count_type = taxon_summaries.count_type AND taxon_counts.tax_level = taxon_summaries.tax_level AND taxon_counts.tax_id = taxon_summaries.tax_id AND taxon_summaries.background_id = #{background_id}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineReportService",
+        "method": "fetch_taxon_counts"
+      },
+      "user_input": "background_id",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Interpolated values are server/DB-derived integer ids (pipeline_run_id / background_id / joined pipeline-run id lists), not user-controlled strings. Fix-forward hardening (bind ids as query parameters) tracked in backlog #294."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "3c459cf529c3afa12af4dc7fc6804f7bfebf35cf5e9882df425f0c1ea270d976",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/pipeline_report_service.rb",
+      "line": 546,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonSummary.joins(\"LEFT OUTER JOIN taxon_counts ON taxon_counts.count_type = taxon_summaries.count_type AND taxon_counts.tax_level = taxon_summaries.tax_level AND taxon_counts.tax_id = taxon_summaries.tax_id AND taxon_counts.pipeline_run_id = #{pipeline_run_id}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PipelineReportService",
+        "method": "fetch_taxons_absent_from_sample"
+      },
+      "user_input": "pipeline_run_id",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Interpolated values are server/DB-derived integer ids (pipeline_run_id / background_id / joined pipeline-run id lists), not user-controlled strings. Fix-forward hardening (bind ids as query parameters) tracked in backlog #294."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "71de6685840f4ac5d7cc404cf4447ac284ae440edc379a096f9efeac3a7963e9",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/taxon_counts_data_service.rb",
+      "line": 77,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "TaxonCount.joins(:pipeline_run).joins(\"LEFT JOIN taxon_summaries ON taxon_counts.count_type = taxon_summaries.count_type AND taxon_counts.tax_level = taxon_summaries.tax_level AND taxon_counts.tax_id = taxon_summaries.tax_id AND taxon_summaries.background_id = #{background_id}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "TaxonCountsDataService",
+        "method": "generate"
+      },
+      "user_input": "background_id",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Interpolated values are server/DB-derived integer ids (pipeline_run_id / background_id / joined pipeline-run id lists), not user-controlled strings. Fix-forward hardening (bind ids as query parameters) tracked in backlog #294."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "ccb58189aff848f50bca9bb00493f2e56f499f681b2e960f60cdc7e2c854b761",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/amr_heatmap/index.html.erb",
+      "line": 5,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(params[:sampleIds].map(&:to_i))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "AmrHeatmapController",
+          "method": "index",
+          "line": 6,
+          "file": "app/controllers/amr_heatmap_controller.rb",
+          "rendered": {
+            "name": "amr_heatmap/index",
+            "file": "app/views/amr_heatmap/index.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "amr_heatmap/index"
+      },
+      "user_input": "params[:sampleIds].map(&:to_i)",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "054e0ec38b0722af8afc5afe4e1f627d5ff7d51f25862d4e79ea0763b87de6e6",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped model attribute",
+      "file": "app/views/home/snapshot.html.erb",
+      "line": 6,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(Project.find(SnapshotLink.find_by(:share_id => snapshot_links_params[:share_id]).project_id).description)",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SnapshotLinksController",
+          "method": "show",
+          "line": 21,
+          "file": "app/controllers/snapshot_links_controller.rb",
+          "rendered": {
+            "name": "home/snapshot",
+            "file": "app/views/home/snapshot.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "home/snapshot"
+      },
+      "user_input": "Project.find(SnapshotLink.find_by(:share_id => snapshot_links_params[:share_id]).project_id).description",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "4d281039bcaebf31f4052faf2de381d8c7a995dc0797b55fe800fb3025d58222",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped model attribute",
+      "file": "app/views/home/snapshot.html.erb",
+      "line": 7,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "SnapshotLink.find_by(:share_id => snapshot_links_params[:share_id]).project_id",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SnapshotLinksController",
+          "method": "show",
+          "line": 21,
+          "file": "app/controllers/snapshot_links_controller.rb",
+          "rendered": {
+            "name": "home/snapshot",
+            "file": "app/views/home/snapshot.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "home/snapshot"
+      },
+      "user_input": null,
+      "confidence": "Medium",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "55419bb7875ca677e3ae3af3ba5a2cfefddc672791bedee497099bd0e1bf3572",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/phylo_trees/index.html.erb",
+      "line": 4,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(([] or current_power.projects.find(params[:projectId])))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "PhyloTreesController",
+          "method": "index",
+          "line": 71,
+          "file": "app/controllers/phylo_trees_controller.rb",
+          "rendered": {
+            "name": "phylo_trees/index",
+            "file": "app/views/phylo_trees/index.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "phylo_trees/index"
+      },
+      "user_input": "params[:projectId]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "67723daaa5124dd615376cc74113f7071e79e5a758dd2562c28ac114ac8745da",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/phylo_trees/index.html.erb",
+      "line": 6,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(current_power.phylo_trees.order(:updated_at => :desc).where(:project_id => params[:projectId]).where(:taxid => params[:taxId]).as_json)",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "PhyloTreesController",
+          "method": "index",
+          "line": 71,
+          "file": "app/controllers/phylo_trees_controller.rb",
+          "rendered": {
+            "name": "phylo_trees/index",
+            "file": "app/views/phylo_trees/index.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "phylo_trees/index"
+      },
+      "user_input": "params[:projectId]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "2999e0898c5e3ade89e5951209b7ea43372f0f477f5bb85e6df12be3bb5f4d46",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/pipeline_viz/show.html.erb",
+      "line": 5,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(((current_power.samples.find_by(:id => params[:sample_id]) and if params[:pipeline_version] then\n  current_power.samples.find_by(:id => params[:sample_id]).pipeline_run_by_version(params[:pipeline_version])\nelse\n  current_power.samples.find_by(:id => params[:sample_id]).first_pipeline_run\nend).call_pipeline_data_service((current_user.allowed_feature_list.include?(\"pipeline_viz_experimental\") or current_user.admin?), ((current_user.id != current_power.samples.find_by(:id => params[:sample_id]).user_id) and (not current_user.admin?))) or RetrievePipelineVizGraphDataService.call((current_power.samples.find_by(:id => params[:sample_id]) and if params[:pipeline_version] then\n  current_power.samples.find_by(:id => params[:sample_id]).pipeline_run_by_version(params[:pipeline_version])\nelse\n  current_power.samples.find_by(:id => params[:sample_id]).first_pipeline_run\nend).id, (current_user.allowed_feature_list.include?(\"pipeline_viz_experimental\") or current_user.admin?), ((current_user.id != current_power.samples.find_by(:id => params[:sample_id]).user_id) and (not current_user.admin?)))))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "PipelineVizController",
+          "method": "show",
+          "line": 69,
+          "file": "app/controllers/pipeline_viz_controller.rb",
+          "rendered": {
+            "name": "pipeline_viz/show",
+            "file": "app/views/pipeline_viz/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "pipeline_viz/show"
+      },
+      "user_input": "params[:sample_id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "aa8753cae77aeb30fb1a885db33bf74cbd4cefec47836bf3a3ab4a1252dd0456",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/pipeline_viz/show.html.erb",
+      "line": 6,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(curate_pipeline_run_display((current_power.samples.find_by(:id => params[:sample_id]) and if params[:pipeline_version] then\n  current_power.samples.find_by(:id => params[:sample_id]).pipeline_run_by_version(params[:pipeline_version])\nelse\n  current_power.samples.find_by(:id => params[:sample_id]).first_pipeline_run\nend)))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "PipelineVizController",
+          "method": "show",
+          "line": 69,
+          "file": "app/controllers/pipeline_viz_controller.rb",
+          "rendered": {
+            "name": "pipeline_viz/show",
+            "file": "app/views/pipeline_viz/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "pipeline_viz/show"
+      },
+      "user_input": "params[:sample_id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "4beeef8adac213740fafc3905d8e4aa18dc46b73ac339409d24b1b7edbe69ffd",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/pipeline_viz/show.html.erb",
+      "line": 7,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(:id => current_power.samples.find_by(:id => params[:sample_id]).id, :name => current_power.samples.find_by(:id => params[:sample_id]).name, :upload_error => current_power.samples.find_by(:id => params[:sample_id]).upload_error)",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "PipelineVizController",
+          "method": "show",
+          "line": 69,
+          "file": "app/controllers/pipeline_viz_controller.rb",
+          "rendered": {
+            "name": "pipeline_viz/show",
+            "file": "app/views/pipeline_viz/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "pipeline_viz/show"
+      },
+      "user_input": "params[:sample_id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "65caedf649b2d52c5dad9f7b38a0f320c0eed1db42ee2f5984bd5cf1b9c95d16",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/pipeline_viz/show.html.erb",
+      "line": 8,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(current_power.samples.find_by(:id => params[:sample_id]).pipeline_versions)",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "PipelineVizController",
+          "method": "show",
+          "line": 69,
+          "file": "app/controllers/pipeline_viz_controller.rb",
+          "rendered": {
+            "name": "pipeline_viz/show",
+            "file": "app/views/pipeline_viz/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "pipeline_viz/show"
+      },
+      "user_input": "params[:sample_id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "ed3314100dbeb76f1a6c6151f2890490eca3ea1f1716a3d72111722207569e1a",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/samples/edit.html.erb",
+      "line": 6,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(samples_scope.find(params[:id]))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SamplesController",
+          "method": "edit",
+          "line": 1348,
+          "file": "app/controllers/samples_controller.rb",
+          "rendered": {
+            "name": "samples/edit",
+            "file": "app/views/samples/edit.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "samples/edit"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "87f0f9e703098bde1b3215f4271014e7433ab463285ee98d348449721201b22d",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/samples/edit.html.erb",
+      "line": 9,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json((samples_scope.find(params[:id]).project or nil))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SamplesController",
+          "method": "edit",
+          "line": 1348,
+          "file": "app/controllers/samples_controller.rb",
+          "rendered": {
+            "name": "samples/edit",
+            "file": "app/views/samples/edit.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "samples/edit"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "6a225edc3bb1fdcc53050cdd5b2d298b4219a06c963ac49ea5512487ed531eaf",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/samples/edit.html.erb",
+      "line": 10,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(samples_scope.find(params[:id]).input_files)",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SamplesController",
+          "method": "edit",
+          "line": 1348,
+          "file": "app/controllers/samples_controller.rb",
+          "rendered": {
+            "name": "samples/edit",
+            "file": "app/views/samples/edit.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "samples/edit"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "ac26402785189e805889dc0b9e528153850bd937a8d2562266bde70ef03813f7",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/samples/folder.html.erb",
+      "line": 5,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(([] or select_pipeline_run(samples_scope.find(params[:id]), params[:pipeline_version]).outputs_by_step((current_user.id == samples_scope.find(params[:id]).user_id))))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SamplesController",
+          "method": "results_folder",
+          "line": 1291,
+          "file": "app/controllers/samples_controller.rb",
+          "rendered": {
+            "name": "samples/folder",
+            "file": "app/views/samples/folder.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "samples/folder"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "b7f4fd7f63d416dfa8b2f45c76108b6140801391ea7a5a221c6df65766144a88",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/samples/raw_folder.html.erb",
+      "line": 5,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(samples_scope.find(params[:id]).results_folder_files(params[:pipeline_version]))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "SamplesController",
+          "method": "raw_results_folder",
+          "line": 1273,
+          "file": "app/controllers/samples_controller.rb",
+          "rendered": {
+            "name": "samples/raw_folder",
+            "file": "app/views/samples/raw_folder.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "samples/raw_folder"
+      },
+      "user_input": "params[:id]",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
+    },
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "0422717f27c9aacd0481481f5c0a582c86eaa6c4d09597727d98acf04e80e042",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped model attribute",
+      "file": "app/views/users/edit.html.erb",
+      "line": 5,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "escape_json(User.find(params[:id]))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "UsersController",
+          "method": "edit",
+          "line": 41,
+          "file": "app/controllers/users_controller.rb",
+          "rendered": {
+            "name": "users/edit",
+            "file": "app/views/users/edit.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "users/edit"
+      },
+      "user_input": "User.find(params[:id])",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "False positive (CZID-189 triage 2026-07-08). Value is emitted via the escape_json helper (app/helpers/application_helper.rb), which calls json_escape (ERB::Util) and neutralizes <, >, &, </script> and U+2028/U+2029, making the JSON safe to embed in an inline <script>. Any interpolated id is an integer. Not injectable."
     }
   ],
-  "updated": "2024-01-30 11:47:55 -0800",
-  "brakeman_version": "5.4.0"
+  "updated": "2026-07-08 00:00:00 +0000",
+  "brakeman_version": "6.1.2"
 }

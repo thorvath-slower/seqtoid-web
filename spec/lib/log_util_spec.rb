@@ -16,12 +16,12 @@ RSpec.describe LogUtil do
     end
 
     it "should log error" do
-      expect(Raven).to receive(:capture_exception).with(zero_division_error, hash_including(message: message, extra: {}))
+      expect(Sentry).to receive(:capture_exception).with(zero_division_error, hash_including(extra: { message: message }))
       subject.log_error(message, exception: zero_division_error)
     end
 
     it "should log error with details" do
-      expect(Raven).to receive(:capture_exception).with(zero_division_error, hash_including(message: message, extra: details))
+      expect(Sentry).to receive(:capture_exception).with(zero_division_error, hash_including(extra: details.merge(message: message)))
       subject.log_error(message, exception: zero_division_error, **details)
     end
   end
@@ -39,12 +39,12 @@ RSpec.describe LogUtil do
     end
 
     it "should log message" do
-      expect(Raven).to receive(:capture_message).with(message, hash_including(level: "info", extra: {}))
+      expect(Sentry).to receive(:capture_message).with(message, hash_including(level: "info", extra: {}))
       subject.log_message(message)
     end
 
     it "should log message with details" do
-      expect(Raven).to receive(:capture_message).with(message, hash_including(level: "info", extra: details))
+      expect(Sentry).to receive(:capture_message).with(message, hash_including(level: "info", extra: details))
       subject.log_message(message, **details)
     end
   end

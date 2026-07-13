@@ -14,16 +14,6 @@ RSpec.describe S3Util do
       },
     ].each
   end
-  let(:unsuccessful_stream_response) do
-    [
-      {
-        message_type: 'error',
-        error_code: 'InternalError',
-        error_message: 'We encountered an internal error. Please try again.',
-      },
-    ].each
-  end
-
   before do
     @mock_aws_clients = {
       s3: Aws::S3::Client.new(stub_responses: true),
@@ -45,11 +35,76 @@ RSpec.describe S3Util do
 
     # On error (like a gene name not found in the json file), return a blank string.
     it "handles errors from S3" do
-      @mock_aws_clients[:s3].stub_responses(:select_object_content, { payload: unsuccessful_stream_response })
+      # S3 Select surfaces a server-side failure as an Aws::S3::Errors::ServiceError,
+      # which s3_select_json rescues and turns into "". (CZID-119: the old in-stream
+      # error-event stub format is no longer valid under aws-sdk-core 3.248.)
+      @mock_aws_clients[:s3].stub_responses(:select_object_content, 'InternalError')
       expect { S3Util.s3_select_json(fake_database_bucket, ontology_file_key, test_expression) }.not_to raise_error
       entry = S3Util.s3_select_json(fake_database_bucket, ontology_file_key, test_expression)
       expect(entry).to be_instance_of(String)
       expect(entry.blank?).to be_truthy
+    end
+  end
+
+  describe "#abort_multipart_uploads" do
+    let(:bucket) { "fake-samples-bucket" }
+    let(:prefix) { "samples/1/2/" }
+
+    it "aborts every incomplete multipart upload under the prefix" do
+      @mock_aws_clients[:s3].stub_responses(
+        :list_multipart_uploads,
+        {
+          uploads: [
+            { key: "samples/1/2/fastqs/file.1.fastq.gz", upload_id: "upload-a" },
+            { key: "samples/1/2/fastqs/file.2.fastq.gz", upload_id: "upload-b" },
+          ],
+        }
+      )
+
+      aborted_args = []
+      allow(@mock_aws_clients[:s3]).to receive(:abort_multipart_upload) do |args|
+        aborted_args << args
+      end
+
+      count = S3Util.abort_multipart_uploads(bucket, prefix)
+
+      expect(count).to eq(2)
+      expect(aborted_args).to contain_exactly(
+        { bucket: bucket, key: "samples/1/2/fastqs/file.1.fastq.gz", upload_id: "upload-a" },
+        { bucket: bucket, key: "samples/1/2/fastqs/file.2.fastq.gz", upload_id: "upload-b" }
+      )
+    end
+
+    it "does nothing when there are no incomplete multipart uploads" do
+      @mock_aws_clients[:s3].stub_responses(:list_multipart_uploads, { uploads: [] })
+      expect(@mock_aws_clients[:s3]).not_to receive(:abort_multipart_upload)
+      expect(S3Util.abort_multipart_uploads(bucket, prefix)).to eq(0)
+    end
+  end
+
+  describe "#upload_to_s3" do
+    let(:key) { "downloads/67/Reads (Non-host).tar.gz" }
+    let(:content) { "some-content" }
+
+    it "uploads the content to S3 when the bucket name is present" do
+      uploaded_args = nil
+      allow(@mock_aws_clients[:s3]).to receive(:put_object) { |args| uploaded_args = args }
+
+      S3Util.upload_to_s3("fake-downloads-bucket", key, content)
+
+      expect(uploaded_args).to eq(bucket: "fake-downloads-bucket", key: key, body: content)
+    end
+
+    # CZID-296: a blank bucket (unset downloads-bucket env var) must fail fast with an
+    # actionable error instead of the opaque SDK "Invalid bucket name" deep in put_object.
+    it "raises an actionable error and does not call the SDK when the bucket name is blank" do
+      expect(@mock_aws_clients[:s3]).not_to receive(:put_object)
+
+      [nil, "", "  "].each do |blank_bucket|
+        expect do
+          S3Util.upload_to_s3(blank_bucket, key, content)
+        end.to raise_error(ArgumentError, /bucket name is blank/)
+      end
     end
   end
 end

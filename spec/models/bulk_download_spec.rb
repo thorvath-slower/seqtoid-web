@@ -110,90 +110,15 @@ describe BulkDownload, type: :model do
       stub_const('ENV', ENV.to_hash.merge("SERVER_DOMAIN" => "https://czid.org",
                                           "SAMPLES_BUCKET_NAME" => "czi-infectious-disease-development-samples",
                                           "SAMPLES_BUCKET_NAME_V1" => "czi-infectious-disease-development-samples"))
+      # The sample fastq S3 paths (--src-urls) come from the SAMPLES_BUCKET_NAME constant
+      # (assigned at boot in config/initializers/s3.rb), which stubbing ENV does not change.
+      # Stub the constant directly so it matches the V1 bucket used for the dest-url. (CZID-120)
+      stub_const("SAMPLES_BUCKET_NAME", "czi-infectious-disease-development-samples")
     end
 
-    it "returns the correct task command for original_input_file download type" do
-      @bulk_download = create(:bulk_download, user: @joe, download_type: BulkDownloadTypesHelper::ORIGINAL_INPUT_FILE_BULK_DOWNLOAD_TYPE, pipeline_run_ids: [
-                                @sample_one.first_pipeline_run.id,
-                                @sample_two.first_pipeline_run.id,
-                              ])
-
-      task_command = [
-        "python",
-        "s3_tar_writer.py",
-        "--src-urls",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_one.id}/fastqs/#{@sample_one.input_files[0].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_one.id}/fastqs/#{@sample_one.input_files[1].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_two.id}/fastqs/#{@sample_two.input_files[0].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_two.id}/fastqs/#{@sample_two.input_files[1].name}",
-        "--tar-names",
-        get_expected_tar_name(@project, @sample_one, "original_R1.fastq.gz"),
-        get_expected_tar_name(@project, @sample_one, "original_R2.fastq.gz"),
-        get_expected_tar_name(@project, @sample_two, "original_R1.fastq.gz"),
-        get_expected_tar_name(@project, @sample_two, "original_R2.fastq.gz"),
-        "--dest-url",
-        "s3://czi-infectious-disease-development-samples/downloads/#{@bulk_download.id}/Original Input Files.tar.gz",
-        "--progress-delay",
-        15,
-        "--success-url",
-        "https://czid.org/bulk_downloads/#{@bulk_download.id}/success/#{@bulk_download.access_token}",
-        "--error-url",
-        "https://czid.org/bulk_downloads/#{@bulk_download.id}/error/#{@bulk_download.access_token}",
-        "--progress-url",
-        "https://czid.org/bulk_downloads/#{@bulk_download.id}/progress/#{@bulk_download.access_token}",
-      ]
-
-      expect(@bulk_download.bulk_download_ecs_task_command).to eq(task_command)
-    end
-
-    it "returns the correct task command for original_input_file download type for samples with additional (non-fastq) input files" do
-      reference_sequence_file1 = create(:local_web_reference_sequence_input_file, sample: @sample_one)
-      primer_bed_file1 = create(:local_web_primer_bed_input_file, sample: @sample_one)
-      @sample_one.input_files += [reference_sequence_file1, primer_bed_file1]
-
-      reference_sequence_file2 = create(:local_web_reference_sequence_input_file, sample: @sample_two)
-      primer_bed_file2 = create(:local_web_primer_bed_input_file, sample: @sample_two)
-      @sample_two.input_files += [reference_sequence_file2, primer_bed_file2]
-
-      @bulk_download = create(:bulk_download, user: @joe, download_type: BulkDownloadTypesHelper::ORIGINAL_INPUT_FILE_BULK_DOWNLOAD_TYPE, pipeline_run_ids: [
-                                @sample_one.first_pipeline_run.id,
-                                @sample_two.first_pipeline_run.id,
-                              ])
-
-      task_command = [
-        "python",
-        "s3_tar_writer.py",
-        "--src-urls",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_one.id}/fastqs/#{@sample_one.input_files[0].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_one.id}/fastqs/#{@sample_one.input_files[1].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_one.id}/fastqs/#{@sample_one.input_files[2].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_one.id}/fastqs/#{@sample_one.input_files[3].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_two.id}/fastqs/#{@sample_two.input_files[0].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_two.id}/fastqs/#{@sample_two.input_files[1].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_two.id}/fastqs/#{@sample_two.input_files[2].name}",
-        "s3://czi-infectious-disease-development-samples/samples/#{@project.id}/#{@sample_two.id}/fastqs/#{@sample_two.input_files[3].name}",
-        "--tar-names",
-        get_expected_tar_name(@project, @sample_one, "original_R1.fastq.gz"),
-        get_expected_tar_name(@project, @sample_one, "original_R2.fastq.gz"),
-        get_expected_tar_name(@project, @sample_one, "original_reference_sequence.fasta.gz"),
-        get_expected_tar_name(@project, @sample_one, "original_primer.bed.gz"),
-        get_expected_tar_name(@project, @sample_two, "original_R1.fastq.gz"),
-        get_expected_tar_name(@project, @sample_two, "original_R2.fastq.gz"),
-        get_expected_tar_name(@project, @sample_two, "original_reference_sequence.fasta.gz"),
-        get_expected_tar_name(@project, @sample_two, "original_primer.bed.gz"),
-        "--dest-url",
-        "s3://czi-infectious-disease-development-samples/downloads/#{@bulk_download.id}/Original Input Files.tar.gz",
-        "--progress-delay",
-        15,
-        "--success-url",
-        "https://czid.org/bulk_downloads/#{@bulk_download.id}/success/#{@bulk_download.access_token}",
-        "--error-url",
-        "https://czid.org/bulk_downloads/#{@bulk_download.id}/error/#{@bulk_download.access_token}",
-        "--progress-url",
-        "https://czid.org/bulk_downloads/#{@bulk_download.id}/progress/#{@bulk_download.access_token}",
-      ]
-
-      expect(@bulk_download.bulk_download_ecs_task_command).to eq(task_command)
+    it "no longer offers the original_input_file download type (removed as a legal control, 8ef75e8c)" do
+      expect(BulkDownloadTypesHelper.bulk_download_types.pluck(:type)).not_to include("original_input_file")
+      expect(BulkDownloadTypesHelper.bulk_download_type("original_input_file")).to be_nil
     end
 
     it "returns the correct task command for unmapped_reads download type" do
@@ -701,10 +626,33 @@ describe BulkDownload, type: :model do
       expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
     end
 
-    it "outputs correct command in development" do
+    # CZID-186: in a local `development` boot there is no `*-development` aegea
+    # cluster/bucket, so the ECS cluster and executable-file bucket are redirected to a
+    # real deployment stage derived from ENV["ENVIRONMENT"] (default "staging"). The
+    # task-role stays keyed on Rails.env (the download IAM role IS per Rails env).
+    it "redirects the ecs cluster/bucket to the default staging stage in development" do
       allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
+      # Whole-ENV stub with ENVIRONMENT unset -> aegea_deployment_stage falls back to "staging".
       stub_const('ENV', ENV.to_hash.merge("SAMPLES_BUCKET_NAME" => "czid-samples-development",
-                                          "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development"))
+                                          "SAMPLES_BUCKET_NAME_V1" => "czid-samples-development").tap { |h| h.delete("ENVIRONMENT") })
+
+      task_command = [
+        "aegea", "ecs", "run", "--execute=#{mock_executable_file_path}",
+        "--task-role", "czi-infectious-disease-downloads-development",
+        "--task-name", BulkDownload::ECS_TASK_NAME,
+        "--ecr-image", "idseq-s3-tar-writer:latest",
+        "--fargate-cpu", "4096",
+        "--fargate-memory", "8192",
+        "--cluster", "idseq-fargate-tasks-staging",
+        "--staging-s3-bucket", "aegea-ecs-execute-staging",
+      ]
+
+      expect(@bulk_download.aegea_ecs_submit_command(executable_file_path: mock_executable_file_path)).to eq(task_command)
+    end
+
+    it "derives the ecs cluster/bucket stage from ENV[ENVIRONMENT] in development" do
+      allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new("development"))
+      stub_const('ENV', ENV.to_hash.merge("ENVIRONMENT" => "staging"))
 
       task_command = [
         "aegea", "ecs", "run", "--execute=#{mock_executable_file_path}",
@@ -736,7 +684,7 @@ describe BulkDownload, type: :model do
       )
 
       expect(Open3).to receive(:capture3).exactly(1).times.with(mock_aegea_ecs_submit_command).and_return(
-        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0)]
+        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
       )
 
       expect_any_instance_of(Tempfile).to receive(:unlink).exactly(1).times
@@ -748,13 +696,69 @@ describe BulkDownload, type: :model do
     end
 
     it "correctly updates bulk download on aegea ecs failure" do
+      # "An error occurred" is not a transient signal, so no retry (exactly once).
       expect(Open3).to receive(:capture3).exactly(1).times.and_return(
-        ["", "An error occurred", instance_double(Process::Status, exitstatus: 1)]
+        ["", "An error occurred", instance_double(Process::Status, exitstatus: 1, success?: false)]
       )
 
       expect do
         @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
-      end.to raise_error(StandardError, 'An error occurred')
+      end.to raise_error(BulkDownload::KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE)
+
+      expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
+    end
+
+    it "retries a transient aegea failure then succeeds" do
+      # Don't actually sleep between retries.
+      allow(AegeaRetry).to receive(:sleep)
+
+      # First call: transient throttling failure. Second call: success.
+      expect(Open3).to receive(:capture3).exactly(2).times.and_return(
+        ["", "An error occurred (ThrottlingException): Rate exceeded", instance_double(Process::Status, exitstatus: 1, success?: false)],
+        [JSON.generate("taskArn": mock_task_arn), "", instance_double(Process::Status, exitstatus: 0, success?: true)]
+      )
+
+      @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+
+      expect(@bulk_download.ecs_task_arn).to eq(mock_task_arn)
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_RUNNING)
+    end
+
+    it "does NOT retry a permanent aegea failure" do
+      allow(AegeaRetry).to receive(:sleep)
+
+      # AccessDenied is permanent -- must fail on the first attempt, no retry.
+      expect(Open3).to receive(:capture3).exactly(1).times.and_return(
+        ["", "An error occurred (AccessDenied): not authorized to perform ecs:RunTask", instance_double(Process::Status, exitstatus: 1, success?: false)]
+      )
+
+      # The permanent stderr (AccessDenied) is logged for debugging, but the
+      # raised error carries the clean KICKOFF_FAILURE message, not the raw
+      # traceback (see #532).
+      expect(LogUtil).to receive(:log_error).with(a_string_matching(/AccessDenied/), hash_including(bulk_download_id: @bulk_download.id))
+      expect do
+        @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+      end.to raise_error(BulkDownload::KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE)
+
+      expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
+    end
+
+    it "raises with the last stderr after exhausting retries on persistent transient failures" do
+      allow(AegeaRetry).to receive(:sleep)
+
+      # Every attempt is a (retryable) throttle. Default policy = 4 attempts.
+      expect(Open3).to receive(:capture3).exactly(4).times.and_return(
+        ["", "Rate exceeded (ThrottlingException)", instance_double(Process::Status, exitstatus: 1, success?: false)]
+      )
+
+      # The last stderr (Rate exceeded) is logged for debugging, but the raised
+      # error carries the clean KICKOFF_FAILURE message, not the raw traceback
+      # (see #532).
+      expect(LogUtil).to receive(:log_error).with(a_string_matching(/Rate exceeded/), hash_including(bulk_download_id: @bulk_download.id))
+      expect do
+        @bulk_download.kickoff_ecs_task(["SHELL_COMMAND"])
+      end.to raise_error(BulkDownload::KickoffError, BulkDownloadsHelper::KICKOFF_FAILURE)
 
       expect(@bulk_download.error_message).to eq(BulkDownloadsHelper::KICKOFF_FAILURE)
       expect(@bulk_download.status).to eq(BulkDownload::STATUS_ERROR)
@@ -1149,6 +1153,63 @@ describe BulkDownload, type: :model do
       add_s3_tar_writer_expectations(
         "sample_metadata.csv" => "mock_sample_metadata_csv"
       )
+
+      bulk_download.generate_download_file
+
+      expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
+    end
+
+    # CZID-469: the AMR combined-results resque handler (generate_download_file's
+    # `elsif download_type == AMR_COMBINED_RESULTS_BULK_DOWNLOAD` branch) was never
+    # exercised on dev (no AMR runs). It reads from the workflow_runs association and
+    # delegates to AmrResultsConcatService, so it must be driven with workflow_run_ids
+    # (not pipeline_run_ids). Locks the AMR generation path against a silent regression.
+    it "correctly generates download file for download type amr_combined_results_bulk_download" do
+      amr_sample = create(:sample, project: @project, name: "AMR Sample")
+      amr_run_one = create(:workflow_run, sample: amr_sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:amr])
+      amr_run_two = create(:workflow_run, sample: amr_sample, user: @joe, workflow: WorkflowRun::WORKFLOW[:amr])
+
+      bulk_download = create(
+        :bulk_download,
+        user: @joe,
+        download_type: BulkDownloadTypesHelper::AMR_COMBINED_RESULTS_BULK_DOWNLOAD,
+        workflow_run_ids: [amr_run_one.id, amr_run_two.id],
+        params: {}
+      )
+
+      expect(AmrResultsConcatService).to receive(:call).with(
+        match_array([amr_run_one.id, amr_run_two.id])
+      ).exactly(1).times.and_return("mock_combined_amr_results_csv")
+
+      add_s3_tar_writer_expectations(
+        "combined_amr_results.csv" => "mock_combined_amr_results_csv"
+      )
+
+      bulk_download.generate_download_file
+
+      expect(bulk_download.status).to eq(BulkDownload::STATUS_SUCCESS)
+    end
+
+    # CZID-469: the biom_format handler is its own non-tar branch in generate_download_file
+    # (it builds a .biom via BulkDownloadsHelper.generate_biom_format_file + create_biom_file
+    # and uploads directly to S3 rather than through the s3_tar_writer). It was never
+    # exercised on dev (microbiome-flagged, short-read-mngs only). Stub the file-generation
+    # collaborators so the branch and success path run without a live pipeline/biom binary.
+    it "correctly generates download file for download type biom_format" do
+      bulk_download = create_bulk_download(BulkDownloadTypesHelper::BIOM_FORMAT_DOWNLOAD_TYPE, {
+                                             "metric": { "value": "NT_rpm" },
+                                             "background": { "value": mock_background_id },
+                                             "filter_by": { "value": [] },
+                                             "categories": { "value": [] },
+                                           })
+
+      expect(BulkDownloadsHelper).to receive(:generate_biom_format_file).exactly(1).times.and_return(
+        ["/tmp/metrics.tsv", "/tmp/metadata.tsv", "/tmp/taxon_lineage.tsv"]
+      )
+      expect(bulk_download).to receive(:create_biom_file).with("/tmp/metrics.tsv", "/tmp/metadata.tsv", "/tmp/taxon_lineage.tsv").exactly(1).times.and_return("/tmp/output_metadata.biom")
+      allow(File).to receive(:read).and_call_original
+      expect(File).to receive(:read).with("/tmp/output_metadata.biom").exactly(1).times.and_return("mock_biom_bytes")
+      expect(S3Util).to receive(:upload_to_s3).with(anything, anything, "mock_biom_bytes").exactly(1).times
 
       bulk_download.generate_download_file
 

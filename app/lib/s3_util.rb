@@ -63,7 +63,20 @@ module S3Util
     end
   end
 
+  # CZID-296: Guard against a blank bucket name before handing it to the AWS SDK.
+  # When the downloads bucket env var (e.g. SAMPLES_BUCKET_NAME_V1) is unset, the
+  # bucket resolves to "" and the SDK raises an opaque
+  # 'Parameter validation failed: Invalid bucket name ""' deep in put_object,
+  # producing a cryptic "upload failed: - to s3:///downloads/..." error. Fail fast
+  # here with an actionable message that names the missing configuration.
   def self.upload_to_s3(bucket, key, content)
+    if bucket.blank?
+      raise ArgumentError,
+            "S3Util.upload_to_s3: bucket name is blank (key=#{key.inspect}). " \
+            "The destination bucket env var is likely unset (e.g. SAMPLES_BUCKET_NAME_V1); " \
+            "set it before uploading."
+    end
+
     AwsClient[:s3].put_object(bucket: bucket,
                               key: key,
                               body: content)
@@ -94,6 +107,31 @@ module S3Util
       max_uploads: 1
     )
     resp.uploads.map(&:upload_id).first
+  end
+
+  # Abort every incomplete (in-progress) multipart upload under a key prefix.
+  # A failed or orphaned upload leaves partial data behind as an incomplete
+  # multipart upload rather than a completed object, so deleting the object
+  # prefix alone does not reclaim it. This walks the paginated
+  # list_multipart_uploads response and aborts each upload, and returns the
+  # count of uploads aborted.
+  def self.abort_multipart_uploads(bucket, prefix)
+    aborted = 0
+    pages = AwsClient[:s3].list_multipart_uploads(
+      bucket: bucket,
+      prefix: prefix
+    )
+    pages.each do |resp|
+      (resp.uploads || []).each do |upload|
+        AwsClient[:s3].abort_multipart_upload(
+          bucket: bucket,
+          key: upload.key,
+          upload_id: upload.upload_id
+        )
+        aborted += 1
+      end
+    end
+    aborted
   end
 
   def self.delete_s3_prefix(s3_prefix)

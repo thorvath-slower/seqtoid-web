@@ -6,7 +6,7 @@ export const CliUserInstructions = (props: { readme: string }) => {
   const readme = props.readme.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
   return (
     <div className={cs.instructionContainer}>
-      <ReactMarkdown source={readme} />
+      <ReactMarkdown>{readme}</ReactMarkdown>
     </div>
   );
 };

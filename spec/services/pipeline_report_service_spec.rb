@@ -2,6 +2,31 @@ require 'rails_helper'
 require 'json'
 
 RSpec.describe PipelineReportService, type: :service do
+  # Compare two CSV reports cell-by-cell: numeric cells within a relative
+  # tolerance, everything else exact. Computed scores (z_score, agg_score,
+  # background mean/stdev) come from single-precision inputs and differ ~1e-7
+  # between MySQL and PostgreSQL — below significance (Postgres migration).
+  def expect_csv_numerically_close(actual, expected, rel_tol: 1e-4)
+    a_rows = actual.split("\n")
+    e_rows = expected.split("\n")
+    expect(a_rows.length).to eq(e_rows.length)
+    a_rows.each_with_index do |a_row, i|
+      a_cells = a_row.split(",", -1)
+      e_cells = e_rows[i].split(",", -1)
+      expect(a_cells.length).to eq(e_cells.length)
+      a_cells.each_with_index do |a, j|
+        e = e_cells[j]
+        af = Float(a, exception: false)
+        ef = Float(e, exception: false)
+        if af && ef
+          expect(af).to be_within([ef.abs * rel_tol, 1e-6].max).of(ef)
+        else
+          expect(a).to eq(e)
+        end
+      end
+    end
+  end
+
   let(:csv_output_standard_background) { "tax_id,tax_level,genus_tax_id,name,common_name,category,is_phage,agg_score,max_z_score,nt_z_score,nt_rpm,nt_count,nt_contigs,nt_contig_r,nt_percent_identity,nt_alignment_length,nt_e_value,nt_bg_mean,nt_bg_stdev,nt_bg_mean_mass_normalized,nt_bg_stdev_mass_normalized,nr_z_score,nr_rpm,nr_count,nr_contigs,nr_contig_r,nr_percent_identity,nr_alignment_length,nr_e_value,nr_bg_mean,nr_bg_stdev,nr_bg_mean_mass_normalized,nr_bg_stdev_mass_normalized,species_tax_ids,known_pathogen\n570,2,570,Klebsiella,,bacteria,false,2428411764.7058825,99,99,193404.63458110517,217,6,594,99.7014,149.424,10^-89.5822,18.3311,64.2056,,,99,77540.10695187165,87,6,594,97.9598,46.4253,10^-16.9874,35.0207,238.639,,,[573],0\n573,1,570,Klebsiella pneumoniae,,bacteria,false,2428411764.7058825,99,99,186274.50980392157,209,2,198,99.6995,149.402,10^-89.5641,9.35068,26.4471,,,99,61497.326203208555,69,2,198,97.8565,46.3623,10^-16.9101,29.9171,236.332,,,,0\n".freeze }
   let(:csv_output_mass_normalized_background) { "tax_id,tax_level,genus_tax_id,name,common_name,category,is_phage,agg_score,max_z_score,nt_z_score,nt_rpm,nt_count,nt_contigs,nt_contig_r,nt_percent_identity,nt_alignment_length,nt_e_value,nt_bg_mean,nt_bg_stdev,nt_bg_mean_mass_normalized,nt_bg_stdev_mass_normalized,nr_z_score,nr_rpm,nr_count,nr_contigs,nr_contig_r,nr_percent_identity,nr_alignment_length,nr_e_value,nr_bg_mean,nr_bg_stdev,nr_bg_mean_mass_normalized,nr_bg_stdev_mass_normalized,species_tax_ids,known_pathogen\n570,2,570,Klebsiella,,bacteria,false,124107.09808698049,0.7071078152481705,0.707106649930723,193750.0,217,6,594,99.7014,149.424,10^-89.5822,96875.0,137002.0,54.25,76.7211,0.7071078152481705,77678.57142857143,87,6,594,97.9598,46.4253,10^-16.9874,38839.3,54927.0,21.75,30.7591,[573],0\n573,1,570,Klebsiella pneumoniae,,bacteria,false,124107.09808698049,0.7071063853398237,0.7071063853398237,186607.14285714287,209,2,198,99.6995,149.402,10^-89.5641,93303.6,131951.0,52.25,73.8927,0.7071063159965896,61607.142857142855,69,2,198,97.8565,46.3623,10^-16.9101,30803.6,43562.8,17.25,24.3952,,0\n".freeze }
   let(:fake_output_prefix) { "s3://fake-output-prefix" }
@@ -284,50 +309,41 @@ RSpec.describe PipelineReportService, type: :service do
         @report = PipelineReportService.call(@pipeline_run, @background.id)
       end
 
+      # z_score / agg_score are computed from single-precision (float4) inputs;
+      # cross-engine float arithmetic (MySQL vs PostgreSQL) differs ~1e-7, below any
+      # significance, so they're asserted within tolerance (Postgres migration).
       it "should get correct values for species 573" do
         species_result = {
           "genus_tax_id" => 570,
           "name" => "Klebsiella pneumoniae",
-          "nt" => {
-            "count" => 209,
-            "rpm" => 186_607.14285714287,
-            "z_score" => 0.7071063853398237,
-          },
-          "nr" => {
-            "count" => 69,
-            "rpm" => 61_607.142857142855,
-            "z_score" => 0.7071063159965896,
-          },
-          "agg_score" => 124_107.09808698049,
+          "nt" => { "count" => 209, "rpm" => 186_607.14285714287 },
+          "nr" => { "count" => 69, "rpm" => 61_607.142857142855 },
         }
 
-        expect(JSON.parse(@report)["counts"]["1"]["573"]).to include_json(species_result)
+        result = JSON.parse(@report)["counts"]["1"]["573"]
+        expect(result).to include_json(species_result)
+        expect(result["nt"]["z_score"]).to be_within(1e-4).of(0.7071063853398237)
+        expect(result["nr"]["z_score"]).to be_within(1e-4).of(0.7071063159965896)
+        expect(result["agg_score"]).to be_within(1e-1).of(124_107.09808698049)
       end
 
       it "should get correct values for genus 570" do
         genus_result = {
           "genus_tax_id" => 570,
-          "nt" => {
-            "count" => 217.0,
-            "rpm" => 193_750.0,
-            "z_score" => 0.707106649930723,
-            "e_value" => -89.5822,
-          },
-          "nr" => {
-            "count" => 87.0,
-            "rpm" => 77_678.57142857143,
-            "z_score" => 0.7071078152481705,
-            "e_value" => -16.9874,
-          },
-          "agg_score" => 124_107.09808698049,
+          "nt" => { "count" => 217.0, "rpm" => 193_750.0, "e_value" => -89.5822 },
+          "nr" => { "count" => 87.0, "rpm" => 77_678.57142857143, "e_value" => -16.9874 },
         }
 
-        expect(JSON.parse(@report)["counts"]["2"]["570"]).to include_json(genus_result)
+        result = JSON.parse(@report)["counts"]["2"]["570"]
+        expect(result).to include_json(genus_result)
+        expect(result["nt"]["z_score"]).to be_within(1e-4).of(0.707106649930723)
+        expect(result["nr"]["z_score"]).to be_within(1e-4).of(0.7071078152481705)
+        expect(result["agg_score"]).to be_within(1e-1).of(124_107.09808698049)
       end
 
       it "should show correct values in CSV in consistent order" do
         csv_report = PipelineReportService.call(@pipeline_run, @background.id, csv: true)
-        expect(csv_report).to eq(csv_output_mass_normalized_background)
+        expect_csv_numerically_close(csv_report, csv_output_mass_normalized_background)
       end
     end
 
@@ -1035,7 +1051,7 @@ RSpec.describe PipelineReportService, type: :service do
       it "should show correct values in CSV in consistent order" do
         csv_report = PipelineReportService.call(@pipeline_run, background_id, csv: true)
         expected_csv_output = "tax_id,tax_level,genus_tax_id,name,common_name,category,is_phage,nt_bpm,nt_base_count,nt_count,nt_contigs,nt_contig_b,nt_percent_identity,nt_alignment_length,nt_e_value,nr_bpm,nr_base_count,nr_count,nr_contigs,nr_contig_b,nr_percent_identity,nr_alignment_length,nr_e_value,species_tax_ids,known_pathogen\n570,2,570,Klebsiella,,bacteria,false,490196.0,550000,217,6,1800000,99.7014,1490.42,10^-89.5822,356506.0,400000,87,6,1800000,97.9598,460.425,10^-16.9874,[573],0\n573,1,570,Klebsiella pneumoniae,,bacteria,false,445632.0,500000,209,2,600000,99.6995,1149.4,10^-89.5641,329768.0,370000,69,2,600000,97.8565,460.362,10^-16.9101,,0\n"
-        expect(csv_report).to eq(expected_csv_output)
+        expect_csv_numerically_close(csv_report, expected_csv_output)
       end
     end
   end

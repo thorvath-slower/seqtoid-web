@@ -16,12 +16,18 @@ module SeedResource
 
     def sfn_configs
       account_id = ENV["AWS_ACCOUNT_ID"]
-      find_or_create(:app_config, key: AppConfig::SFN_SINGLE_WDL_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-dev-default-wdl")
+      # The SWIPE state machines are named per deployment stage (idseq-swipe-<stage>-...).
+      # Previously the stage was hardcoded to "dev", so seeding in the staging account produced
+      # `idseq-swipe-dev-default-wdl` in the staging account -> StateMachineDoesNotExist (#385).
+      # Derive the stage from ENV["ENVIRONMENT"] (the same var db/seeds.rb already uses), defaulting
+      # to "dev" so local/dev seeding behaviour is unchanged.
+      stage = ENV["ENVIRONMENT"].presence || "dev"
+      find_or_create(:app_config, key: AppConfig::SFN_SINGLE_WDL_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-#{stage}-default-wdl")
       find_or_create(:app_config, key: AppConfig::ENABLE_SFN_NOTIFICATIONS, value: "1")
 
-      find_or_create(:app_config, key: AppConfig::SFN_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-dev-short-read-mngs-wdl")
-      find_or_create(:app_config, key: AppConfig::SFN_MNGS_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-dev-short-read-mngs-wdl")
-      find_or_create(:app_config, key: AppConfig::SFN_CG_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-dev-default-wdl")
+      find_or_create(:app_config, key: AppConfig::SFN_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-#{stage}-short-read-mngs-wdl")
+      find_or_create(:app_config, key: AppConfig::SFN_MNGS_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-#{stage}-short-read-mngs-wdl")
+      find_or_create(:app_config, key: AppConfig::SFN_CG_ARN, value: "arn:aws:states:us-west-2:#{account_id}:stateMachine:idseq-swipe-#{stage}-default-wdl")
     end
 
     def workflow_versions

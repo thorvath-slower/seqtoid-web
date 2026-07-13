@@ -86,10 +86,10 @@ if [ "$HAS_BASH_COMPLETION" == "0" ] ; then
     sudo apt-get -y install bash-completion
 fi
 
-echo "Switching to node 16.14.2"
+echo "Switching to node $(cat .node-version)"
 source /home/runner/.nvm/nvm.sh # load already installed nvm
-nvm install 16.14.2
-nvm use 16.14.2
+nvm install "$(cat .node-version)"
+nvm use "$(cat .node-version)"
 node -v
 
 # Make the docker volume directory and open permissions for elasticsearch

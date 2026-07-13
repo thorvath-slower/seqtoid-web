@@ -21,7 +21,12 @@ class Sample < ApplicationRecord
   belongs_to :host_genome, counter_cache: true # use .size for cache, use .count to force COUNT query
   has_many :pipeline_runs, -> { order(created_at: :desc) }, dependent: :destroy
   has_many :backgrounds, through: :pipeline_runs
-  has_many :input_files, dependent: :destroy
+  # Default to :id order so fastq R1/R2 (input_files.fastq[0]/[1]) and other
+  # input-file reads are deterministic. Postgres has no implicit row order
+  # (MySQL returned PK = insertion order, i.e. R1 before R2); restore that.
+  # inverse_of is required because the order(:id) scope disables Rails' automatic
+  # inverse detection; without it nested builds (factories) fail "sample must exist".
+  has_many :input_files, -> { order(:id) }, inverse_of: :sample, dependent: :destroy
   accepts_nested_attributes_for :input_files
   validates_associated :input_files
   has_many :metadata, dependent: :destroy
@@ -86,6 +91,11 @@ class Sample < ApplicationRecord
 
   SLEEP_SECONDS_BETWEEN_RETRIES = 10
 
+  # Delay after which a still-created local upload is considered stalled and no
+  # longer expected to finish on its own. Determined from historical upload
+  # times, where 80% of successful uploads completed within 3 hours.
+  STALLED_UPLOAD_FINALIZATION_DELAY = 3.hours
+
   FILTERING_OPERATORS = [">=", "<="].freeze
 
   # Constants related to sorting
@@ -112,7 +122,7 @@ class Sample < ApplicationRecord
     # Note: if the samples do not contain the specified metadata, all metadata.string_validated_value's will be nil
     # and samples will be sorted by TIEBREAKER_SORT_KEY
     joins_statement = "LEFT JOIN metadata ON (samples.id = metadata.sample_id AND metadata.key = '#{sort_key}')"
-    order_statement = "metadata.string_validated_value #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "metadata.string_validated_value #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(ActiveRecord::Base.sanitize_sql_array(joins_statement)).order(ActiveRecord::Base.sanitize_sql_array(order_statement))
   }
 
@@ -123,12 +133,12 @@ class Sample < ApplicationRecord
     "
     # TODO(ihan): Investigate location metadata creation. I've implemented a workaround solution below,
     # but ideally, all location info should be stored by location_id.
-    order_statement = "(CASE WHEN ISNULL(metadata.location_id) THEN metadata.string_validated_value ELSE locations.name END) #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "(CASE WHEN metadata.location_id IS NULL THEN metadata.string_validated_value ELSE locations.name END) #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
   scope :sort_by_host_genome, lambda { |order_dir|
-    order_statement = "host_genomes.name #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "host_genomes.name #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     left_outer_joins(:host_genome).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -138,7 +148,7 @@ class Sample < ApplicationRecord
       LEFT JOIN pipeline_runs ON samples.id = pipeline_runs.sample_id AND
       pipeline_runs.id = (SELECT MAX(id) FROM pipeline_runs WHERE samples.id = pipeline_runs.sample_id)
     "
-    order_statement = "pipeline_runs.#{sort_key} #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "pipeline_runs.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -149,7 +159,7 @@ class Sample < ApplicationRecord
       pipeline_runs.id = (SELECT MAX(id) FROM pipeline_runs WHERE samples.id = pipeline_runs.sample_id)
       LEFT JOIN insert_size_metric_sets ON insert_size_metric_sets.pipeline_run_id = pipeline_runs.id
     "
-    order_statement = "insert_size_metric_sets.mean #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
+    order_statement = "insert_size_metric_sets.mean #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}"
     joins(joins_statement).order(Arel.sql(ActiveRecord::Base.sanitize_sql_array(order_statement)))
   }
 
@@ -436,12 +446,6 @@ class Sample < ApplicationRecord
 
     raise stderr_array.join(" ") unless stderr_array.empty?
 
-    if user.allowed_feature?("create_next_gen_entities")
-      # Link uploaded files and kickoff workflow in workflows service
-      if workflow_runs.any? { |wr| wr.workflow == WorkflowRun::WORKFLOW[:consensus_genome] }
-        SampleFileEntityLinkCreationService.call(user.id, self)
-      end
-    end
     self.status = STATUS_UPLOADED
     save! # this triggers pipeline command
   rescue StandardError => e
@@ -532,13 +536,6 @@ class Sample < ApplicationRecord
       )
 
       input_files << input_file
-    end
-
-    if user.allowed_feature?("create_next_gen_entities")
-      # Link uploaded files and kickoff workflow in workflows service
-      if workflow_runs.any? { |wr| wr.workflow == WorkflowRun::WORKFLOW[:consensus_genome] }
-        SampleFileEntityLinkCreationService.call(user_id, self)
-      end
     end
 
     self.status = STATUS_UPLOADED
@@ -806,12 +803,21 @@ class Sample < ApplicationRecord
 
   # Delay determined based on query of historical upload times, where 80%
   # of successful uploads took less than 3 hours by updated time.
-  def self.current_stalled_local_uploads(delay = 3.hours)
+  def self.current_stalled_local_uploads(delay = STALLED_UPLOAD_FINALIZATION_DELAY)
     where(status: STATUS_CREATED)
       .where("samples.created_at < ?", Time.now.utc - delay)
       .joins(:input_files)
       .where(input_files: { source_type: InputFile::SOURCE_TYPE_LOCAL })
       .distinct
+  end
+
+  # Orphaned upload shells: samples still in the created state whose upload
+  # never finalized and is old enough to be considered stalled (past the
+  # finalization delay). These have no completed pipeline run and no finalized
+  # upload_error, so they are otherwise a dead end the user cannot clear.
+  def self.orphaned_created_uploads(delay = STALLED_UPLOAD_FINALIZATION_DELAY)
+    where(status: STATUS_CREATED)
+      .where("samples.created_at < ?", Time.now.utc - delay)
   end
 
   def cleanup_relations
@@ -821,6 +827,10 @@ class Sample < ApplicationRecord
 
   def cleanup_s3
     S3Util.delete_s3_prefix("s3://#{ENV['SAMPLES_BUCKET_NAME']}/#{sample_path}/")
+    # Failed or orphaned uploads leave partial data behind as incomplete
+    # multipart uploads (not completed objects), so the prefix delete above
+    # does not reclaim them. Abort any that remain under the sample prefix.
+    S3Util.abort_multipart_uploads(ENV['SAMPLES_BUCKET_NAME'], "#{sample_path}/")
   end
 
   def self.viewable(user)
@@ -1143,11 +1153,12 @@ class Sample < ApplicationRecord
 
   # order_by stores a sortable column's dataKey (refer to: columnConfigurations.ts)
   def self.sort_samples(samples, order_by, order_dir)
+    order_dir = safe_order_dir(order_dir)
     sort_key = DATA_KEY_TO_SORT_KEY[order_by.to_s]
     metadata_sort_key = sanitize_metadata_field_name(order_by)
 
     if SAMPLES_SORT_KEYS.include?(sort_key)
-      samples.order("samples.#{sort_key} #{order_dir}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}")
+      samples.order("samples.#{sort_key} #{order_dir} #{mysql_nulls(order_dir)}, samples.#{TIEBREAKER_SORT_KEY} #{order_dir}")
     elsif sort_key == "host"
       samples.sort_by_host_genome(order_dir)
     elsif PIPELINE_RUNS_SORT_KEYS.include?(sort_key)
@@ -1188,9 +1199,11 @@ class Sample < ApplicationRecord
 
     queries_by_count_type = threshold_filters_by_count_type.each_with_object({}) do |(count_type, filter_queries), queries|
       filter_statement = filter_queries.join(" AND ")
-      sanitized_filter_statement = ActiveRecord::Base.sanitize_sql_array(["(`taxon_counts`.`count_type` = '#{count_type}' AND #{filter_statement})"])
+      sanitized_filter_statement = ActiveRecord::Base.sanitize_sql_array(["(taxon_counts.count_type = '#{count_type}' AND #{filter_statement})"])
       # TODO: Test out creating new composite index (pipeline_run_id, count_type, tax_id)
-      left_join_statement = "LEFT OUTER JOIN `pipeline_runs` ON `pipeline_runs`.`sample_id` = `samples`.`id` LEFT OUTER JOIN `taxon_counts` FORCE INDEX FOR JOIN (`index_pr_tax_hit_level_tc`) ON `taxon_counts`.`pipeline_run_id` = `pipeline_runs`.`id`"
+      # NOTE: MySQL `FORCE INDEX FOR JOIN` hint dropped -- Postgres has no query-hint
+      # syntax; it was an optimizer hint with no effect on results.
+      left_join_statement = "LEFT OUTER JOIN pipeline_runs ON pipeline_runs.sample_id = samples.id LEFT OUTER JOIN taxon_counts ON taxon_counts.pipeline_run_id = pipeline_runs.id"
       queries[count_type] = joins(left_join_statement).where(
         pipeline_runs: {
           deprecated: false,

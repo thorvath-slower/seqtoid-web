@@ -37,6 +37,15 @@ class User < ApplicationRecord
   has_many :bulk_downloads, dependent: :destroy
   has_many :user_settings, dependent: :destroy
   has_many :persisted_backgrounds, dependent: :destroy
+  # CZID-330 — export-control attestation records are COMPLIANCE EVIDENCE and must be retained; they are
+  # deliberately NOT dependent: :destroy. TODO(counsel): confirm the retention/erasure policy for these
+  # records on user deletion (evidence retention vs. data-subject erasure requests).
+  has_many :export_control_attestations, dependent: :restrict_with_exception
+  # CZID-285/286 — Layer 3 export-control evidence (identity/screening clearances + device-location
+  # attestations) are COMPLIANCE EVIDENCE and must be retained; like the CZID-330 records they are
+  # deliberately NOT dependent: :destroy. TODO(counsel): retention/erasure policy on user deletion.
+  has_many :export_control_clearances, dependent: :restrict_with_exception
+  has_many :device_location_attestations, dependent: :restrict_with_exception
 
   validates :email, presence: true, uniqueness: true, format: {
     # Auth0 converts all emails to lowercase. Let's raise this at creation time
@@ -48,6 +57,12 @@ class User < ApplicationRecord
     # common accented chars I knew from experience, leaving out pure symbols.
     with: /\A[- 'a-zA-ZÀ-ÖØ-öø-ÿ]+\z/, message: "must contain only letters, apostrophes, dashes or spaces",
   }, allow_nil: true
+  # CZID-523 -- enforce that verified/uploading users belong to an approved institution by validating
+  # the email domain against a configurable allowlist. Runs on both create and email changes, so it
+  # covers admin creation (UsersController), self-signup (Mutations::CreateUser), and the shared
+  # UserFactoryService choke point. Enforcement is OFF unless an allowlist is configured (see below),
+  # so existing deployments/tests are unaffected until UCSF go-live populates the list.
+  validate :email_domain_allowed, if: -> { email.present? && (new_record? || will_save_change_to_email?) }
   attr_accessor :email_arguments
 
   # `User` creation/changes/deletions get auto-tracked for analytics
@@ -157,6 +172,32 @@ class User < ApplicationRecord
     domain == "chanzuckerberg.com" || domain.ends_with?(".chanzuckerberg.com")
   end
 
+  # CZID-523 -- the configured allowlist of approved institutional email domains. Reads the DB-backed
+  # AppConfig JSON array first (runtime-editable, no deploy), then falls back to a comma-separated
+  # ALLOWED_EMAIL_DOMAINS ENV var. Returns a lowercased, de-duped, blank-free array. An empty array
+  # means "enforcement disabled" (any domain accepted).
+  def self.allowed_email_domains
+    from_config = AppConfigHelper.get_json_app_config(AppConfig::ALLOWED_EMAIL_DOMAINS, [])
+    from_config = [] unless from_config.is_a?(Array)
+    if from_config.empty? && ENV["ALLOWED_EMAIL_DOMAINS"].present?
+      from_config = ENV["ALLOWED_EMAIL_DOMAINS"].split(",")
+    end
+    from_config.map { |d| d.to_s.strip.downcase.delete_prefix("@") }.reject(&:blank?).uniq
+  end
+
+  # CZID-523 -- true when domain enforcement is disabled (empty allowlist) or the user's email domain
+  # matches an approved institutional domain (exact match or a subdomain of one). This is used for the
+  # institutional-user gate; it is NOT a substitute for authorization checks.
+  def institutional_email?
+    domains = User.allowed_email_domains
+    return true if domains.empty?
+
+    user_domain = email.to_s.split("@").last&.downcase
+    return false if user_domain.blank?
+
+    domains.any? { |allowed| user_domain == allowed || user_domain.end_with?(".#{allowed}") }
+  end
+
   # "Greg  L.  Dingle" -> "Greg L."
   def first_name
     return nil if name.nil?
@@ -246,5 +287,17 @@ class User < ApplicationRecord
       end
       traits
     end
+  end
+
+  private
+
+  # CZID-523 -- reject accounts whose email domain is not on the approved institutional allowlist.
+  # No-op when the allowlist is empty (enforcement disabled). The error is user-facing (surfaced by the
+  # UsersController rescue and the GraphQL mutation), so keep it clear and actionable.
+  def email_domain_allowed
+    return if institutional_email?
+
+    errors.add(:email, "domain is not on the list of approved institutional email domains. " \
+                       "Please sign up with your institutional email address, or contact your administrator.")
   end
 end

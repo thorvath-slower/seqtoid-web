@@ -1110,12 +1110,19 @@ export class DiscoveryView extends React.Component<
       loadingLocations: true,
     });
 
-    const mapLocationData = await getDiscoveryLocations({
-      domain,
-      projectId,
-      filters: prepareFilters(filters),
-      search,
-    });
+    // #545: getDiscoveryLocations can resolve to null/undefined (no data or an error
+    // response shape). mapLocationData/rawMapLocationData are treated as objects
+    // downstream -- handleMapLevelChange does `Object.entries(rawMapLocationData)` and
+    // refreshMapPreviewedData indexes into mapLocationData -- so a null value threw the
+    // minified async-render TypeErrors ("forEach"/"in"/index on null). Default to {} to
+    // preserve the object invariant (matching the initial state) and render an empty map.
+    const mapLocationData =
+      (await getDiscoveryLocations({
+        domain,
+        projectId,
+        filters: prepareFilters(filters),
+        search,
+      })) ?? {};
 
     this.setState(
       {

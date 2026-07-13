@@ -48,20 +48,33 @@ class Location < ApplicationRecord
   GEOSEARCH_ACTIONS = [:autocomplete, :geosearch].freeze
   OSM_SEARCH_TYPES_TO_USE = %w[relation].freeze
 
-  # Base request to LocationIQ API
+  # Base request to LocationIQ API.
+  #
+  # Resilience (#467c): LocationIQ is a third-party SaaS. This call is wrapped in a
+  # shared circuit breaker + bounded connect/read timeouts + transient retries
+  # (HttpResilience) so a LocationIQ hang can never wedge a request/worker thread and
+  # a sustained outage fast-fails (open circuit) instead of every caller paying the
+  # full timeout. Geocoding is non-critical to the core upload/report path, so on an
+  # open circuit or exhausted retries we degrade gracefully: return [false, []] and
+  # let the caller fall back (existing callers already treat a falsey success as "no
+  # results"). Callers that need to distinguish an outage can rescue the logged state.
   def self.location_api_request(endpoint_query)
     raise "No location API key" unless ENV["LOCATION_IQ_API_KEY"]
 
     query_url = "#{LOCATION_IQ_BASE_URL}/#{endpoint_query}&key=#{ENV['LOCATION_IQ_API_KEY']}&format=json"
-
     uri = Addressable::URI.parse(query_url)
     request = Net::HTTP::Get.new(uri)
-    resp = Net::HTTP.start(uri.host, 443, use_ssl: true) do |http|
-      http.request(request)
+
+    resp = HttpResilience.breaker(:location_iq).run do
+      HttpResilience.request(request, "#{uri.scheme}://#{uri.host}:#{uri.port}", open_timeout: 3, read_timeout: 10)
     end
+
     # Search with 0 results will return HTTPNotFound. Consider it a successful request for our handling.
     success = resp.is_a?(Net::HTTPSuccess) || resp.is_a?(Net::HTTPNotFound)
     [success, JSON.parse(resp.body)]
+  rescue HttpResilience::CircuitOpenError, Timeout::Error, SocketError, SystemCallError, IOError, JSON::ParserError => err
+    Rails.logger.warn("[Location] LocationIQ request degraded: #{err.class}: #{err.message}")
+    [false, []]
   end
 
   # Search request to Location IQ API by freeform query.
@@ -132,7 +145,16 @@ class Location < ApplicationRecord
     elsif loc_info[:osm_id].to_i > 0 && loc_info[:osm_type]
       # Warning: OSM IDs may change, but it is OK to do a service lookup with them.
       success, resp = geosearch_by_osm_id(loc_info[:osm_id], loc_info[:osm_type])
-      raise "Couldn't fetch OSM ID #{loc_info[:osm_id]} (#{loc_info[:osm_type]})" unless success
+
+      # The OSM re-fetch is a best-effort hardening step ("don't fully trust client input"), not
+      # a hard requirement. LocationIQ reverse-by-osm_id can fail or return an error payload
+      # ({"error": ...}), and with an empty locations table EVERY selection hits this path. When
+      # the re-fetch is unavailable, fall back to the client-supplied fields (the client already
+      # geocoded the selection) instead of raising / crashing the save. See #672.
+      if !success || (resp.is_a?(Hash) && resp["error"].present?)
+        Rails.logger.warn("[Location] OSM re-fetch unavailable for osm_id=#{loc_info[:osm_id]} (#{loc_info[:osm_type]}); using client-supplied location fields")
+        return new_from_params(loc_info)
+      end
 
       location_fields = LocationHelper.adapt_location_iq_response(resp)
 

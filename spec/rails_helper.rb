@@ -10,6 +10,7 @@ require 'rspec/rails'
 # Add additional requires below this line. Rails is not loaded until this point!
 require_relative 'support/user_macros'
 require_relative 'support/graphql_responses'
+require_relative 'support/token_signing_key'
 
 # Requires supporting ruby files with custom matchers and macros, etc, in
 # spec/support/ and its subdirectories. Files matching `spec/**/*_spec.rb` are
@@ -71,6 +72,18 @@ RSpec.configure do |config|
 
   # Factory Bot
   config.include FactoryBot::Syntax::Methods
+
+  # Reset every FactoryBot sequence to its start before each example. This makes
+  # a spec's generated values (file names, sample names, etc.) depend ONLY on
+  # what that example itself creates, never on how many records earlier examples
+  # created. Without this, adding any record-creating spec shifts the global
+  # sequence counters and silently breaks specs that build expectations from
+  # sequenced attributes (the SFN dispatch specs off-by-N failures). Sequences
+  # are only used for uniqueness within an example, not for monotonic values
+  # across examples, so rewinding is safe. (CZID-294)
+  config.before(:each) do
+    FactoryBot.rewind_sequences
+  end
 
   # Time helpers
   config.include ActiveSupport::Testing::TimeHelpers

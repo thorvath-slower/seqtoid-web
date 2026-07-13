@@ -1,4 +1,66 @@
 class AppConfig < ApplicationRecord
+  # CZID-330 — when this is "1", the export-control / Terms-of-Use click-through attestation gate is
+  # ENFORCED: a logged-in user without a current accepted attestation is redirected to the attestation
+  # page and cannot reach the app until they accept. Defaults OFF ("" / nil) so the mechanism ships
+  # DARK — enforcement go-live is gated on counsel sign-off (CZID-292/335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_ATTESTATION = 'enable_export_control_attestation'.freeze
+  # CZID-285/286 — when this is "1", the Layer 3 export-control gate is ENFORCED: a logged-in user without
+  # a current, affirmatively-passed clearance (IDV verified AND denied-party screening clear) is redirected
+  # to the clearance flow and cannot reach the app until cleared. Defaults OFF ("" / nil) so this ships
+  # DARK — go-live is gated on counsel + vendor sign-off (CZID-292/278/335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_LAYER3 = 'enable_export_control_layer3'.freeze
+  # CZID-286 — when this is "1" (AND Layer 3 above is on), device/location attestation is ALSO required:
+  # a cleared user must additionally hold a current, server-verified device-location attestation. Separate
+  # flag so device attestation can be scoped to the highest-sensitivity flows only. Defaults OFF (dark);
+  # go-live is counsel/vendor-gated. TODO(counsel/product): which flows require it.
+  ENABLE_EXPORT_CONTROL_DEVICE_ATTESTATION = 'enable_export_control_device_attestation'.freeze
+  # CZID-596/599 -- when this is "1", the Descartes Visual Compliance restricted-party SCREENING service
+  # (export-control Layer 3) is ACTIVE: ScreeningService may call the SearchEntity API and place holds.
+  # Defaults OFF ("" / nil) so the screening core ships DARK and is NEVER invoked -- ScreeningService's
+  # enabled?/screen_if_enabled short-circuit to a full BYPASS (no call, no hold, normal behavior) when
+  # this is off. Go-live is counsel + vendor gated (CZID-335), never flipped by engineering. This is
+  # SEPARATE from ENABLE_EXPORT_CONTROL_LAYER3 (the gate flag): the screening core can be exercised in a
+  # sandbox with this flag while the user-facing gate stays off.
+  ENABLE_DESCARTES_SCREENING = 'enable_descartes_screening'.freeze
+  # CZID-600 -- export-control Layer 3 screening POLICY config. These carry counsel's operational choices
+  # (list scope, whitelist, cadence, hit-handling) as runtime config so they are drop-in without a deploy.
+  # They hold NO secret values (secrets are ENV/Chamber -- see ExportControl::ScreeningPolicy). Each is
+  # read through ExportControl::ScreeningPolicy and ships INERT / fail-closed by default, so the feature
+  # stays dark until counsel provisions values. Go-live is counsel + vendor gated (CZID-335).
+  #
+  # Which Descartes RPS list-groups to search (maps to the SearchEntity srpsgroupbypass field). Accepts
+  # counsel's group NAMES (comma/space/pipe separated, case-insensitive: Export, Munitions, GSA, Police,
+  # Banking, International) OR the raw numerals ("12"). Blank/unset => send empty => Descartes profile
+  # default. For our export-control use the relevant groups are Export (1) + Munitions (2).
+  EXPORT_CONTROL_RPS_GROUPS = 'export_control_rps_groups'.freeze
+  # JSON array of known-good institutional subjects to allow past a screening hold (the WL/AL allow-table
+  # -- cuts false positives for established UCSF users). Each entry matches a subject_ref ("User:42") or
+  # an email domain ("ucsf.edu" / "@ucsf.edu"), case-insensitive. Blank/unset => NOBODY is whitelisted
+  # (fail-closed default). Example: ["ucsf.edu", "User:1"].
+  EXPORT_CONTROL_SCREENING_WHITELIST = 'export_control_screening_whitelist'.freeze
+  # Re-screen cadence in DAYS -- how long a passing screen stays valid before a re-screen is due. Blank,
+  # zero, or non-positive => always re-screen (most conservative). Counsel sets the operational value.
+  EXPORT_CONTROL_RESCREEN_CADENCE_DAYS = 'export_control_rescreen_cadence_days'.freeze
+  # Hit-handling policy applied to a screening hold: "block" (deny outright), "hold" (place a hold and
+  # await human Incident-Manager adjudication -- DEFAULT), or "report" (hold + emit a report signal).
+  # Unknown/blank => "hold" (fail-closed; the policy is NEVER "allow" on a hit). Counsel owns the
+  # legally-correct response to a hit.
+  EXPORT_CONTROL_HIT_HANDLING = 'export_control_hit_handling'.freeze
+  # CZID-599 -- per-gate-point toggles for the LIVE export-control screening gate (ExportControlScreeningGate).
+  # Each turns the ScreeningService caller ON at ONE point, and ONLY when the master
+  # AppConfig::ENABLE_EXPORT_CONTROL_LAYER3 is also "1". Both default OFF, so the gate hooks are a full
+  # PASS-THROUGH (no screen call, no hold, normal user flow) until counsel + the license enable them.
+  # Separate flags so the onboarding backstop and the result-release backstop can be turned on
+  # independently. Screening is ADDITIONALLY gated by ENABLE_DESCARTES_SCREENING (screen_if_enabled), so
+  # this ships triple-dark. Go-live is counsel + vendor gated (CZID-335), never flipped by engineering.
+  ENABLE_EXPORT_CONTROL_SCREEN_ONBOARDING = 'enable_export_control_screen_onboarding'.freeze
+  ENABLE_EXPORT_CONTROL_SCREEN_RELEASE = 'enable_export_control_screen_release'.freeze
+  # CZID-598 -- watermark (ISO-8601 UTC string, no offset) for the Descartes Incident Manager resolution
+  # poller (ResolveScreeningHolds). Records the "To" bound of the last fully-processed IMTimeStampSearch
+  # window; the next poll starts its "From" here. Advanced ONLY after a reply is fully processed, so a
+  # failed poll re-covers the same window (idempotent re-processing). Empty/unset => first poll uses the
+  # API default 24h look-back. Inert until ENABLE_DESCARTES_SCREENING is on (the job self-skips when off).
+  DESCARTES_RESOLUTION_POLL_CURSOR = 'descartes_resolution_poll_cursor'.freeze
   # When this is "1", all requests other than the landing page will be re-directed to the maintenance page.
   DISABLE_SITE_FOR_MAINTENANCE = 'disable_site_for_maintenance'.freeze
   # When this is "1", the Video Tour banner on the landing page will be shown.
@@ -65,10 +127,14 @@ class AppConfig < ApplicationRecord
   DEFAULT_ALIGNMENT_CONFIG_NAME = "default_alignment_config_name".freeze
   # When this is "1", automatically delete old BulkDownloads via scheduled job.
   AUTO_DELETE_OLD_BULK_DOWNLOADS = "auto_delete_old_bulk_downloads".freeze
-  # When this is "1", the Nextgen services are available for read/write
-  NEXTGEN_SERVICES_ENABLED = "nextgen_services_enabled".freeze
   # When this is "1", the user profile form will be saved locally
   LOCAL_USER_PROFILE = "local_user_profile".freeze
+  # CZID-523 -- JSON array of approved institutional email domains, e.g. ["ucsf.edu", "chanzuckerberg.com"].
+  # When set to a non-empty list, new/updated user accounts must have an email whose domain matches an
+  # entry (exact match or a subdomain of an entry). When unset/empty, domain enforcement is OFF and any
+  # email is accepted -- so this ships DARK and is opt-in per deployment (UCSF go-live sets the list).
+  # An ENV var ALLOWED_EMAIL_DOMAINS (comma-separated) is used as a fallback when this key is unset.
+  ALLOWED_EMAIL_DOMAINS = "allowed_email_domains".freeze
 
   after_save :clear_cached_record
 

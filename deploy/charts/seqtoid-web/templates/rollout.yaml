@@ -1,0 +1,87 @@
+# The web workload as an Argo Rollouts blueGreen Rollout (NOT a Deployment).
+# activeService takes live traffic; previewService fronts the new color for the
+# smoke AnalysisRun before promotion.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "seqtoid-web.fullname" . }}
+  labels:
+    {{- include "seqtoid-web.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.suspend }}
+  replicas: 0  # cost spin-down: scale the web Rollout to 0
+  {{- else if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "seqtoid-web.selectorLabels" . | nindent 6 }}
+  strategy:
+    blueGreen:
+      activeService: {{ include "seqtoid-web.fullname" . }}-active
+      previewService: {{ include "seqtoid-web.fullname" . }}-preview
+      autoPromotionEnabled: {{ .Values.blueGreen.autoPromotionEnabled }}
+      scaleDownDelaySeconds: {{ .Values.blueGreen.scaleDownDelaySeconds }}
+      abortScaleDownDelaySeconds: {{ .Values.blueGreen.abortScaleDownDelaySeconds }}
+      {{- if .Values.blueGreen.analysis.enabled }}
+      # Resilience (#467a): prePromotionAnalysis runs the smoke AnalysisTemplate
+      # against the PREVIEW color BEFORE any traffic shift. A failing smoke run
+      # aborts the rollout — the active (previous) color keeps serving and the bad
+      # preview is scaled down after abortScaleDownDelaySeconds. This holds even when
+      # autoPromotionEnabled is true (dev/staging): auto-promotion only fires once the
+      # analysis PASSES, so a broken build never auto-promotes. Verified safe 2026-07-06.
+      prePromotionAnalysis:
+        templates:
+          - templateName: {{ include "seqtoid-web.fullname" . }}-smoke
+      {{- if .Values.blueGreen.analysis.postPromotion }}
+      postPromotionAnalysis:
+        templates:
+          - templateName: {{ include "seqtoid-web.fullname" . }}-smoke
+      {{- end }}
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "seqtoid-web.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "seqtoid-web.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.gracefulDrain.terminationGracePeriodSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: rails
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # No command/args override: the image ENTRYPOINT (bin/entrypoint.sh) runs
+          # `chamber exec idseq-<env>-web -- bundle exec rails server -b 0.0.0.0 -p 3000`.
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          env:
+            {{- include "seqtoid-web.commonEnv" . | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                # Let the Service deregister this pod before it stops accepting conns.
+                command: ["sh", "-c", "sleep {{ .Values.gracefulDrain.preStopSleepSeconds }}"]
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.ingress.healthCheckPath }}
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.ingress.healthCheckPath }}
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

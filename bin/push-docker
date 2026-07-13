@@ -1,38 +1,48 @@
 #!/bin/bash
 # NOTE: We push all created tags to the Docker repo, but only the commit, branch, and latest tags matter.
 # Cache and compose are noise.
+#
+# CZID-76: dual-push the same image to BOTH the legacy `idseq-web` repo and the go-forward
+# `seqtoid-web` repo during the transition (see bin/build-docker). ECR_REPO_NAMES drives the set;
+# once every consumer references `seqtoid-web`, drop `idseq-web` from the list to complete cutover.
+# The live `idseq-web` repo is never renamed — it stays in place with its history intact.
+set -euo pipefail
 
-export REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/idseq-web"
+# Space-separated ECR repo names to push (must match bin/build-docker). Override via env.
+ECR_REPO_NAMES="${ECR_REPO_NAMES:-idseq-web seqtoid-web}"
+REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
 BRANCH="branch-$1"
 COMMIT="sha-$2"
 
-echo $BRANCH
-echo $COMMIT
-echo $REPO
+echo "$BRANCH"
+echo "$COMMIT"
+echo "Repos $ECR_REPO_NAMES"
 echo '--'
 
-# Retry up to 5 times total if we fail to push to Amazon ECR
-run=1
-count=1
-while [ $run -eq 1 ] ; do
-    echo "Trying Amazon ECR push..."
-    # NOTE: Pushing without a tag no longer pushes all tags. It only pushes latest.
-    docker push "$REPO:$COMMIT"
-    docker push "$REPO:$BRANCH"
-    if [ "$BRANCH" == "branch-main" ]; then
-        docker push $REPO:latest
-    fi
-    if [ $? -eq 0 ]; then  # Success
-        run=0
-        break
-    fi
-    echo "Failed. Trying again in 15s..."
-    if [ $count -ge 5 ]; then
-        run=0
-        echo "Error: Exceeded max retries pushing to Amazon ECR."
-        exit 1
-    fi
-    count=$((count+1))
-    sleep 15
+push_repo() {
+    declare repo="$1"
+    # Retry up to 5 times total if we fail to push to Amazon ECR
+    run=1
+    count=1
+    while [ $run -eq 1 ] ; do
+        echo "Trying Amazon ECR push to $repo ..."
+        # NOTE: Pushing without a tag no longer pushes all tags. It only pushes latest.
+        if docker push "$repo:$COMMIT" && docker push "$repo:$BRANCH" &&
+           { [ "$BRANCH" != "branch-main" ] || docker push "$repo:latest"; }; then
+            run=0
+            break
+        fi
+        echo "Failed. Trying again in 15s..."
+        if [ $count -ge 5 ]; then
+            echo "Error: Exceeded max retries pushing to Amazon ECR ($repo)."
+            exit 1
+        fi
+        count=$((count+1))
+        sleep 15
+    done
+}
+
+for NAME in $ECR_REPO_NAMES; do
+    push_repo "$REGISTRY/$NAME"
 done

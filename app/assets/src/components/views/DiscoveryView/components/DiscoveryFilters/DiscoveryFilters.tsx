@@ -246,7 +246,8 @@ export class DiscoveryFilters extends React.Component<
   }
 
   handleRemoveTag = ({ selectedKey, valueToRemove = "" }: $TSFixMe) => {
-    let newSelected = null;
+    // TS 5 narrows `let x = null` to type `null`; keep the pre-existing loose typing.
+    let newSelected: $TSFixMe = null;
     const newState = {};
 
     if (Array.isArray(this.state[selectedKey])) {

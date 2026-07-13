@@ -1,13 +1,22 @@
 name: idseq-web check
 
+# CZID #305 — the JS/TS + Python jobs below gate every PR (and main post-merge). The two
+# Ruby jobs are gated to manual `workflow_dispatch` only: on PRs they would duplicate the
+# dedicated gates (ci-test-mysql8.yml runs the Ruby suite; pull-request-only.yml runs
+# rubocop via reviewdog), so we don't run them twice. Trigger this workflow by hand to get
+# the full multi-language check (Ruby + JS + Python) in one place.
 on:
+  pull_request:
   push:
+    branches: [main]   # post-merge gate; PR branches use pull_request (no duplicate run)
+  workflow_dispatch:
 
 jobs:
   ruby_test:
     name: Ruby Test
+    if: ${{ github.event_name == 'workflow_dispatch' }}   # covered on PRs by ci-test-mysql8.yml
     runs-on: ubuntu-latest
-    container: ruby:3.1.6
+    container: ruby:3.3.6
     env:
       # This is a dummy secret, do not use it for anything
       AUTH_TOKEN_SECRET: 'GYbvZ9/uHy75wWWK4BO3jZGJ0noacv7GbTJI96wZgWQ='
@@ -27,7 +36,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       db:
-        image: bitnamilegacy/mysql:5.7
+        image: bitnamilegacy/mysql:8.0
         options: >-
           --health-cmd "mysqladmin ping -h localhost"
           --health-interval 10s
@@ -39,176 +48,178 @@ jobs:
           MYSQL_USER: test_user
           MYSQL_PASSWORD: test_password
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-      - name: Determine Kernel Version
-        run: |
-          echo "KERNEL_VERSION=`uname -r`" >> $GITHUB_ENV
-      - name: Install APT Dependencies
-        run: |
-          apt-get update && apt-get install -y python3-pip nodejs
-      - name: Cache Ruby Dependencies
-        uses: actions/cache@v4
-        with:
-          path: vendor/bundle
-          # Include kernel version for under-the-hood gem changes:
-          key: ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems-${{ hashFiles('**/Gemfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems
-      - name: Install Ruby Dependencies
-        run: |
-          gem install bundler
-          bundle config path vendor/bundle
-          bundle install --jobs 4 --retry 3
-      - name: Cache Python Dependencies
-        uses: actions/cache@v4
-        with:
-          path: /root/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip
-      - name: Install Extra Dependencies
-        run: |
-          pip3 config set global.break-system-packages true
-          pip3 install --upgrade pip
-          pip3 install --cache-dir /root/.cache/pip "cython<3.0.0"
-          pip3 install "pyyaml==5.4.1" --no-build-isolation
-          pip3 install --cache-dir /root/.cache/pip -r requirements.txt
-      - name: Setup Dummy Static Files
-        # Create dummy versions of our javascript and css bundle
-        #   The actual files are not required for testing ruby, just the presence of the files
-        run: |
-          mkdir -p app/assets/dist
-          echo foo > app/assets/dist/main.bundle.min.css
-          echo foo > app/assets/dist/main.bundle.min.js
-          echo foo > app/assets/dist/vendors.bundle.min.css
-          echo foo > app/assets/dist/vendors.bundle.min.js
-      - name: Create database and load schema
-        run: |
-          bundle exec bin/rails db:create db:schema:load
-      - name: RSpec
-        run: bundle exec rspec
-        env:
-          SAMPLES_BUCKET_NAME: idseq-samples-development
-      - name: Rails Test
-        run: bundle exec rails test
-        env:
-          SAMPLES_BUCKET_NAME: idseq-samples-development
-          ALIGNMENT_CONFIG_DEFAULT_NAME: "2024-02-06"
+    - name: Check out code
+      uses: actions/checkout@v6
+    - name: Determine Kernel Version
+      run: |
+        echo "KERNEL_VERSION=$(uname -r)" >> "$GITHUB_ENV"
+    - name: Cache Ruby Dependencies
+      uses: actions/cache@v5
+      with:
+        path: vendor/bundle
+        # Include kernel version for under-the-hood gem changes:
+        key: ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.KERNEL_VERSION }}-gems
+    - name: Install Ruby Dependencies
+      run: |
+        gem install bundler
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+    - name: Cache Python Dependencies
+      uses: actions/cache@v5
+      with:
+        path: /root/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip
+    - name: Install Extra Dependencies
+      run: |
+        apt-get update && apt-get install -y python3-pip nodejs
+        pip3 config set global.break-system-packages true
+        pip3 install --upgrade pip
+        pip3 install --cache-dir /root/.cache/pip "cython<3.0.0"
+        pip3 install "pyyaml==5.4.1" --no-build-isolation
+        pip3 install --cache-dir /root/.cache/pip -r requirements.txt
+    - name: Setup Dummy Static Files
+      # Create dummy versions of our javascript and css bundle
+      #   The actual files are not required for testing ruby, just the presence of the files
+      run: |
+        mkdir -p app/assets/dist
+        echo foo > app/assets/dist/main.bundle.min.css
+        echo foo > app/assets/dist/main.bundle.min.js
+        echo foo > app/assets/dist/vendors.bundle.min.css
+        echo foo > app/assets/dist/vendors.bundle.min.js
+    - name: Create database and load schema
+      run: |
+        bundle exec bin/rails db:create db:schema:load
+    - name: RSpec
+      run: bundle exec rspec
+      env:
+        SAMPLES_BUCKET_NAME: idseq-samples-development
+        SAMPLES_BUCKET_NAME_V1: czi-infectious-disease-development-samples # bulk-downloads bucket (CZID-296)
+    - name: Rails Test
+      run: bundle exec rails test
+      env:
+        SAMPLES_BUCKET_NAME: idseq-samples-development
+        SAMPLES_BUCKET_NAME_V1: czi-infectious-disease-development-samples # bulk-downloads bucket (CZID-296)
+        ALIGNMENT_CONFIG_DEFAULT_NAME: "2024-02-06"
 
   ruby_code_analysis:
     name: Ruby Code Analysis
+    if: ${{ github.event_name == 'workflow_dispatch' }}   # covered on PRs by pull-request-only.yml (rubocop)
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          # No need to set `ruby-version`, it gets automatically set to the .ruby-version if it is not specified.
-          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+    - name: Check out code
+      uses: actions/checkout@v6
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1
+      with:
+        # No need to set `ruby-version`, it gets automatically set to the .ruby-version if it is not specified.
+        bundler-cache: true # runs 'bundle install' and caches installed gems automatically
 
-      - name: Rubocop
-        # no annotations yet unfortunately
-        #  There are rubocop github actions but they are buggy
-        #  This one: https://github.com/andrewmcodes/rubocop-linter-action
-        #    uses a strange mechanism in which it creates a new check and
-        #    adds annotations to it. It creates this check in the wrong
-        #    workflow which breaks.
-        #  This one: https://github.com/gimenete/rubocop-action
-        #   offers literally no customization and we want to pin our
-        #   rubocop version.
-        run: bundle exec rubocop
-    #  TODO: This should be re-enabled after ruby is upgraded to a more current version
-    # - name: Brakeman
-    #   run: |
-    #     # No High Confidence warnings.
-    #     bundle exec brakeman --no-pager -w3
-
-    #     # No new Medium Confidence warnings.
-    #     MAX_MEDIUM_WARNINGS=37
-    #     if [ $(bundle exec brakeman --no-pager -w2 -f json | jq '.scan_info.security_warnings') -gt $MAX_MEDIUM_WARNINGS ]
-    #     then
-    #       echo "No new Medium Confidence Brakeman warnings are allowed."
-    #       exit 1
-    #     fi
+    - name: Rubocop
+      # no annotations yet unfortunately
+      #  There are rubocop github actions but they are buggy
+      #  This one: https://github.com/andrewmcodes/rubocop-linter-action
+      #    uses a strange mechanism in which it creates a new check and
+      #    adds annotations to it. It creates this check in the wrong
+      #    workflow which breaks.
+      #  This one: https://github.com/gimenete/rubocop-action
+      #   offers literally no customization and we want to pin our
+      #   rubocop version.
+      run: bundle exec rubocop
+    - name: Brakeman
+      # Re-enabled (CZID-462) now that the old blocker is resolved — Ruby is 3.3.6.
+      # The authoritative Brakeman gate runs on every PR in security-scan.yml
+      # (dedicated `brakeman` job). This step mirrors it so the manual full-check
+      # (workflow_dispatch) also covers it. w3 = zero tolerance; w2 = fail on NEW
+      # only, against the config/brakeman.ignore baseline (#294).
+      run: |
+        bundle exec brakeman --no-pager -w3 -z -q
+        bundle exec brakeman --no-pager -w2 -i config/brakeman.ignore -z -q
 
   javascript:
     name: Javascript
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 16
-      - name: Cache Node Dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-      - name: Check the Lockfile Version
-        run: |
-          VERSION=`cat package-lock.json | jq '.lockfileVersion'`
-          if [ "$VERSION" -lt "2"  ]; then
-            echo "Check the lockfileVersion in package-lock.json."
-            exit 1
-          fi
-      - name: Switch git to use HTTP
-        # See: https://github.com/actions/setup-node/issues/214#issuecomment-842538631
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
-      - name: Install older version of npm
-        run: npm install -g npm@v8.5.5
-      - name: Install Dependencies
-        # Verifies that package.json and package-lock.json match.
-        # See: https://docs.npmjs.com/cli/v7/commands/npm-ci
-        run: npm ci
-      - name: Test
-        run: npm test
-        env:
-          CI: true
-      - name: ESLint
-        # setup-node automatically creates annotations from this output
-        # Use eslint-disable or fix another warning to stay below the max.
-        run: npx eslint app/assets/src e2e --ext .js,.jsx,.ts,.tsx --max-warnings 41
-      - name: ESLint a11y Rules
-        # These rules are related to web accessibility, with a separate warnings budget.
-        # Use eslint-disable or fix another warning to stay below the max.
-        run: npx eslint app/assets/src -c .eslintrc-a11y.json --ext .js,.jsx,.ts,.tsx --max-warnings 152
-      - name: Check for Unused Packages
-        # Uses Depcheck to flag unused dependencies in package.json
-        run: exit $(npx depcheck --ignores="core-js" --json | jq '.dependencies | length')
-      - name: TypeScript Checks
-        run: npx tsc -p ./app/assets/tsconfig.json --noemit
-        # checks for hidden TS errors on  @ts-expect-error escaped lines
-      - name: TypeScript behind ts-expect-errors
-        run: bin/ts-peek.sh
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version-file: "./.node-version"
+    - name: Cache Node Dependencies
+      uses: actions/cache@v5
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    - name: Check the Lockfile Version
+      run: |
+        VERSION=$(jq '.lockfileVersion' < package-lock.json)
+        if [ "$VERSION" -lt "2"  ]; then
+          echo "Check the lockfileVersion in package-lock.json."
+          exit 1
+        fi
+    - name: Switch git to use HTTP
+      # See: https://github.com/actions/setup-node/issues/214#issuecomment-842538631
+      run: >
+        git config --global url."https://github.com/".insteadOf
+        ssh://git@github.com/
+    - name: Pin npm (matches Dockerfile / engines)
+      run: npm install -g npm@11.16.0
+    - name: Install Dependencies
+      # Verifies that package.json and package-lock.json match.
+      # See: https://docs.npmjs.com/cli/v7/commands/npm-ci
+      run: npm ci
+    - name: Test
+      run: npm test
+      env:
+        CI: true
+    - name: ESLint
+      # setup-node automatically creates annotations from this output
+      # Use eslint-disable or fix another warning to stay below the max.
+      run: npx eslint app/assets/src e2e --ext .js,.jsx,.ts,.tsx --max-warnings 41
+    - name: ESLint a11y Rules
+      # These rules are related to web accessibility, with a separate warnings budget.
+      # Use eslint-disable or fix another warning to stay below the max.
+      run: npx eslint app/assets/src -c .eslintrc-a11y.json --ext .js,.jsx,.ts,.tsx --max-warnings 152
+    - name: Check for Unused Packages
+      # Uses Depcheck to flag unused dependencies in package.json
+      run: exit "$(npx depcheck --ignores="core-js" --json | jq '.dependencies | length')"
+    - name: TypeScript Checks
+      run: npx tsc -p ./app/assets/tsconfig.json --noemit
+      # checks for hidden TS errors on  @ts-expect-error escaped lines
+    - name: TypeScript behind ts-expect-errors
+      run: bin/ts-peek.sh
 
   python:
     name: Python
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
-      - name: Install Python Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-      - name: Flake8
-        #continue-on-error: true
-        uses: py-actions/flake8@v2.3.0
-        with:
-          max-line-length: "120"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Test
-        run: python3 -m unittest discover -v -s test/python/ -p 'test_*.py'
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v6
+      with:
+        python-version-file: .python-version
+    - name: Cache Python Dependencies
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+    - name: Flake8
+      # Our modernized flake8-action (upstream julianwachholz is node16/EOL), now living in
+      # thorvath-slower/seqtoid-ci-workflows (collapsed in from the standalone flake8-action repo).
+      # Pinned to the seqtoid-ci-workflows @v1 moving major tag (SSOT: update once, propagates). See CZID-204 / #405 / #406.
+      uses: thorvath-slower/seqtoid-ci-workflows/flake8-action@v1
+      with:
+        checkName: "Python Lint"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Test
+      run: python3 -m unittest discover -v -s test/python/ -p 'test_*.py'

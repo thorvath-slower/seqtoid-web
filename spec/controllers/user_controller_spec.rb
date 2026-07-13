@@ -52,7 +52,6 @@ RSpec.describe UsersController, type: :controller do
           allow(UserFactoryService).to receive(:call).and_raise(Net::SMTPAuthenticationError, "test UserFactoryService Net::SMTPAuthenticationError")
           subject
           parsed_body = JSON.parse(response.body)
-          puts "parsed_body: #{parsed_body}"
           expect(parsed_body).to eq(
             ["User was successfully created but SMTP email is not configured. Try manual password reset at #{request.base_url}#{users_password_new_path} To enable SMTP, set environment variables for SMTP_USER and SMTP_PASSWORD."]
           )
@@ -64,7 +63,6 @@ RSpec.describe UsersController, type: :controller do
           allow(UserFactoryService).to receive(:call).and_raise("UserFactoryService error")
           subject
           parsed_body = JSON.parse(response.body)
-          puts "parsed_body: #{parsed_body}"
           expect(parsed_body).to eq(["UserFactoryService error"])
         end
       end

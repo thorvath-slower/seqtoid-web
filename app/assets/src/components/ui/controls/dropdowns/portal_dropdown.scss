@@ -46,18 +46,21 @@
   }
 }
 
+// CZID-320: the chevron is now a static SVG (IconArrowDownSmall) instead of a
+// FontAwesome \f107 glyph, so it never flickers through a fallback-font glyph on
+// the heavy open-render of a large option list. Style it via fill/width.
 .arrow {
-  font-style: normal;
-  font-size: 0.85em;
-  -webkit-font-smoothing: antialiased;
-
-  &:before {
-    font-family: FontAwesome;
-    content: "\f107";
-  }
+  // Themed gray, not `currentColor`: the chevron previously inherited the trigger's
+  // text color, which resolves to near-black on a plain dropdown (e.g. the metadata
+  // Nucleotide Type field) — a heavy black arrow that clashed with the light-gray
+  // chevrons on the adjacent SDS dropdowns. A fixed gray keeps every closed dropdown
+  // chevron consistent; it still turns primary when the menu is open (`.active`).
+  fill: $sds-color-gray-500;
+  width: 14px;
+  height: 14px;
 
   &.active {
-    color: $sds-color-primary-400;
+    fill: $sds-color-primary-400;
   }
 }
 

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Canonical test steps for seqtoid-web on MySQL (Version 2, jsims-faithful).
+# run identically by the local harness (bin/ci-local, via docker-compose.ci.yml).
+# Expects: Ruby 3.3.6, a reachable MySQL (DB_HOST/DB_USERNAME/DB_PASSWORD),
+# Redis, RAILS_ENV=test, dummy AWS_* env.
+set -euo pipefail
+
+echo "::group::System deps"
+# python3-dev + build-essential are required to compile biom-format's C
+# extension (Python.h); without them the pip step fails. nodejs for asset bits,
+# default-mysql-client for the mysql CLI, default-libmysqlclient-dev for the
+# mysql2 native gem build.
+apt-get update && apt-get install -y python3-pip python3-dev build-essential nodejs default-mysql-client default-libmysqlclient-dev
+pip3 config set global.break-system-packages true
+echo "::endgroup::"
+
+echo "::group::Ruby deps"
+gem install bundler:"$(tail -1 Gemfile.lock | tr -d ' ')" --no-document 2>/dev/null || gem install bundler --no-document
+bundle config path vendor/bundle
+bundle install --jobs 4 --retry 3
+echo "::endgroup::"
+
+echo "::group::Python deps"
+pip3 install --upgrade pip
+pip3 install "cython<3.0.0"
+pip3 install "pyyaml==5.4.1" --no-build-isolation
+pip3 install -r requirements.txt
+echo "::endgroup::"
+
+echo "::group::Dummy static assets (ruby tests don't need real bundles)"
+mkdir -p app/assets/dist
+for f in main.bundle.min.css main.bundle.min.js vendors.bundle.min.css vendors.bundle.min.js; do echo foo > "app/assets/dist/$f"; done
+echo "::endgroup::"
+
+# Parallelism auto-scales to the box: CI's ubuntu-latest is 2-core, dev boxes have more.
+# parallel_tests shards the suite across N processes, each owning its own test DB
+# (idseq_test, idseq_test2, … — see config/database.yml + TEST_ENV_NUMBER) inside the
+# single MySQL service container. Falls back to a serial run if parallel_tests is absent
+# so local runs never hard-break.
+PARALLEL_N="$(command -v nproc >/dev/null 2>&1 && nproc || echo 2)"
+
+if [ -n "${SHARD_INDEX:-}" ] && [ -n "${SHARD_TOTAL:-}" ]; then
+  # CZID-542: cross-runner sharding. This process runs ONLY its group slice
+  # (--only-group), balanced across shards by runtime. Each shard is a separate
+  # GitHub Actions matrix job; SimpleCov results are collated afterward
+  # (bin/collate-coverage). Off by default, so a plain local/serial run
+  # (no SHARD_INDEX) keeps the identical behavior below -- the SSOT holds.
+  echo "::group::Shard ${SHARD_INDEX}/${SHARD_TOTAL}: create + load all ${SHARD_TOTAL} parallel schemas"
+  # Prepare every parallel schema (idseq_test, idseq_test2 .. idseq_test<N>) on this
+  # runner, exactly like the non-sharded parallel path below. --only-group runs a
+  # single process, but parallel_tests picks that process's TEST_ENV_NUMBER (hence its
+  # DB) internally; preparing all N makes the shard robust to that numbering rather
+  # than guessing it. Reuses the proven parallel:* rake tasks. Each shard has its own
+  # fresh MySQL service container, so this cannot collide across shards.
+  bundle exec rake "parallel:drop[${SHARD_TOTAL}]" \
+                   "parallel:create[${SHARD_TOTAL}]" \
+                   "parallel:load_schema[${SHARD_TOTAL}]"
+  echo "::endgroup::"
+
+  # --only-group runs just this shard's slice. --group-by runtime balances by the
+  # committed timing log (tmp/parallel_runtime_rspec.log), but parallel_tests reads
+  # that log eagerly and aborts (Errno::ENOENT) the moment the flag is passed without
+  # one. The log lives under tmp/, which is gitignored (/tmp/*), so it is absent on a
+  # fresh CI checkout -- passing --group-by runtime unconditionally hard-fails every
+  # shard. Only enable it when the log actually exists; otherwise let parallel_tests
+  # use its default grouping (runtime-if-present, filesize fallback), which is exactly
+  # what the non-sharded parallel path below relies on. parallel_rspec prints one final
+  # "N examples, M failures" line for this shard's slice; the collate job sums those.
+  group_by_args=()
+  if [ -f tmp/parallel_runtime_rspec.log ]; then
+    group_by_args=(--group-by runtime)
+  fi
+  echo "::group::RSpec (shard ${SHARD_INDEX} of ${SHARD_TOTAL})"
+  SAMPLES_BUCKET_NAME=idseq-samples-development \
+    bundle exec parallel_rspec -n "${SHARD_TOTAL}" \
+      --only-group "${SHARD_INDEX}" \
+      "${group_by_args[@]+"${group_by_args[@]}"}"
+  echo "::endgroup::"
+elif bundle exec parallel_test --version >/dev/null 2>&1; then
+  echo "::group::Create + load ${PARALLEL_N} parallel MySQL schemas"
+  # parallel:drop first so reloads start clean (MySQL force:cascade drops trip FK
+  # constraints when tables already exist); idempotent on fresh DBs. load_schema mirrors
+  # today's db:schema:load (loads schema.rb, NOT migrations).
+  bundle exec rake "parallel:drop[${PARALLEL_N}]" \
+                   "parallel:create[${PARALLEL_N}]" \
+                   "parallel:load_schema[${PARALLEL_N}]"
+  echo "::endgroup::"
+
+  echo "::group::RSpec (parallel x${PARALLEL_N})"
+  # parallel_rspec prints per-process summaries then one final combined
+  # "N examples, M failures" line to stdout — the regression gate reads the last one.
+  SAMPLES_BUCKET_NAME=idseq-samples-development \
+    bundle exec parallel_rspec -n "${PARALLEL_N}"
+  echo "::endgroup::"
+else
+  echo "::group::Create + load MySQL schema (serial fallback)"
+  # db:drop first so reloads start clean (MySQL force:cascade drops trip FK constraints
+  # when tables already exist); idempotent on a fresh DB.
+  bundle exec bin/rails db:drop db:create db:schema:load
+  echo "::endgroup::"
+
+  echo "::group::RSpec (serial fallback)"
+  SAMPLES_BUCKET_NAME=idseq-samples-development bundle exec rspec
+  echo "::endgroup::"
+fi

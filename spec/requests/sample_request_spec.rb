@@ -697,8 +697,13 @@ RSpec.describe "Sample request", type: :request do
         end
 
         it "returns an error" do
+          # CZID-185: post as JSON, exactly as the real client does (app/assets/src/api/upload.ts
+          # sends an axios application/json body). Form-encoding 501 samples trips Rack 3's
+          # param-count limit (4096) in the query parser BEFORE the controller's SAMPLE_UPLOAD_LIMIT
+          # check can return the graceful error; a JSON body is parsed by ActionDispatch (not Rack's
+          # form QueryParser), so it reaches the controller — matching production behaviour.
           expect do
-            post "/samples/bulk_upload_with_metadata", params: { samples: @samples501, metadata: @metadata501, client: @client_params, format: :json }
+            post "/samples/bulk_upload_with_metadata", params: { samples: @samples501, metadata: @metadata501, client: @client_params }, as: :json
           end.to raise_error(ErrorHelper::SampleUploadErrors.exceeded_sample_upload_limit(@number_of_samples, SamplesController::SAMPLE_UPLOAD_LIMIT, @client_params))
         end
       end

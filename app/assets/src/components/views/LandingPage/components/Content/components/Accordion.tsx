@@ -52,10 +52,10 @@ const Accordion = () => {
             anyone working on SeqtoID unless specifically requested by a user,
             such as to debug an issue. Read more in SeqtoID’s{" "}
             <a
-              href="https://czid.org/privacy"
+              href="/privacy"
               aria-label="View the SeqtoID privacy notice (opens in new window)"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               Privacy Policy
             </a>
@@ -77,10 +77,10 @@ const Accordion = () => {
             filter out all human genetic information, regardless of host. Read
             more in SeqtoID’s{" "}
             <a
-              href="https://czid.org/privacy"
+              href="/privacy"
               aria-label="View the SeqtoID privacy notice (opens in new window)"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               Privacy Policy
             </a>
@@ -98,10 +98,10 @@ const Accordion = () => {
           <>
             Once created, your account will be maintained in accordance with our{" "}
             <a
-              href="https://czid.org/terms"
+              href="/terms"
               aria-label="View the SeqtoID terms of use (opens in new window)"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               Terms of Use
             </a>

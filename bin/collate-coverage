@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# CZID-542: collate the per-shard SimpleCov results from a sharded CI run into a
+# single coverage report (+ coverage/.last_run.json) so the promotion regression
+# gate reads ONE collated number that equals the serial baseline -- no double
+# count, no undercount.
+#
+# Fail-closed: if fewer than EXPECTED_SHARDS shard resultsets are present, exit
+# non-zero. A partial merge would silently under-report coverage and read as a
+# false regression on PRs, so a missing/dropped shard must fail the whole run.
+#
+# The whole-suite minimum_coverage floor (skipped per-shard in .simplecov) is
+# re-applied here on the collated result, preserving the serial run's hard floor.
+require "simplecov"
+
+expected = Integer(ENV.fetch("EXPECTED_SHARDS"))
+artifact_dir = ENV.fetch("SHARD_ARTIFACT_DIR", "shard-artifacts")
+resultsets = Dir.glob(File.join(artifact_dir, "**", "resultset.json")).sort
+
+if resultsets.length < expected
+  warn "coverage collate FAIL-CLOSED: expected #{expected} shard resultsets, found #{resultsets.length}"
+  warn "found: #{resultsets.inspect}"
+  exit 1
+end
+
+puts "collating #{resultsets.length} shard resultsets:"
+resultsets.each { |r| puts "  - #{r}" }
+
+# Mirror .simplecov's configuration so the collated percentage matches a serial
+# run exactly (same profile, branch coverage, groups, and filters), and re-apply
+# the whole-suite floor on the merged result.
+SimpleCov.collate resultsets, "rails" do
+  add_group "Services", "app/services"
+  enable_coverage :branch
+  add_filter "/lib/tasks"
+  add_filter "/lib/seed_resources"
+  add_filter "db/seeds.rb"
+  minimum_coverage line: 61, branch: 46
+end

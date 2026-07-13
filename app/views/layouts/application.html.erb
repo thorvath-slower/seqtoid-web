@@ -4,7 +4,6 @@
     <%= render "layouts/onetrust" %>
     <%= render "layouts/sentry_monitoring" %>
     <%= render "layouts/segment_analytics" %>
-    <%= render "layouts/adobe_analytics" %>
 
     <!-- SEO Tags -->
     <title>SeqtoID - Detect & Track Infectious Diseases</title>
@@ -27,7 +26,7 @@
     <meta name="twitter:image" content="https://assets.prod.czid.org/assets/CZID_Meta.png" />
 
     <%= csrf_meta_tags %>
-    <%= stylesheet_link_tag    'application', media: 'all', 'data-turbolinks-track': 'reload' %>
+    <%= stylesheet_link_tag    'application', media: 'all' %>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
     <!-- The following line is a side fix to work around our issue with @import url(..) declarations in Sass. -->
     <!-- As soon as possible, the Sass issues should be fixed and this streamlined back into our Sass build. -->

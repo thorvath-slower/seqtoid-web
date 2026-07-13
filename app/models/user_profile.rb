@@ -5,6 +5,6 @@ class UserProfile < ApplicationRecord
   # Validations
   validates :user_id, presence: true
   validates :profile_form_version, numericality: { only_integer: true }, allow_nil: true
-  serialize :czid_usecase, Array
-  serialize :referral_source, Array
+  serialize :czid_usecase, type: Array
+  serialize :referral_source, type: Array
 end
