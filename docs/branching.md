@@ -9,7 +9,7 @@ and [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
 > **TL;DR:** Branch off `integration`. Open a small PR back into `integration` -- it
 > spins up an isolated per-PR preview sandbox you can upload to and run pipelines in.
 > `integration` is the active development trunk; the only thing it does is host those
-> sandboxes and accumulate reviewed work. On a **weekly cadence** the good-to-go state
+> sandboxes and accumulate reviewed work. On a **nightly cadence** (09:00 UTC / 1 AM PST) the good-to-go state
 > of `integration` is promoted to `main`, and `main` auto-deploys to the shared **dev**
 > environment. `main` then promotes forward through **staging -> prod** on the gated
 > chain. `main` is always the known-good trunk.
@@ -19,9 +19,9 @@ and [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
 ## The picture
 
 ```
-  feature/bug/improvement       PR      integration      weekly       main       auto      dev (shared)
+  feature/bug/improvement       PR      integration      nightly      main       auto      dev (shared)
   branch off integration  ----------->  (dev trunk +  ----------->  (known-good  ------->  dev.seqtoid.org
-  (cat-NNN-slug)              |          preview        promotion    weekly           |
+  (cat-NNN-slug)              |          preview        promotion    nightly           |
                              |          sandboxes)     (automated)  roll-up)          |
                              v                                                        v
                     per-PR PREVIEW sandbox                              main --gated--> staging --gated--> prod
@@ -34,7 +34,7 @@ and [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
   back into it. Its *only* job is to host the per-PR preview sandboxes and accumulate
   reviewed changes between promotions. It does **not** deploy to any persistent
   environment.
-- **`main` = known-good.** It is the weekly roll-up of `integration`, and the only
+- **`main` = known-good.** It is the nightly roll-up of `integration`, and the only
   branch that auto-deploys to the shared **dev** environment (`dev.seqtoid.org`) via
   GitOps (`gitops-advance-dev.yml` -> Argo CD). Nothing else touches the dev pipeline.
 - **feature branches** are where you work: `cat-NNN-short-slug` off `integration`.
@@ -63,21 +63,22 @@ and [`ARTIFACT-PROMOTION.md`](ARTIFACT-PROMOTION.md).
 
 ## Promotion
 
-### `integration` -> `main` (weekly, automated)
+### `integration` -> `main` (nightly, automated)
 
 A scheduled workflow (`promote-integration-to-main.yml`) promotes the green state of
-`integration` to `main` on a **weekly cadence**. The promotion is the release event
+`integration` to `main` on a **nightly cadence** (`cron: 0 9 * * *` = 09:00 UTC / 1 AM PST -- overnight
+Pacific, one hour after the nightly test suite so they never overlap; #680). The promotion is the release event
 that makes something "known-good" and sends it to dev. Because every change in
-`integration` was already reviewed and green on its own PR, the weekly roll-up is an
+`integration` was already reviewed and green on its own PR, the nightly roll-up is an
 aggregation of already-vetted work.
 
 ### Hotfix (expedited promotion)
 
-An urgent dev fix does **not** wait for the weekly cron. It still flows **through
+An urgent dev fix does **not** wait for the nightly cron. It still flows **through
 `integration`** (so it gets a preview sandbox and the normal checks + review), then a
 person triggers the **same** promotion workflow off-cycle via `workflow_dispatch`
 (the "kick it off manually" path). This keeps one promotion path with two triggers --
-`schedule` (weekly) and `workflow_dispatch` (hotfix) -- rather than a second, divergent
+`schedule` (nightly) and `workflow_dispatch` (hotfix) -- rather than a second, divergent
 route. A commit-message suffix is deliberately **not** used: a manual dispatch is
 explicit, permission-gated, and auditable.
 
@@ -85,7 +86,7 @@ explicit, permission-gated, and auditable.
 
 A green `main` build advances the dev image tag via GitOps and Argo rolls it out
 (blue/green with a smoke gate). `main` only moves on promotion, so dev updates on the
-promotion cadence (weekly by default, or immediately on a hotfix dispatch).
+promotion cadence (nightly by default, or immediately on a hotfix dispatch).
 
 ### `main` -> staging -> prod (gated)
 
