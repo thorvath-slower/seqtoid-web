@@ -1,8 +1,8 @@
-# Weekly roll-up of the reviewed `integration` trunk onto `main`, which auto-deploys to
+# Nightly roll-up of the reviewed `integration` trunk onto `main`, which auto-deploys to
 # the shared dev environment. See docs/branching.md.
 #
 # Two triggers, one path:
-#   - schedule:        the weekly cadence (the normal "we're ready for dev" promotion)
+#   - schedule:        the nightly cadence (the normal "we're ready for dev" promotion)
 #   - workflow_dispatch: an off-cycle / hotfix promotion, kicked off manually instead of
 #                        waiting for the cron. The fix still went through `integration`
 #                        (checks + review + a preview sandbox) first.
@@ -19,7 +19,11 @@ name: Promote integration -> main
 
 on:
   schedule:
-    - cron: "0 15 * * 1"  # Mondays 15:00 UTC
+    # Nightly 09:00 UTC = 1am PST / 2am PDT -- overnight Pacific (nobody touching integration),
+    # and one hour AFTER the nightly test suite (0 8 UTC) so the promoted HEAD is freshly tested
+    # and the two never overlap. GitHub cron is UTC-only (no DST): midnight PST would be 08:00 UTC,
+    # which collides with the test suite, so it is shifted to 09:00 UTC. (#680)
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       reason:
