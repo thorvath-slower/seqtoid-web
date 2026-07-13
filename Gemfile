@@ -60,9 +60,9 @@ gem 'redis', '~> 4.3'
 gem 'sprockets-rails'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
-gem 'rails', '~>7.1.0' # bug-#002: Rails 7.0 EOL -> 7.1
+gem 'rails', '~> 7.2.0', '>= 7.2.3.1' # bug-#002: Rails 7.0 EOL; SMP-1297: 7.1 -> 7.2, floor at 7.2.3.1 (activestorage/activesupport CVEs)
 gem 'rails-controller-testing', '~> 1.0', '>= 1.0.5'
-gem 'railties', '~> 7.1'
+gem 'railties', '~> 7.2'
 gem 'rake'
 # Worker/Scheduler management
 gem 'resque', '~> 2.3'
