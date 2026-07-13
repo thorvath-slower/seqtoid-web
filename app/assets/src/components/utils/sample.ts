@@ -230,8 +230,12 @@ export const sampleErrorInfo = ({
     default:
       status = SampleStatus.SAMPLE_FAILED;
       pillStatus = "failed";
-      message = "Oh no! There was an issue processing your sample.";
-      linkText = "Contact us for help re-running your sample.";
+      // CZID-676 Phase C: self-service recovery now lives in the sample actions
+      // (overflow) menu -- point users there before support is the last resort.
+      message =
+        "Oh no! There was an issue processing your sample. Use the actions menu " +
+        "(the dots in the top-right) to retry, re-run, or report it to our team.";
+      linkText = "Contact us for help.";
       type = "error";
       link = CONTACT_US_LINK;
       break;

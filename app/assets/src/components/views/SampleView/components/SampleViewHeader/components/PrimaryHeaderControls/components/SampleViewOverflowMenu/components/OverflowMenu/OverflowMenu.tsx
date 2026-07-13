@@ -1,4 +1,15 @@
-import { Button, Icon, Menu, MenuItem, Tooltip } from "@czi-sds/components";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Icon,
+  Menu,
+  MenuItem,
+  Tooltip,
+} from "@czi-sds/components";
+import { PrimaryButton, SecondaryButton } from "~/components/ui/controls/buttons";
 import { cx } from "@emotion/css";
 import { PopoverProps } from "@mui/material";
 import React, { useContext, useState } from "react";
@@ -54,6 +65,7 @@ export const OverflowMenu = ({
     useState<PopoverProps["anchorEl"]>(null);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [isRerunConfirmOpen, setIsRerunConfirmOpen] = useState(false);
 
   const openActionsMenu = (event: React.MouseEvent<HTMLElement>) => {
     setMenuAnchorEl(event.currentTarget);
@@ -100,11 +112,12 @@ export const OverflowMenu = ({
   };
 
   const handleRerun = () => {
-    // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      "Re-running starts a fresh analysis and uses compute. Continue?",
-    );
-    if (!confirmed) return;
+    closeActionsMenu();
+    setIsRerunConfirmOpen(true);
+  };
+
+  const confirmRerun = () => {
+    setIsRerunConfirmOpen(false);
     if (isMngs && sampleId != null) {
       runRecovery(() => rerunPipeline(Number(sampleId)));
     } else if (workflowRunId != null) {
@@ -260,6 +273,28 @@ export const OverflowMenu = ({
         workflowLabel={workflowLabel}
         isShortReadMngs={isShortReadMngs}
       />
+      <Dialog
+        open={isRerunConfirmOpen}
+        onClose={() => setIsRerunConfirmOpen(false)}
+        sdsSize="xs"
+      >
+        <DialogTitle title={`Re-run ${workflowShorthand} analysis?`} />
+        <DialogContent>
+          Re-running starts a fresh analysis and uses compute. This may take a
+          while and counts toward the daily re-run limit. Continue?
+        </DialogContent>
+        <DialogActions>
+          <SecondaryButton
+            sdsStyle="rounded"
+            onClick={() => setIsRerunConfirmOpen(false)}
+          >
+            Cancel
+          </SecondaryButton>
+          <PrimaryButton sdsStyle="rounded" onClick={confirmRerun}>
+            Re-run
+          </PrimaryButton>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

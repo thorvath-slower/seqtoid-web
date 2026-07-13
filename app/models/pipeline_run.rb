@@ -1210,6 +1210,15 @@ class PipelineRun < ApplicationRecord
       if ready_for_cache?
         Resque.enqueue(PrecacheReportInfo, id)
       end
+
+      # D2 (CZID-676): a run that was auto-healed (results_load_retry_count > 0) may have
+      # missed its stage-complete taxon index -- that indexing fires on the SFN
+      # stage-complete notification (HandleSfnNotifications), which the cheap retry does
+      # not re-emit. Re-index here so the heatmap is populated without waiting for the
+      # on-view self-heal (ElasticsearchQueryHelper.update_es_for_missing_data).
+      if results_load_retry_count.to_i.positive?
+        Resque.enqueue(IndexTaxons, Rails.configuration.x.constants.default_background, id)
+      end
       event = EventDictionary::PIPELINE_RUN_SUCCEEDED
     elsif results_load_auto_heal_eligible?
       # Compute succeeded but one or more outputs failed to load. Reset the

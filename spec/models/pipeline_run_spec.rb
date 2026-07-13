@@ -871,5 +871,24 @@ describe PipelineRun, type: :model do
         expect(pipeline_run.reload.results_finalized).to eq(PipelineRun::FINALIZED_SUCCESS)
       end
     end
+
+    context "D2: taxon re-index on a healed finalize (CZID-676)" do
+      before do
+        set_outputs!("taxon_counts" => PipelineRun::STATUS_LOADED, "ercc_counts" => PipelineRun::STATUS_LOADED)
+        allow(pipeline_run).to receive(:ready_for_cache?).and_return(false)
+        allow(Resque).to receive(:enqueue)
+      end
+
+      it "re-indexes taxa when the run was auto-healed (retry count > 0)" do
+        pipeline_run.update_column(:results_load_retry_count, 1) # rubocop:disable Rails/SkipsModelValidations
+        pipeline_run.finalize_results(nil)
+        expect(Resque).to have_received(:enqueue).with(IndexTaxons, anything, pipeline_run.id)
+      end
+
+      it "does not re-index a normal (non-healed) success -- avoids double-indexing" do
+        pipeline_run.finalize_results(nil)
+        expect(Resque).not_to have_received(:enqueue).with(IndexTaxons, anything, anything)
+      end
+    end
   end
 end
