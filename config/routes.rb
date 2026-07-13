@@ -83,6 +83,7 @@ Rails.application.routes.draw do
 
       put :reupload_source
       put :kickoff_pipeline
+      put :retry_pipeline_run
       put :cancel_pipeline_run
       put :move_to_project
 
