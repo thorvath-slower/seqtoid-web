@@ -4,16 +4,17 @@
 # removed (no longer present -- fixed by the chamber source-build (#291) + apt-upgrade
 # in the runtime stage since the #674 refresh, incl. libmariadb3 / CVE-2025-13699).
 #
-# The entries below are the ONLY baselined HIGH/CRIT still present in the image, and
-# ALL have a fix -- they are app dependencies to pull forward (gem/npm bump) then
-# remove. Remediation tracked in #474. pkg -> fixed version:
+# SMP-1297 remediation: activestorage/activesupport (Rails 7.2.3.1), faraday,
+# fast-xml-parser, puma (7.2.1), uri (0.13.3) and zlib (3.2.3) were pulled forward
+# and their CVEs removed from this baseline. The entries below map to gems/npm pkgs
+# that already sit at a fixed version in the CURRENT lockfiles (stale from the older
+# image scan), so they should no longer appear once the image rebuilds. They are kept
+# here until a fresh image-scan-validated pass confirms their absence (form-data has a
+# nested-vs-top-level nuance). Remediation tracked in #474. pkg -> fixed version:
 #   braces: 3.0.3
 #   erb: ~> 4.0.3.1, ~> 4.0.4.1, ~> 6.0.1.1, >= 6.0.4
 #   form-data: 2.5.6, 3.0.5, 4.0.6
 #   net-imap: ~> 0.3.10, ~> 0.4.24, ~> 0.5.14, >= 0.6.4; ~> 0.4.24, ~> 0.5.14, >= 0.6.4
-#   puma: ~> 7.2.1, >= 8.0.2
-#   uri: ~> 0.12.5, ~> 0.13.3, >= 1.0.4
-#   zlib: ~> 3.0.1, ~> 3.1.2, >= 3.2.3
 
 CVE-2024-4068
 CVE-2026-41316
@@ -21,7 +22,3 @@ CVE-2026-12143
 CVE-2026-42245
 CVE-2026-42246
 CVE-2026-42257
-CVE-2026-47736
-CVE-2026-47737
-CVE-2025-61594
-CVE-2026-27820

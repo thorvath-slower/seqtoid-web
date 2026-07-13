@@ -2257,7 +2257,7 @@ GEM
       method_source (~> 1.0)
       reline (>= 0.6.0)
     public_suffix (7.0.5)
-    puma (6.6.1)
+    puma (7.2.1)
       nio4r (~> 2.0)
     raabro (1.4.0)
     racc (1.8.1)
@@ -2475,6 +2475,7 @@ GEM
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
     uniform_notifier (1.18.0)
+    uri (0.13.3)
     useragent (0.16.11)
     version_gem (1.1.11)
     voight_kampff (2.0.0)
@@ -2499,6 +2500,7 @@ GEM
       nokogiri (~> 1.8)
     zache (0.15.2)
     zeitwerk (2.8.2)
+    zlib (3.2.3)
 
 PLATFORMS
   ruby
@@ -2558,7 +2560,7 @@ DEPENDENCIES
   parallel (= 1.14.0)
   parallel_tests (~> 4.7)
   pluck_to_hash
-  puma (~> 6.4)
+  puma (~> 7.2, >= 7.2.1)
   rack-cors
   rack-host-redirect
   rack-mini-profiler (~> 3.0)
@@ -2594,10 +2596,12 @@ DEPENDENCIES
   timeout (~> 0.4.0)
   tzinfo-data
   uglifier (~> 4.1)
+  uri (~> 0.13, >= 0.13.3)
   useragent
   warden (~> 1.2)
   web-console (>= 3.5.1)
   webmock (~> 3.6)
+  zlib (~> 3.2, >= 3.2.3)
 
 RUBY VERSION
    ruby 3.3.6p108
