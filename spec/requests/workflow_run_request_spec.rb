@@ -4,7 +4,7 @@ require 'rails_helper'
 #
 # Focus: the read authorization boundary (set_workflow_run scopes via
 # current_power.workflow_runs and renders 404 for non-viewable runs rather than
-# raising), the admin-only :rerun gate, and that the POST batch endpoints filter
+# raising), the owner-scoped :rerun gate (creator or admin, CZID-676), and that the POST batch endpoints filter
 # to viewable objects. See app/controllers/workflow_runs_controller.rb and
 # app/models/power.rb (`power :workflow_runs`).
 RSpec.describe "WorkflowRuns request", type: :request do
@@ -65,14 +65,26 @@ RSpec.describe "WorkflowRuns request", type: :request do
     end
   end
 
-  describe "PUT /workflow_runs/:id/rerun (admin-only)" do
-    it "redirects a regular user to root_path (admin_required)" do
+  describe "PUT /workflow_runs/:id/rerun (owner-scoped, CZID-676)" do
+    # rerun dispatches a new workflow run; isolate the auth path from the dispatch.
+    before { allow_any_instance_of(WorkflowRun).to receive(:rerun) }
+
+    it "lets the run creator (regular user) re-run their own workflow" do
       sign_in @joe
       wr = workflow_run_for(@joe)
 
       put "/workflow_runs/#{wr.id}/rerun"
 
-      expect(response).to redirect_to(root_path)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "returns 404 (not a leak) for a run the user cannot access" do
+      sign_in @joe
+      other = workflow_run_for(@admin)
+
+      put "/workflow_runs/#{other.id}/rerun"
+
+      expect(response).to have_http_status(:not_found)
     end
   end
 
