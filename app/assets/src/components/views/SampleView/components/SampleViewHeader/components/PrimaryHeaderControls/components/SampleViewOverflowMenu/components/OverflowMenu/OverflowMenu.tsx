@@ -60,11 +60,11 @@ export const OverflowMenu = ({
   supportNote,
   onRecoverySuccess,
 }: OverflowMenuProps) => {
-  // Show the menu when there is something actionable: a deletable run (readyToDelete,
-  // which for mNGS needs a report) OR a finalized/failed run that can be recovered.
-  // CZID-676: recovery must appear on FAILED samples (no report -> readyToDelete false),
-  // which is exactly where Retry/Re-run/Report are needed.
-  if (!deleteId || (!readyToDelete && !runFinalized)) return null;
+  // Render the menu whenever there is a run to act on. Delete is shown only when the
+  // run is deletable (readyToDelete); the recovery items (Retry/Re-run/Report) are
+  // ALWAYS shown -- disabled with a tooltip when they can't run -- so they appear on
+  // failed samples too (some failures leave readyToDelete/runFinalized false). CZID-676.
+  if (!deleteId) return null;
   const [menuAnchorEl, setMenuAnchorEl] =
     useState<PopoverProps["anchorEl"]>(null);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
@@ -83,8 +83,11 @@ export const OverflowMenu = ({
   const userOwnsRun = userId === sampleUserId;
   const deleteDisabled = !(userOwnsRun && runFinalized);
 
-  // Self-service recovery (CZID-676 Phase C). Owner-scoped like delete; the server
-  // enforces the same (creator or admin) + the daily cap.
+  // Self-service recovery (CZID-676 Phase C). Retry/Re-run are ALWAYS shown, enabled for
+  // the run's creator and greyed (with a tooltip) for everyone else. Enablement is gated on
+  // ownership only -- NOT runFinalized -- because some failures leave run_finalized false,
+  // and the server already enforces run-state safety (retry no-ops unless the run failed;
+  // re-run no-ops while a run is in progress) plus creator-or-admin + the daily cap.
   const recoveryDisabled = !userOwnsRun || isRecovering;
   const recoveryTooltip = !userOwnsRun
     ? "Only the user that initiated the run can perform this action."
@@ -243,8 +246,7 @@ export const OverflowMenu = ({
         onClose={closeActionsMenu}
       >
         {readyToDelete && renderDeleteRunMenuItem()}
-        {runFinalized &&
-          isMngs &&
+        {isMngs &&
           sampleId != null &&
           renderRecoveryMenuItem(
             "retry-run",
@@ -253,8 +255,7 @@ export const OverflowMenu = ({
             handleRetry,
             recoveryDisabled,
           )}
-        {runFinalized &&
-          (sampleId != null || workflowRunId != null) &&
+        {(sampleId != null || workflowRunId != null) &&
           renderRecoveryMenuItem(
             "rerun-run",
             `Re-run ${workflowShorthand} Analysis`,
@@ -262,14 +263,13 @@ export const OverflowMenu = ({
             handleRerun,
             recoveryDisabled,
           )}
-        {runFinalized &&
-          renderRecoveryMenuItem(
-            "report-run",
-            "Report to our team",
-            supportIcon,
-            handleReportToSupport,
-            false,
-          )}
+        {renderRecoveryMenuItem(
+          "report-run",
+          "Report to our team",
+          supportIcon,
+          handleReportToSupport,
+          false,
+        )}
       </Menu>
       <BulkDeleteModal
         isOpen={isBulkDeleteModalOpen}
