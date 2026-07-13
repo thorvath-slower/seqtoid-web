@@ -94,6 +94,19 @@ const markSampleUploaded = (sampleId: $TSFixMe) =>
     },
   });
 
+// Self-service recovery (CZID-676 Phase C), owner-scoped on the server.
+// retryPipelineRun: cheap reconcile of an mNGS run from cached S3 outputs (uncapped).
+const retryPipelineRun = (sampleId: number) =>
+  putWithCSRF(`/samples/${sampleId}/retry_pipeline_run.json`, {});
+
+// rerunPipeline: full mNGS re-run (new pipeline run; server soft-caps per day).
+const rerunPipeline = (sampleId: number) =>
+  putWithCSRF(`/samples/${sampleId}/kickoff_pipeline.json`, {});
+
+// rerunWorkflowRun: full CG/AMR re-run (server soft-caps per day).
+const rerunWorkflowRun = (workflowRunId: number) =>
+  putWithCSRF(`/workflow_runs/${workflowRunId}/rerun.json`, {});
+
 const uploadFileToUrl = async (
   file: $TSFixMe,
   url: $TSFixMe,
@@ -837,6 +850,9 @@ export {
   kickoffConsensusGenome,
   kickoffAMR,
   markSampleUploaded,
+  retryPipelineRun,
+  rerunPipeline,
+  rerunWorkflowRun,
   modifyFeatureFlagForUsers,
   retryPhyloTree,
   saveProjectDescription,
