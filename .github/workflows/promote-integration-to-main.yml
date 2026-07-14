@@ -42,7 +42,17 @@ concurrency:
 jobs:
   promote:
     # Never run on a fork of this repo.
-    if: github.repository == 'thorvath-slower/seqtoid-web'
+    #
+    # This was `github.repository == 'thorvath-slower/seqtoid-web'`. That string compare is FALSE in the
+    # UCSF org (IT-Academic-Research-Services), so the nightly roll-up would NEVER RUN there: nothing
+    # would reach main, nothing would build, nothing would deploy -- and it would report as a SKIPPED,
+    # GREEN job. Developers would merge to integration and quietly never ship. See platform-overhaul #692.
+    #
+    # Deliberately a repo VARIABLE, not `!github.event.repository.fork`: GitHub reports
+    # IT-ARS/seqtoid-web as isFork=TRUE and thorvath-slower/seqtoid-web as isFork=FALSE, so the fork flag
+    # would enable this in the fork and disable it in the real upstream -- exactly backwards.
+    # Set TRUNK_ROLLUP_ENABLED=true on the canonical repo only; forks leave it unset.
+    if: ${{ vars.TRUNK_ROLLUP_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
