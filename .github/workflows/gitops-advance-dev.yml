@@ -40,7 +40,7 @@ jobs:
       - name: Checkout infra (the GitOps values repo)
         uses: actions/checkout@v6
         with:
-          repository: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          repository: ${{ vars.INFRA_REPO || format('{0}/cypherid-web-infra', github.repository_owner) }}
           # IT-ARS: app-minted token; fork: GITOPS_TOKEN PAT (#74) -- scoped write + PR create.
           token: ${{ steps.app_token.outputs.token || secrets.GITOPS_TOKEN }}
 
@@ -76,7 +76,7 @@ jobs:
         if: steps.advance.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token || secrets.GITOPS_TOKEN }}
-          INFRA_REPO: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          INFRA_REPO: ${{ vars.INFRA_REPO || format('{0}/cypherid-web-infra', github.repository_owner) }}
           KEEP_BRANCH: gitops/advance-dev-${{ steps.advance.outputs.tag }}
         run: |
           set -euo pipefail
@@ -119,7 +119,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token || secrets.GITOPS_TOKEN }}
           TAG: ${{ steps.advance.outputs.tag }}
-          INFRA_REPO: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
+          INFRA_REPO: ${{ vars.INFRA_REPO || format('{0}/cypherid-web-infra', github.repository_owner) }}
         run: |
           set -euo pipefail
           BRANCH="gitops/advance-dev-${TAG}"
