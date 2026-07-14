@@ -74,6 +74,15 @@ module Czid
 end
 
 HealthCheck.setup do |config|
-  # Exclude SMTP server test from standard check (can still use /health_check/email.json explicitly)
-  config.standard_checks -= ["emailconf"]
+  # The k8s liveness/readiness probes hit bare `/health_check`, which runs `standard_checks`.
+  # Pin that set EXPLICITLY to liveness-appropriate checks only. On the Rails 7.2 image the
+  # auto-detected `redis` and `elasticsearch` checks crept into `standard` and fail there --
+  # the redis check connects to 127.0.0.1:6379 (not REDIS_URL) -> ECONNREFUSED, and the
+  # elasticsearch check returns false -- so `/health_check` 500s and the liveness probe
+  # crashloops the web pods (dev then silently serves on the previous image). A liveness probe
+  # must not depend on downstream services (that turns a redis/ES blip into a web-tier outage);
+  # it should only prove the process is up and can reach its DB. database + cache both return
+  # 200 here. redis/elasticsearch remain available at /health_check/redis, /health_check/elasticsearch
+  # for monitoring/readiness. (SMP-1297 / Rails 7.2 dev-deploy incident.)
+  config.standard_checks = %w[database cache]
 end
