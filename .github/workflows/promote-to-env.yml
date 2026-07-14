@@ -41,12 +41,22 @@ jobs:
     # rules; referencing the environment is the authorable hook and is a safe no-op until they exist.)
     environment: ${{ inputs.env_name }}
     steps:
+      # IT-ARS authenticates gitops writes with a GitHub App (repo var CI_APP_ENABLED=true).
+      # The thorvath-slower fork has no app installed, so this step is skipped there and every
+      # token below falls back to the GITOPS_TOKEN PAT. See platform-overhaul #683.
+      - name: Generate app token
+        id: app_token
+        if: ${{ vars.CI_APP_ENABLED == 'true' }}
+        uses: chanzuckerberg/github-app-token@365b1f2db827eb8f17288ec335b1a7e3c03ff683 # v1.1.4
+        with:
+          app_id: ${{ secrets.GH_ACTIONS_HELPER_APP_ID }}
+          private_key: ${{ secrets.GH_ACTIONS_HELPER_PK }}
       - name: Checkout infra (the GitOps values repo)
         uses: actions/checkout@v6
         with:
           repository: ${{ vars.INFRA_REPO || 'thorvath-slower/cypherid-web-infra' }}
-          # GITOPS_TOKEN (#74): scoped write to the infra repo + PR create.
-          token: ${{ secrets.GITOPS_TOKEN }}
+          # IT-ARS: app-minted token; fork: GITOPS_TOKEN PAT (#74) -- scoped write + PR create.
+          token: ${{ steps.app_token.outputs.token || secrets.GITOPS_TOKEN }}
 
       - name: Install yq
         run: |
@@ -110,7 +120,7 @@ jobs:
       - name: Open the promotion PR
         if: steps.advance.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token || secrets.GITOPS_TOKEN }}
           ENV_NAME: ${{ inputs.env_name }}
           DIGEST: ${{ inputs.digest }}
           SHA_TAG: ${{ inputs.sha_tag }}
