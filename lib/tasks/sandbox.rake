@@ -72,18 +72,36 @@ namespace :sandbox do
       sh!("chamber export --format json #{src_service} > #{f.path}")
       sh!("chamber import #{n[:ssm]} #{f.path}")
     end
-    sh!("chamber write #{n[:ssm]} db_username #{n[:user]}")
-    sh!("chamber write #{n[:ssm]} db_password #{password}")
-    sh!("chamber write #{n[:ssm]} db_name #{n[:schema]}")
-
-    # Point S3 at the sandbox bucket. The copied config carries dev's SAMPLES_BUCKET_NAME,
-    # but the sandbox IRSA role can only WRITE seqtoid-sandbox/* -- leaving dev's bucket
-    # here would make every upload/pipeline S3 write fail with AccessDenied. Override to
-    # the sandbox bucket (the role's write scope); per-PR keys are separated by the
-    # sandbox's own DB references. (SAMPLES_BUCKET_NAME + the _V1 variant the app reads.)
+    # Override the DB + S3 config copied from dev with the sandbox-scoped values.
+    #
+    # These MUST be written UPPERCASE. chamber stores every key uppercased and injects env vars by the
+    # stored key, so `chamber import` from dev lands DB_USERNAME / SAMPLES_BUCKET_NAME (uppercase), and
+    # writing lowercase `db_username` created a SECOND, DISTINCT key rather than overriding the import.
+    # The pod then saw BOTH, and the imported uppercase value won -- so a sandbox connected to the dev
+    # Aurora as the MASTER user (DB_USERNAME=idseqmaster) and pointed S3 at dev's samples bucket. It
+    # failed closed only by luck (the master password did not match the scoped one), and did so
+    # non-deterministically. Writing the same UPPERCASE keys overwrites the import in place. See #697.
     sandbox_bucket = ENV["SANDBOX_SAMPLES_BUCKET"] || "seqtoid-sandbox"
-    sh!("chamber write #{n[:ssm]} samples_bucket_name #{sandbox_bucket}")
-    sh!("chamber write #{n[:ssm]} samples_bucket_name_v1 #{sandbox_bucket}")
+    sh!("chamber write #{n[:ssm]} DB_USERNAME #{n[:user]}")
+    sh!("chamber write #{n[:ssm]} DB_PASSWORD #{password}")
+    sh!("chamber write #{n[:ssm]} DB_NAME #{n[:schema]}")
+    sh!("chamber write #{n[:ssm]} SAMPLES_BUCKET_NAME #{sandbox_bucket}")
+    sh!("chamber write #{n[:ssm]} SAMPLES_BUCKET_NAME_V1 #{sandbox_bucket}")
+
+    # Belt-and-braces: delete any lowercase duplicates a previous (buggy) provision may have left in
+    # this path, so exactly one key per setting survives. Ignore "not found" -- a fresh path has none.
+    %w[db_username db_password db_name samples_bucket_name samples_bucket_name_v1].each do |stale|
+      sh!("chamber delete #{n[:ssm]} #{stale} || true")
+    end
+
+    # Assert isolation held before the pod is allowed to boot: the resolved DB user must be the scoped
+    # sandbox user, never the master. Fail the provision Job loudly rather than let a sandbox come up
+    # pointed at dev-as-master. (chamber exec resolves the same precedence the app will see.)
+    resolved_user = `chamber exec #{n[:ssm]} -- printenv DB_USERNAME`.strip
+    unless resolved_user == n[:user]
+      abort("[sandbox:provision] FATAL: DB_USERNAME resolved to '#{resolved_user}', expected '#{n[:user]}'. " \
+            "Refusing to provision a sandbox that is not DB-isolated. See platform-overhaul #697.")
+    end
 
     puts "[sandbox:provision] done -- pod may now boot with CHAMBER_SERVICE=#{n[:ssm]} DB_NAME=#{n[:schema]}"
   end
