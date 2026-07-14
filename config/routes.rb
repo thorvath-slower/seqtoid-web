@@ -364,6 +364,15 @@ Rails.application.routes.draw do
   # See health_check gem
   get 'health_check' => "health_check/health_check#index"
 
+  # Report the exact build serving this environment. GIT_VERSION is the commit baked into
+  # the image at build time (Dockerfile ARG GIT_COMMIT -> ENV GIT_VERSION); until now it was
+  # only reachable via window.GIT_VERSION, which renders solely when SEGMENT_JS_ID is set, so
+  # non-prod envs exposed no way to tell which commit they were running. A bare Rack endpoint
+  # (like /favicon.ico below) so it answers without auth, as /health_check does -- deploy
+  # verification has to work before anyone can log in. MUST stay above the '/:id' shortener
+  # catch-all, or the shortener swallows it.
+  get '/revision', to: proc { [200, { 'Content-Type' => 'text/plain' }, [ENV.fetch('GIT_VERSION', 'unknown')]] }
+
   # No default favicon.ico
   get '/favicon.ico', to: proc { [404, {}, ['']] }
 
