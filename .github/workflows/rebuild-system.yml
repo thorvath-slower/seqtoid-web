@@ -33,7 +33,8 @@ on:
 
 env:
   AWS_DEFAULT_OUTPUT: json
-  AWS_REGION: us-west-2
+  # CZID-83 (CICD-6): region from Actions variables (fallback preserves current behavior when unset).
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
 
 run-name: "⚠️ REBUILD ${{ github.event.inputs.destination }} (DESTRUCTIVE) by ${{ github.actor }}"
 
@@ -79,8 +80,10 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6
         with:
-          aws-region: us-west-2
-          role-to-assume: ${{ github.event.inputs.destination == 'prod' && secrets.PROD_AWS_ROLE || secrets.DEV_AWS_ROLE }}
+          # CZID-83 (CICD-6): region from env var; role ARNs from Actions variables (ARNs are
+          # identifiers, not secrets). PROD_AWS_ROLE / DEV_AWS_ROLE must be set before running green.
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ github.event.inputs.destination == 'prod' && vars.PROD_AWS_ROLE || vars.DEV_AWS_ROLE }}
           role-session-name: czid-web-${{ github.event.inputs.destination }}-rebuild
       - name: Rebuild system (destroy → rebuild → taxon → OpenSearch → roll)
         run: bin/rebuild_system "${{ github.event.inputs.destination }}" "${{ github.event.inputs.image_tag }}" "${{ github.actor }}"
