@@ -207,6 +207,29 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
      fi \
   && rm -rf /var/lib/apt/lists/*
 
+# Ruby stdlib CVE hardening (#474): ruby:3.3.6-slim ships stale DEFAULT/bundled gemspecs
+# (uri 0.13.1, zlib 3.1.1, erb 4.0.3, net-imap 0.4.9.1) that a Trivy image scan flags HIGH
+# even though the app bundle (copied below) carries the patched versions the app actually runs
+# under bundler (uri 0.13.3, zlib 3.2.3, erb 6.0.4, net-imap 0.6.4.1 -- see Gemfile.lock).
+# Pinning them in the Gemfile fixes the RUNTIME but NOT the base-image files, so the scan still
+# fails (this is what blocked dev deploys in #319). Fix here in the image:
+#   - uri + net-imap are pure Ruby: install the patched versions at the system level too.
+#   - erb + zlib have native extensions and cannot compile in this slim (no-toolchain) stage;
+#     their patched, pre-compiled copies live in the bundle, so we only drop the stale base
+#     gemspecs. The core lib files remain on $LOAD_PATH, so `require` still works.
+# Result: the Trivy image scan finds only the patched gemspecs; nothing vulnerable remains to
+# baseline. Validated by an amd64 image scan before the .trivyignore entries were removed.
+RUN set -eux; \
+  gem install uri:0.13.3 net-imap:0.6.4.1 --no-document; \
+  spec=/usr/local/lib/ruby/gems/3.3.0/specifications; \
+  gems=/usr/local/lib/ruby/gems/3.3.0/gems; \
+  rm -f "$spec"/default/uri-0.13.1.gemspec \
+        "$spec"/default/erb-4.0.3.gemspec \
+        "$spec"/default/zlib-3.1.1.gemspec \
+        "$spec"/net-imap-0.4.9.1.gemspec; \
+  rm -rf "$gems"/net-imap-0.4.9.1; \
+  ruby -ruri -rzlib -rerb -rnet/imap -e 'puts "ruby stdlib require ok: " + RUBY_VERSION'
+
 # Built artifacts from the builder stage.
 COPY --from=builder /usr/local/bundle /usr/local/bundle
 COPY --from=builder /usr/local/bin/samtools /usr/local/bin/samtools
