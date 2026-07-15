@@ -123,9 +123,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish manifest list to GHCR
         env:
-          GHCR_REPO: ghcr.io/${{ github.repository_owner }}/seqtoid-web
           PUSH_LATEST: ${{ github.ref == 'refs/heads/main' }}
         run: |
+          # GHCR (like Docker registries generally) requires a LOWERCASE repository name.
+          # github.repository_owner is the org verbatim: 'IT-Academic-Research-Services' has capitals,
+          # which GHCR rejects ("invalid reference format: ... must be lowercase"). The fork owner
+          # (thorvath-slower) is already lowercase, so this never surfaced there. Lowercase the built-in
+          # $GITHUB_REPOSITORY_OWNER in-shell (Actions has no lowercase expression function). See #692.
+          GHCR_REPO="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/seqtoid-web"
           SHA_TAG="sha-${GITHUB_SHA::8}"
           docker buildx imagetools create -t "${GHCR_REPO}:${SHA_TAG}" "${IMAGE_REF}"
           if [ "$PUSH_LATEST" = "true" ]; then

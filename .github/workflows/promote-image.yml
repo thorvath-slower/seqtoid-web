@@ -49,7 +49,10 @@ concurrency:
 env:
   AWS_REGION: us-west-2
   # The GHCR source-of-record repo (from #392). The digest resolved here is the promotion unit.
-  GHCR_REPO: ghcr.io/${{ github.repository_owner }}/seqtoid-web
+  # GHCR_REPO is set at runtime by the "Normalize GHCR repo" step below, NOT here: GHCR requires a
+  # LOWERCASE repository name, and github.repository_owner is verbatim-cased ('IT-Academic-Research-
+  # Services' has capitals, rejected as "invalid reference format ... must be lowercase"). Actions has
+  # no lowercase expression function, so it is lowercased in-shell via ${GITHUB_REPOSITORY_OWNER,,}. #692
   # Default = the DEV account (491013321714) + its dedicated CI role, matching
   # build-docker-image.yml. The old default was the idseq-support account (941377154785 /
   # gha-seqtoid) -- a stale idseq shared-registry holdover; per isolated-envs (D5) dev routes
@@ -70,6 +73,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Normalize GHCR repo (lowercase owner)
+        # GHCR rejects capitals in the owner; lowercase it once here so every later step + action input
+        # (env.GHCR_REPO) uses a valid reference. See the env note above and platform-overhaul #692.
+        run: echo "GHCR_REPO=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/seqtoid-web" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
         uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4
