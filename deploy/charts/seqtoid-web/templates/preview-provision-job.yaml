@@ -65,6 +65,12 @@ spec:
               value: {{ $src | quote }}
             - name: SANDBOX_PR_NUMBER
               value: {{ .Values.preview.prNumber | quote }}
+            {{- with .Values.preview.samplesBucket }}
+            # The dedicated preview bucket. See values.yaml: unset falls back to the old
+            # `seqtoid-sandbox`, which is the team's 4.8 TB research bucket, not a throwaway.
+            - name: SANDBOX_SAMPLES_BUCKET
+              value: {{ . | quote }}
+            {{- end }}
           resources:
             {{- toYaml .Values.preview.resources | nindent 12 }}
 {{- end }}

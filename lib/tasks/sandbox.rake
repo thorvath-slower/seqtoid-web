@@ -94,7 +94,27 @@ namespace :sandbox do
     n = sandbox_names(pr)
     env = ENV.fetch("ENVIRONMENT", "dev")
     src_service = ENV["SANDBOX_SRC_CHAMBER_SERVICE"] || "idseq-#{env}-web"
-    sandbox_bucket = ENV["SANDBOX_SAMPLES_BUCKET"] || "seqtoid-sandbox"
+    # REQUIRED, with no fallback, deliberately. This used to default to `seqtoid-sandbox` -- which
+    # sounds like a throwaway and is not: it is a hand-created, un-terraformed bucket holding
+    # ~4.8 TB of the team's research data (validation sets, time trials, taxid indexes, personal
+    # prefixes), backup status unknown. Every sandbox was uploading into it, and the preview role
+    # granted DeleteObject across the whole thing, with prefix isolation resting only on this
+    # value. A default that silently points at that bucket is how that happened, so there is no
+    # default now: an unset bucket fails the provision loudly instead of quietly polluting
+    # research data. Set it to the terraformed preview bucket (infra: terraform output
+    # preview_samples_bucket) via the chart's preview.samplesBucket.
+    sandbox_bucket = ENV["SANDBOX_SAMPLES_BUCKET"].to_s
+    if sandbox_bucket.empty?
+      abort("[sandbox:provision] FATAL: SANDBOX_SAMPLES_BUCKET is not set. Refusing to guess a " \
+            "samples bucket -- the historical default (seqtoid-sandbox) is the team's research " \
+            "data, not a sandbox. Set chart value preview.samplesBucket to the terraformed " \
+            "preview bucket. See platform-overhaul #697.")
+    end
+    if sandbox_bucket == "seqtoid-sandbox"
+      abort("[sandbox:provision] FATAL: SANDBOX_SAMPLES_BUCKET is 'seqtoid-sandbox', which holds " \
+            "the team's research data (~4.8 TB: validation sets, time trials, taxid indexes). " \
+            "Sandboxes must not write there. Use the dedicated preview bucket. See #697.")
+    end
 
     puts "[sandbox:provision] pr=#{pr} schema=#{n[:schema]} user=#{n[:user]} ssm=#{n[:ssm]}"
 
