@@ -171,6 +171,23 @@ Rails.application.configure do
     "https://assets.dev.seqtoid.org",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Per-PR preview sandboxes (pr-<N>.dev.seqtoid.org, #616/#697).
+    #
+    # THIS ENTRY IS FOR THE DEV APP, NOT THE SANDBOX. assets.dev.seqtoid.org is a CloudFront
+    # distribution whose ORIGIN is this Rails app (dev/web assets.tf), so when a sandbox page
+    # loads a font from the CDN, it is THIS app that decides whether that origin may read it.
+    # Without this, every icon font is blocked -- "Access to font at
+    # https://assets.dev.seqtoid.org/assets/fontawesome-webfont.woff2 from origin
+    # https://pr-25.dev.seqtoid.org has been blocked by CORS policy" -- and the UI renders empty
+    # boxes where the dropdown arrows should be. Fonts are CORS-restricted by browsers while
+    # JS/CSS are not, which is why sandboxes looked ALMOST right.
+    #
+    # A Regexp because PR numbers are unbounded and the list cannot enumerate them (rack-cors
+    # 3.0.0 handles Regexp origins: resources.rb `when Proc, Regexp, ...`). It grants no access:
+    # rack_cors.rb scopes this allow-block to `resource '/assets/*'`, so it only permits reading
+    # public front-end assets a sandbox already fetches -- no API, no data. Anchored, so
+    # pr-25.dev.seqtoid.org.evil.com and evil-pr-25.dev.seqtoid.org do NOT match.
+    %r{\Ahttps://pr-\d+\.dev\.seqtoid\.org\z},
   ]
 
   # web is the container name for the rails server in our docker config
