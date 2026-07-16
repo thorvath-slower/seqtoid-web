@@ -80,8 +80,10 @@ namespace :sandbox do
   def ssm_param_names(service)
     out = `aws ssm get-parameters-by-path --path /#{service}/ --recursive --query 'Parameters[].Name' --output text 2>&1`
     raise "aws ssm get-parameters-by-path failed for /#{service} (exit #{$CHILD_STATUS.exitstatus}): #{out.strip}" unless $CHILD_STATUS.success?
+
     names = out.split
     raise "aws ssm get-parameters-by-path returned NO params for /#{service}; refusing to treat that as 'nothing to do'" if names.empty?
+
     names
   end
 
@@ -210,6 +212,7 @@ namespace :sandbox do
       ssm_param_names(n[:ssm])
     rescue RuntimeError => e
       raise unless e.message.include?("returned NO params")
+
       [] # genuinely already torn down
     end
     ssm_delete_params!(names)
