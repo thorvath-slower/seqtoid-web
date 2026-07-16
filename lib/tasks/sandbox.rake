@@ -145,6 +145,17 @@ namespace :sandbox do
       scoped["DB_NAME"] = n[:schema]
       scoped["SAMPLES_BUCKET_NAME"] = sandbox_bucket
       scoped["SAMPLES_BUCKET_NAME_V1"] = sandbox_bucket
+      # The sandbox serves on its OWN host, so it needs its OWN SERVER_DOMAIN; importing dev's
+      # pointed all three consumers at dev. Most visibly it made the sandbox return 403 "Blocked
+      # hosts" on every page: config/environments/development.rb allowlists ENV["SERVER_DOMAIN"],
+      # and application.rb's `.seqtoid.org` entry does NOT cover us -- Rails 7.2 compiles a leading
+      # dot with SUBDOMAIN_REGEX = /(?:[a-z0-9-]+\.)/ and a `?`, i.e. AT MOST ONE label, so it
+      # allows dev.seqtoid.org but not pr-23.dev.seqtoid.org (two labels). Setting this exact host
+      # is tighter than widening the allowlist to a wildcard, and also fixes rack_cors and the
+      # bulk-download callback URLs (app/models/bulk_download.rb), which both read SERVER_DOMAIN and
+      # were sending sandbox traffic to dev. Host must match the appset's ingress.host
+      # (pr-<N>.dev.seqtoid.org); override via SANDBOX_SERVER_DOMAIN if that ever changes.
+      scoped["SERVER_DOMAIN"] = ENV["SANDBOX_SERVER_DOMAIN"] || "https://pr-#{pr}.dev.seqtoid.org"
       File.write(f.path, JSON.pretty_generate(scoped))
       # Import (not write) so the scoped values land under the SAME uppercase keys the app reads, and
       # overwrite the imported dev values in place rather than racing them. Doing this in one import
