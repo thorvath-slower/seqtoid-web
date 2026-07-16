@@ -213,6 +213,68 @@ namespace :sandbox do
     puts "[sandbox:provision] done -- pod may now boot with CHAMBER_SERVICE=#{n[:ssm]} DB_NAME=#{n[:schema]}"
   end
 
+  # Copy the source env's user rows into the sandbox schema.
+  #
+  # WHY THIS EXISTS: a sandbox gets its OWN empty schema (that isolation is the point, #697), and
+  # db/seeds.rb creates ZERO users. Auth0 authenticates fine, then `User.find_by(email:)`
+  # (app/helpers/auth0_helper.rb) finds nothing in idseq_pr_<N> and the callback renders "Your
+  # account does not exist on this server". So NOBODY could ever log into a sandbox -- it served
+  # pages and nothing else. There is no create-on-miss path in the callback, and the
+  # AUTO_ACCOUNT_CREATION_V1 AppConfig does not help (it gates a logged-OUT registration mutation,
+  # which would also 409 against a user who already exists in the Auth0 tenant).
+  #
+  # Auth0 already holds the identity; the sandbox only needs a matching local row. Copying dev's
+  # users means anyone who can log into dev can log into any sandbox, with no list to maintain.
+  # This copies USER ROWS ONLY -- never samples, projects or any other data.
+  #
+  # MUST run AFTER the migrate hook (the users table does not exist until then) and as the
+  # PROVISIONER (the scoped sbx_pr_<N> user has no grant on idseq_dev and cannot read it). Hence
+  # its own PreSync hook at a sync-wave after migrate, not part of provision.
+  desc "Copy the source env's user rows into the sandbox schema so devs can actually log in"
+  task :seed_users do
+    pr = sandbox_pr_number!
+    n = sandbox_names(pr)
+    env = ENV.fetch("ENVIRONMENT", "dev")
+    src_schema = ENV["SANDBOX_SRC_SCHEMA"] || "idseq_#{env}"
+
+    # The sandbox name is built only from a validated integer, but assert anyway: copying a schema
+    # onto itself, or ever treating the shared schema as a destination, must be impossible.
+    raise "refusing to seed users: source #{src_schema} == destination #{n[:schema]}" if src_schema == n[:schema]
+
+    c = admin_client
+
+    # Idempotent: Argo re-runs this hook on every sync. Only seed a schema that has no users yet,
+    # so a re-sync never duplicates rows or clobbers state a reviewer created by hand.
+    existing = c.query("SELECT COUNT(*) AS n FROM `#{n[:schema]}`.users").first["n"].to_i
+    if existing.positive?
+      puts "[sandbox:seed_users] #{n[:schema]}.users already has #{existing} row(s) -- skipping"
+      c.close
+      next
+    end
+
+    # Copy the INTERSECTION of columns, never `SELECT *`. A PR branch is free to add or drop a
+    # users column (that is half the point of a preview sandbox), and the sandbox schema is
+    # migrated to the PR's schema while dev is not -- so the column lists legitimately differ and
+    # `SELECT *` would fail or silently mis-map.
+    cols = c.query(<<~SQL).map { |r| r["COLUMN_NAME"] }
+      SELECT s.COLUMN_NAME
+      FROM information_schema.COLUMNS s
+      JOIN information_schema.COLUMNS d
+        ON d.COLUMN_NAME = s.COLUMN_NAME AND d.TABLE_NAME = 'users' AND d.TABLE_SCHEMA = '#{n[:schema]}'
+      WHERE s.TABLE_NAME = 'users' AND s.TABLE_SCHEMA = '#{src_schema}'
+    SQL
+    raise "refusing to seed users: no common columns between #{src_schema}.users and #{n[:schema]}.users" if cols.empty?
+
+    quoted = cols.map { |col| "`#{col}`" }.join(", ")
+    c.query("INSERT INTO `#{n[:schema]}`.users (#{quoted}) SELECT #{quoted} FROM `#{src_schema}`.users")
+    copied = c.query("SELECT COUNT(*) AS n FROM `#{n[:schema]}`.users").first["n"].to_i
+    c.close
+
+    puts "[sandbox:seed_users] copied #{copied} user row(s) from #{src_schema} into #{n[:schema]} (#{cols.size} columns)"
+    puts "[sandbox:seed_users] NOTE: these rows are PII and are dropped with the schema on teardown; " \
+         "`rake sandbox:reap_orphans` is the backstop if teardown never runs."
+  end
+
   desc "Tear down a per-PR sandbox: drop the schema + user and delete its SSM path"
   task :teardown do
     pr = sandbox_pr_number!
@@ -243,6 +305,97 @@ namespace :sandbox do
     puts "[sandbox:teardown] deleted #{names.size} SSM params under #{ssm_path}"
 
     puts "[sandbox:teardown] done"
+  end
+
+  # THE BACKSTOP. Reconcile every sandbox that physically exists against the PRs that are actually
+  # open, and tear down anything left over.
+  #
+  # WHY THIS IS NOT OPTIONAL: sandbox teardown is BEST-EFFORT and has three known ways to never
+  # run, each of which strands a schema full of copied user PII (see sandbox:seed_users):
+  #   (a) the teardown Job renders from the PR head SHA, and the gitops flow closes PRs with
+  #       --delete-branch -- once that commit is unreachable the PostDelete hook cannot render;
+  #   (b) the teardown Job pulls seqtoid-web-preview:sha-<head8>, but that ECR repo expires all but
+  #       the 30 most recent tags, so a long-lived PR cannot pull its own teardown image;
+  #   (c) any failed teardown Job wedges deletion behind the Argo finalizer forever.
+  # In all three the only signal is an Application stuck Terminating. This system has already lost
+  # cleanup twice (leaked ~40 SSM params; orphaned namespaces). A hook that usually runs is not a
+  # retention guarantee, and "usually" is not good enough for PII.
+  #
+  # This task depends on NONE of that machinery: it lists what exists, asks GitHub what is open,
+  # and reaps the difference. Run it on a schedule from a STABLE image (never a per-PR tag, which
+  # is failure mode (b) all over again).
+  #
+  # FAILS CLOSED: if the open-PR list cannot be fetched, it reaps NOTHING rather than guessing --
+  # a bad PR list would drop the schema of a live sandbox someone is using.
+  desc "Reap sandbox schemas/users/SSM paths whose PR is no longer open (backstop for teardown)"
+  task :reap_orphans do
+    require "json"
+    require "net/http"
+
+    repo = ENV["SANDBOX_GITHUB_REPO"] || "IT-Academic-Research-Services/seqtoid-web"
+    token = ENV["GITHUB_TOKEN"].to_s
+    dry_run = ENV["SANDBOX_REAP_DRY_RUN"] == "1"
+    raise "GITHUB_TOKEN is required: refusing to reap without an authoritative open-PR list" if token.empty?
+
+    # Every open PR number, paginated. Any failure raises -- see FAILS CLOSED above.
+    open_prs = []
+    page = 1
+    loop do
+      uri = URI("https://api.github.com/repos/#{repo}/pulls?state=open&per_page=100&page=#{page}")
+      req = Net::HTTP::Get.new(uri)
+      req["Authorization"] = "Bearer #{token}"
+      req["Accept"] = "application/vnd.github+json"
+      res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |http| http.request(req) }
+      raise "GitHub API #{res.code} listing open PRs for #{repo}: #{res.body.to_s[0, 200]}" unless res.is_a?(Net::HTTPSuccess)
+
+      batch = JSON.parse(res.body)
+      break if batch.empty?
+
+      open_prs.concat(batch.map { |pr| pr["number"].to_i })
+      page += 1
+    end
+    puts "[sandbox:reap_orphans] #{repo}: #{open_prs.size} open PR(s)"
+
+    # What actually exists, from the two systems that hold state.
+    c = admin_client
+    live_schemas = c.query("SHOW DATABASES").map { |r| r.values.first }
+                    .filter_map { |db| Regexp.last_match(1).to_i if db =~ /\Aidseq_pr_([1-9][0-9]*)\z/ }
+    ssm_prs = `aws ssm describe-parameters --query 'Parameters[].Name' --output text 2>&1`
+              .split.filter_map { |nm| Regexp.last_match(1).to_i if nm =~ %r{\A/idseq-sandbox-pr-([1-9][0-9]*)-web/} }
+              .uniq
+    c.close
+
+    orphans = (live_schemas | ssm_prs).reject { |pr| open_prs.include?(pr) }.sort
+    puts "[sandbox:reap_orphans] schemas=#{live_schemas.sort.inspect} ssm=#{ssm_prs.sort.inspect} " \
+         "-> orphans=#{orphans.inspect}#{dry_run ? ' (DRY RUN)' : ''}"
+
+    if orphans.empty?
+      puts "[sandbox:reap_orphans] nothing to reap"
+      next
+    end
+
+    # Reap each orphan through the SAME teardown task, so there is exactly one implementation of
+    # "destroy a sandbox" and the backstop cannot drift from the real path. Keep going on failure
+    # so one wedged sandbox cannot block the rest, then fail loudly at the end.
+    failed = []
+    orphans.each do |pr|
+      if dry_run
+        puts "[sandbox:reap_orphans] would tear down pr=#{pr}"
+        next
+      end
+      puts "[sandbox:reap_orphans] tearing down orphaned pr=#{pr}"
+      begin
+        ENV["SANDBOX_PR_NUMBER"] = pr.to_s
+        Rake::Task["sandbox:teardown"].reenable
+        Rake::Task["sandbox:teardown"].invoke
+      rescue StandardError => e
+        warn "[sandbox:reap_orphans] FAILED to tear down pr=#{pr}: #{e.message}"
+        failed << pr
+      end
+    end
+    raise "[sandbox:reap_orphans] #{failed.size} sandbox(es) failed to reap: #{failed.inspect}" unless failed.empty?
+
+    puts "[sandbox:reap_orphans] reaped #{orphans.size} orphaned sandbox(es)"
   end
 
   # Idempotent seed for the sandbox migrate hook. db:seed (db/seeds.rb) uses
