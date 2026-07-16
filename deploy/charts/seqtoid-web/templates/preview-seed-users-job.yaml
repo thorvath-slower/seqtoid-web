@@ -1,28 +1,33 @@
 {{- if .Values.preview.enabled -}}
 {{- $src := .Values.preview.srcChamberService | default (printf "idseq-%s-web" .Values.environment) -}}
-# Per-PR sandbox PROVISION Job (#616). PreSync hook at sync-wave -10 -- runs after the
-# provisioner SA (-20) and BEFORE the migrate hook (0), so the isolated schema exists
-# before `db:migrate` runs against it (via DB_NAME).
+# Per-PR sandbox SEED-USERS Job (#697). PreSync hook at sync-wave 10 -- deliberately AFTER the
+# migrate hook (0), unlike provision (-10).
 #
-# Runs `rake sandbox:provision` as the elevated provisioner SA, with CHAMBER_SERVICE
-# pointed at the SOURCE service (idseq-<env>-web) -- NOT the sandbox path -- so the
-# entrypoint's `chamber exec` injects the master DB creds + shared config the task needs
-# to create the schema/user and seed the sandbox SSM path. Deliberately does NOT use
-# commonEnv (which carries the app's sandbox CHAMBER_SERVICE/DB_NAME extraEnv).
+# WHY A SEPARATE HOOK instead of folding this into provision or migrate:
+#   - It cannot run in provision (-10): the `users` table does not exist until `db:migrate` has
+#     run against the fresh schema, and provision runs before that.
+#   - It cannot run in migrate (0): migrate holds the SANDBOX's scoped creds (sbx_pr_<N>), which
+#     have GRANT on idseq_pr_<N> only and physically cannot read idseq_<env>.users. That grant
+#     boundary is the isolation guarantee (#697) and must not be widened to make this convenient.
+# So it needs the provisioner's master creds AND a migrated schema -- which is exactly "PreSync,
+# after migrate". The provisioner SA is a PreSync hook at -20, so it is present here too.
 #
-# hook-delete-policy BeforeHookCreation only (mirrors migrate #481): an in-flight
-# provision is never killed by an overlapping sync; the task is idempotent on retry.
+# What it fixes: a sandbox has its own empty schema and db/seeds.rb creates no users, so Auth0
+# would authenticate a dev and the app would then find no matching row and refuse the login with
+# "Your account does not exist on this server" -- i.e. NOBODY could log into a sandbox at all.
+#
+# Idempotent (skips a schema that already has users), so re-syncs are safe. Copies user rows ONLY.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "seqtoid-web.fullname" . }}-sandbox-provision
+  name: {{ include "seqtoid-web.fullname" . }}-sandbox-seed-users
   labels:
     {{- include "seqtoid-web.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sandbox-provision
+    app.kubernetes.io/component: sandbox-seed-users
   annotations:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-wave: "10"
 spec:
   backoffLimit: {{ .Values.preview.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.preview.activeDeadlineSeconds }}
@@ -34,7 +39,7 @@ spec:
         karpenter.sh/do-not-disrupt: "true"
       labels:
         {{- include "seqtoid-web.labels" . | nindent 8 }}
-        app.kubernetes.io/component: sandbox-provision
+        app.kubernetes.io/component: sandbox-seed-users
     spec:
       restartPolicy: Never
       serviceAccountName: {{ .Values.preview.provisioner.serviceAccountName }}
@@ -43,10 +48,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: sandbox-provision
+        - name: sandbox-seed-users
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["rake", "sandbox:provision"]
+          args: ["rake", "sandbox:seed_users"]
           env:
             - name: RAILS_ENV
               value: development
@@ -58,19 +63,14 @@ spec:
               value: {{ .Values.aws.region | quote }}
             - name: AWS_DEFAULT_REGION
               value: {{ .Values.aws.region | quote }}
-            # Source config (master creds + shared secrets) -- NOT the sandbox path.
+            # Source config (master creds) -- NOT the sandbox path. The task reads
+            # idseq-<env>-web's users table and writes into the sandbox schema.
             - name: CHAMBER_SERVICE
               value: {{ $src | quote }}
             - name: SANDBOX_SRC_CHAMBER_SERVICE
               value: {{ $src | quote }}
             - name: SANDBOX_PR_NUMBER
               value: {{ .Values.preview.prNumber | quote }}
-            {{- with .Values.preview.samplesBucket }}
-            # The dedicated preview bucket. See values.yaml: unset falls back to the old
-            # `seqtoid-sandbox`, which is the team's 4.8 TB research bucket, not a throwaway.
-            - name: SANDBOX_SAMPLES_BUCKET
-              value: {{ . | quote }}
-            {{- end }}
           resources:
             {{- toYaml .Values.preview.resources | nindent 12 }}
 {{- end }}
