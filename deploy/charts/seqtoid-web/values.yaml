@@ -42,7 +42,15 @@ replicaCount: 2
 
 aws:
   region: us-west-2
-  # Account id, used to template SAMPLES_BUCKET_NAME (mirrors the czecs default).
+  # Account id. Templates SAMPLES_BUCKET_NAME (mirrors the czecs default) AND is exported to
+  # pods as AWS_ACCOUNT_ID, which db:seed needs to build the Step Functions ARNs it writes into
+  # app_configs (lib/seed_resources/app_configs.rb).
+  #
+  # If this is empty, AWS_ACCOUNT_ID is not exported and db:seed silently produces ARNs with an
+  # EMPTY account field -- arn:aws:states:us-west-2::stateMachine:... -- and every pipeline
+  # dispatch dies instantly with "Invalid Arn: 'AccountId can not be empty'". Long-lived envs
+  # like dev do not notice: their app_configs rows were seeded correctly once, long ago. A
+  # per-PR sandbox seeds FRESH every time, so it could never dispatch a pipeline at all.
   # Empty by default; per-env values set the real account.
   accountId: ""
   # Override the samples bucket name outright if it doesn't follow the pattern.
