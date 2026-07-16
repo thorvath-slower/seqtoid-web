@@ -166,10 +166,23 @@ namespace :sandbox do
     # DB_PASSWORD/DB_NAME falls back toward the dev master creds, which is the failure this exists to
     # prevent. Also assert the collision itself is gone -- with duplicate spellings present these
     # checks are a COIN FLIP that passes ~half the time and certifies nothing.
-    dupes = ssm_param_names(n[:ssm]).map { |name| name.split("/").last }.group_by(&:upcase).select { |_, v| v.size > 1 }
+    # POLL, do not snapshot. GetParametersByPath is eventually consistent: immediately after the
+    # deletes above it still lists the names it just removed, so asserting on a single read failed the
+    # Job with a FATAL naming keys that were already gone. Wait for the listing to actually converge,
+    # and only then decide. Still fails closed -- if the duplicates are real they never clear and we
+    # abort with the same message, just after the window instead of before it.
+    deadline = Time.now + 120
+    dupes = {}
+    loop do
+      dupes = ssm_param_names(n[:ssm]).map { |name| name.split("/").last }.group_by(&:upcase).select { |_, v| v.size > 1 }
+      break if dupes.empty? || Time.now > deadline
+
+      sleep 5
+    end
     unless dupes.empty?
-      abort("[sandbox:provision] FATAL: #{n[:ssm]} still has case-duplicate keys #{dupes.values.flatten.sort.inspect}. " \
-            "chamber exec would pick between them non-deterministically. See platform-overhaul #697.")
+      abort("[sandbox:provision] FATAL: #{n[:ssm]} still has case-duplicate keys #{dupes.values.flatten.sort.inspect} " \
+            "after waiting for the SSM listing to converge. chamber exec would pick between them " \
+            "non-deterministically. See platform-overhaul #697.")
     end
     resolved_user = chamber_env(n[:ssm], "DB_USERNAME")
     resolved_name = chamber_env(n[:ssm], "DB_NAME")
