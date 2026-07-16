@@ -358,12 +358,23 @@ namespace :sandbox do
 
     # What actually exists, from the two systems that hold state.
     c = admin_client
-    live_schemas = c.query("SHOW DATABASES").map { |r| r.values.first }
-                    .filter_map { |db| Regexp.last_match(1).to_i if db =~ /\Aidseq_pr_([1-9][0-9]*)\z/ }
-    ssm_prs = `aws ssm describe-parameters --query 'Parameters[].Name' --output text 2>&1`
-              .split.filter_map { |nm| Regexp.last_match(1).to_i if nm =~ %r{\A/idseq-sandbox-pr-([1-9][0-9]*)-web/} }
-              .uniq
+    schema_names = c.query("SHOW DATABASES").map { |r| r.values.first }
     c.close
+    live_schemas = schema_names.filter_map do |db|
+      Regexp.last_match(1).to_i if db =~ /\Aidseq_pr_([1-9][0-9]*)\z/
+    end
+
+    # Raise on a failed enumeration rather than reading an error message as "no sandboxes".
+    # Swallowing stderr here would mean an IAM denial silently reported an empty SSM list, the
+    # reaper would skip every orphaned config path, and it would still exit 0 -- the exact
+    # fail-open shape that let broken sandboxes report success for a day (see ssm_param_names).
+    ssm_out = `aws ssm describe-parameters --query 'Parameters[].Name' --output text 2>&1`
+    raise "aws ssm describe-parameters failed (exit #{$CHILD_STATUS.exitstatus}): #{ssm_out.strip}" unless $CHILD_STATUS.success?
+
+    ssm_prs = ssm_out.split.filter_map do |nm|
+      Regexp.last_match(1).to_i if nm =~ %r{\A/idseq-sandbox-pr-([1-9][0-9]*)-web/}
+    end
+    ssm_prs = ssm_prs.uniq
 
     orphans = (live_schemas | ssm_prs).reject { |pr| open_prs.include?(pr) }.sort
     puts "[sandbox:reap_orphans] schemas=#{live_schemas.sort.inspect} ssm=#{ssm_prs.sort.inspect} " \
