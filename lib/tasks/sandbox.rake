@@ -112,7 +112,7 @@ namespace :sandbox do
       abort("[sandbox:provision] FATAL: DB_USERNAME resolved to '#{resolved_user}', expected '#{n[:user]}'. " \
             "Refusing to provision a sandbox that is not DB-isolated. See platform-overhaul #697.")
     end
-    if resolved_pass.nil? || resolved_pass.empty?
+    if resolved_pass.blank?
       abort("[sandbox:provision] FATAL: DB_PASSWORD did not resolve for #{n[:ssm]}. The pod would fall back " \
             "to the dev MASTER creds. Refusing to provision. See platform-overhaul #697.")
     end
