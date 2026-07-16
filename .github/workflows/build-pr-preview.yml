@@ -40,6 +40,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      pull-requests: write   # post the sandbox link back onto the PR
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v6
@@ -83,6 +84,52 @@ jobs:
           # sha (8 chars) so the tag matches what the Phase-2 ApplicationSet deploys.
           bin/build-docker "$PR_HEAD_REF" "${PR_HEAD_SHA:0:8}"
           echo "Pushed ${PREVIEW_ECR_REPO}:sha-${PR_HEAD_SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
+
+      # Surface the sandbox URL ON the PR. Without this a dev has to just KNOW the
+      # pr-<N>.dev.seqtoid.org convention -- the link appeared nowhere in GitHub (no comment, no
+      # deployment). Sticky: find our marked comment and PATCH it, so re-runs update in place
+      # instead of spamming the thread. Uses gh (preinstalled on the runner) -- no new action dep.
+      - name: Post the preview sandbox link on the PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BUILD_RESULT: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          MARKER="<!-- preview-sandbox-link -->"
+          URL="https://pr-${PR_NUMBER}.dev.seqtoid.org"
+          if [ "$BUILD_RESULT" = "success" ]; then
+            STATUS="Image pushed (\`sha-${PR_HEAD_SHA:0:8}\`). Argo is provisioning the sandbox -- it usually serves within a few minutes."
+          else
+            STATUS="The preview image build did NOT succeed, so the sandbox will not come up. See the workflow run above."
+          fi
+          BODY="$(cat <<EOF
+          ${MARKER}
+          ### Preview sandbox
+
+          **${URL}**
+
+          ${STATUS}
+
+          Isolated per-PR environment: its own DB schema + scoped user, SSM config and S3 prefix (it can never touch the shared dev DB). Shares the dev Batch/SFN pipeline. Auto-reaped when this PR closes.
+
+          Watch it: [Grafana](https://grafana.dev.seqtoid.org) -> Argo CD dashboard (\`seqtoid-pr-${PR_NUMBER}\`), or Logs Overview filtered to \`namespace=seqtoid-pr-${PR_NUMBER}\`.
+          EOF
+          )"
+          # sed strips the leading indentation the heredoc picked up from this YAML block.
+          BODY="$(printf '%s\n' "$BODY" | sed -E 's/^[[:space:]]{10}//')"
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq "[.[] | select(.body | contains(\"${MARKER}\")) | .id] | first // empty")"
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$BODY" >/dev/null
+            echo "Updated sandbox-link comment ${existing}."
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$BODY" >/dev/null
+            echo "Posted sandbox-link comment."
+          fi
+          echo "Sandbox: ${URL}" >> "$GITHUB_STEP_SUMMARY"
 
       # Scanning + signing (Trivy/cosign/GHCR) are deliberately NOT done here -- previews are
       # ephemeral throwaways. The supply-chain gate runs on the integration->main promotion.

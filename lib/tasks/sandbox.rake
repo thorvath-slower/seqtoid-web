@@ -82,25 +82,43 @@ namespace :sandbox do
     # failed closed only by luck (the master password did not match the scoped one), and did so
     # non-deterministically. Writing the same UPPERCASE keys overwrites the import in place. See #697.
     sandbox_bucket = ENV["SANDBOX_SAMPLES_BUCKET"] || "seqtoid-sandbox"
+
+    # ORDER MATTERS -- clean up stale duplicates FIRST, then write the canonical keys LAST.
+    # This block used to run AFTER the writes below, which silently destroyed the sandbox: chamber
+    # normalises/uppercases keys, so `chamber delete <svc> db_password` resolves onto the canonical
+    # DB_PASSWORD that had just been written. A provision would report "done" while DB_PASSWORD and
+    # DB_NAME were missing; the pod then fell back to Rails defaults and tried the dev MASTER user with
+    # no password ("Access denied for user 'idseqmaster' ... using password: NO") and the sandbox never
+    # booted. Deleting before writing makes the writes last-write-wins and unclobberable, and is also
+    # safe if two provision Jobs overlap (Argo recreates this hook on every sync). Caught by the
+    # 2026-07-16 IT-ARS e2e (PR #23). See platform-overhaul #697.
+    %w[db_username db_password db_name samples_bucket_name samples_bucket_name_v1].each do |stale|
+      sh!("chamber delete #{n[:ssm]} #{stale} || true")
+    end
+
     sh!("chamber write #{n[:ssm]} DB_USERNAME #{n[:user]}")
     sh!("chamber write #{n[:ssm]} DB_PASSWORD #{password}")
     sh!("chamber write #{n[:ssm]} DB_NAME #{n[:schema]}")
     sh!("chamber write #{n[:ssm]} SAMPLES_BUCKET_NAME #{sandbox_bucket}")
     sh!("chamber write #{n[:ssm]} SAMPLES_BUCKET_NAME_V1 #{sandbox_bucket}")
 
-    # Belt-and-braces: delete any lowercase duplicates a previous (buggy) provision may have left in
-    # this path, so exactly one key per setting survives. Ignore "not found" -- a fresh path has none.
-    %w[db_username db_password db_name samples_bucket_name samples_bucket_name_v1].each do |stale|
-      sh!("chamber delete #{n[:ssm]} #{stale} || true")
-    end
-
-    # Assert isolation held before the pod is allowed to boot: the resolved DB user must be the scoped
-    # sandbox user, never the master. Fail the provision Job loudly rather than let a sandbox come up
-    # pointed at dev-as-master. (chamber exec resolves the same precedence the app will see.)
-    resolved_user = `chamber exec #{n[:ssm]} -- printenv DB_USERNAME`.strip
-    unless resolved_user == n[:user]
+    # Assert isolation held before the pod is allowed to boot. Verify EVERY scoped credential, not just
+    # the username: a sandbox missing DB_PASSWORD/DB_NAME silently falls back to the dev master creds,
+    # which is exactly the failure this check exists to prevent. Fail the Job loudly instead.
+    # (chamber exec resolves the same precedence the app will see.)
+    resolved = `chamber exec #{n[:ssm]} -- printenv DB_USERNAME DB_PASSWORD DB_NAME`.split("\n").map(&:strip)
+    resolved_user, resolved_pass, resolved_name = resolved
+    if resolved_user != n[:user]
       abort("[sandbox:provision] FATAL: DB_USERNAME resolved to '#{resolved_user}', expected '#{n[:user]}'. " \
             "Refusing to provision a sandbox that is not DB-isolated. See platform-overhaul #697.")
+    end
+    if resolved_pass.nil? || resolved_pass.empty?
+      abort("[sandbox:provision] FATAL: DB_PASSWORD did not resolve for #{n[:ssm]}. The pod would fall back " \
+            "to the dev MASTER creds. Refusing to provision. See platform-overhaul #697.")
+    end
+    if resolved_name != n[:schema]
+      abort("[sandbox:provision] FATAL: DB_NAME resolved to '#{resolved_name}', expected '#{n[:schema]}'. " \
+            "Refusing to provision a sandbox that would target the wrong schema. See platform-overhaul #697.")
     end
 
     puts "[sandbox:provision] done -- pod may now boot with CHAMBER_SERVICE=#{n[:ssm]} DB_NAME=#{n[:schema]}"
