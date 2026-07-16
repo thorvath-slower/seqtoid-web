@@ -299,6 +299,16 @@ preview:
   # Source chamber service to copy shared config + read master DB creds from.
   # Empty -> idseq-<environment>-web.
   srcChamberService: ""
+  # S3 bucket a sandbox uploads samples to (written to the sandbox's SAMPLES_BUCKET_NAME).
+  # Set this to the dedicated, terraformed preview bucket (infra: terraform output
+  # preview_samples_bucket -> seqtoid-preview-samples-<env>-<account>).
+  #
+  # Empty means the task falls back to its historical default, `seqtoid-sandbox` -- which is NOT a
+  # throwaway: it is a hand-created bucket holding ~4.8 TB of the team's research data (validation
+  # sets, time trials, taxid indexes), backup status unknown. Sandboxes must not write there. The
+  # preview IRSA role no longer grants write/delete on it, so leaving this empty now fails the
+  # upload on IAM rather than quietly polluting research data. Set it.
+  samplesBucket: ""
   provisioner:
     serviceAccountName: seqtoid-web-provisioner
     roleArn: ""          # the seqtoid-web-preview-provisioner IRSA role (infra repo)
