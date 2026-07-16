@@ -14,6 +14,7 @@
 # Hard guards: SANDBOX_PR_NUMBER must be a positive integer; the schema/user names are
 # built ONLY from it (never free-form), so these tasks can only ever touch idseq_pr_<N>
 # / sbx_pr_<N> -- never idseq_dev or any other schema.
+require "English" # $CHILD_STATUS -- the shell-out exit codes below are load-bearing guards
 namespace :sandbox do
   def sandbox_pr_number!
     raw = ENV["SANDBOX_PR_NUMBER"].to_s
@@ -51,8 +52,37 @@ namespace :sandbox do
 
   # Every param name under a chamber service's SSM path (raw API -- see the case notes in
   # :provision for why chamber's own write/delete cannot address these by name).
+  #
+  # FAILS LOUDLY on purpose. This swallowed stderr and returned [] on error, which made both
+  # callers no-op SILENTLY: the duplicate sweep deleted nothing and the isolation assert passed
+  # VACUOUSLY (no names -> no duplicates found -> "verified"), so a provision exited 0 while
+  # leaving the sandbox pointed at the dev master. The provisioner role was missing
+  # ssm:GetParametersByPath, so this failed on EVERY run and nothing ever said so. A check that
+  # cannot fail is not a check. A chamber service path is never legitimately empty, so an empty
+  # result is an error too, not an answer.
+  # Delete SSM params by full name, in API-limit batches. Also fails loudly: this used to send both
+  # stdout and stderr to /dev/null and ignore the exit status, so an IAM denial looked exactly like a
+  # successful delete -- which is how :teardown reported "deleted N params" while deleting none.
+  def ssm_delete_params!(names)
+    names.each_slice(10) do |batch|
+      out = IO.popen(["aws", "ssm", "delete-parameters", "--names", *batch], err: [:child, :out], &:read)
+      raise "aws ssm delete-parameters failed (exit #{$CHILD_STATUS.exitstatus}): #{out.strip}" unless $CHILD_STATUS.success?
+    end
+  end
+
+  # NOTE THE TRAILING SLASH on --path, it is load-bearing. GetParametersByPath authorises against the
+  # PATH itself, not its children: `--path /idseq-sandbox-pr-23-web` is checked against the resource
+  # `parameter/idseq-sandbox-pr-23-web`, which the provisioner policy does NOT match (it grants
+  # `parameter/idseq-sandbox-pr-*-web/*`, i.e. the children). `--path /idseq-sandbox-pr-23-web/` is
+  # checked against `parameter/idseq-sandbox-pr-23-web/`, which DOES match `/*`. This is also why
+  # `chamber export` from dev works while a bare-path CLI call gets AccessDenied -- chamber queries
+  # with the slash. Verified against the live role 2026-07-16.
   def ssm_param_names(service)
-    `aws ssm get-parameters-by-path --path /#{service} --recursive --query 'Parameters[].Name' --output text 2>/dev/null`.split
+    out = `aws ssm get-parameters-by-path --path /#{service}/ --recursive --query 'Parameters[].Name' --output text 2>&1`
+    raise "aws ssm get-parameters-by-path failed for /#{service} (exit #{$CHILD_STATUS.exitstatus}): #{out.strip}" unless $CHILD_STATUS.success?
+    names = out.split
+    raise "aws ssm get-parameters-by-path returned NO params for /#{service}; refusing to treat that as 'nothing to do'" if names.empty?
+    names
   end
 
   desc "Provision a per-PR sandbox: isolated schema + scoped user + its own SSM path"
@@ -126,9 +156,7 @@ namespace :sandbox do
     # delete them through the raw SSM API. Any key that is not already canonical uppercase is a
     # duplicate spelling of one we just imported and can only cause an exec collision.
     stale = ssm_param_names(n[:ssm]).reject { |name| name.split("/").last == name.split("/").last.upcase }
-    stale.each_slice(10) do |batch|
-      system("aws", "ssm", "delete-parameters", "--names", *batch, out: File::NULL, err: File::NULL)
-    end
+    ssm_delete_params!(stale)
     puts "[sandbox:provision] removed #{stale.size} lower-case duplicate param(s)"
 
     # Assert isolation held BEFORE the pod is allowed to boot, resolving each value exactly as the app
@@ -172,15 +200,19 @@ namespace :sandbox do
     c.query("FLUSH PRIVILEGES")
     c.close
 
-    # Delete every param under the sandbox SSM path. Enumerate + delete via the aws CLI
-    # (the chamber service `X` maps to SSM path `/X/`); this is more robust than parsing
-    # `chamber list` output. Idempotent: no-op if the path is already empty.
-    require "shellwords"
+    # Delete every param under the sandbox SSM path. Enumerate + delete via the aws CLI (the chamber
+    # service `X` maps to SSM path `/X/`); this is more robust than parsing `chamber list` output.
+    # Both calls now raise on failure -- they previously discarded stderr AND the exit status, so the
+    # missing ssm:GetParametersByPath grant made this print "deleted 0 SSM params" and orphan every
+    # sandbox's config forever, with no error anywhere. Tolerate ONLY the already-empty case.
     ssm_path = "/#{n[:ssm]}"
-    names = `aws ssm get-parameters-by-path --path #{Shellwords.escape(ssm_path)} --recursive --query 'Parameters[].Name' --output text 2>/dev/null`.split
-    names.each_slice(10) do |batch|
-      system("aws", "ssm", "delete-parameters", "--names", *batch, out: File::NULL, err: File::NULL)
+    names = begin
+      ssm_param_names(n[:ssm])
+    rescue RuntimeError => e
+      raise unless e.message.include?("returned NO params")
+      [] # genuinely already torn down
     end
+    ssm_delete_params!(names)
     puts "[sandbox:teardown] deleted #{names.size} SSM params under #{ssm_path}"
 
     puts "[sandbox:teardown] done"
