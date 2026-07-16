@@ -81,6 +81,10 @@ runtime (image ENTRYPOINT), so they are not enumerated here.
   value: {{ .Values.aws.region | quote }}
 - name: AWS_DEFAULT_REGION
   value: {{ .Values.aws.region | quote }}
+{{- with .Values.aws.accountId }}
+- name: AWS_ACCOUNT_ID
+  value: {{ . | quote }}
+{{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}
