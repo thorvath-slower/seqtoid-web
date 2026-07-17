@@ -176,6 +176,37 @@ namespace :sandbox do
       # were sending sandbox traffic to dev. Host must match the appset's ingress.host
       # (pr-<N>.dev.seqtoid.org); override via SANDBOX_SERVER_DOMAIN if that ever changes.
       scoped["SERVER_DOMAIN"] = ENV["SANDBOX_SERVER_DOMAIN"] || "https://pr-#{pr}.dev.seqtoid.org"
+
+      # The sandbox gets its OWN Redis, so it never shares a Resque queue with dev.
+      #
+      # Inheriting dev's REDISCLOUD_URL puts the sandbox on DEV's job queues. Resque wraps a bare
+      # client in Redis::Namespace.new(:resque, ...), so the keys are identical, and the worker's
+      # queue list ends in `*` -- it consumes EVERY queue. Both directions fail silently:
+      #
+      #   * Dev's worker pops the SANDBOX's jobs and runs them against DEV's database. Observed: a
+      #     sandbox's five ResultMonitorLoader jobs executed on dev within a second of being
+      #     enqueued, resolving PipelineRun.find(2) in dev's schema -- a different sample. The
+      #     sandbox's outputs stayed LOADING_QUEUED and its report never rendered. That is the
+      #     user-visible bug: a sandbox runs a pipeline to SUCCEEDED and shows no result.
+      #   * A sandbox's worker pops DEV's scheduled jobs and runs them against the SANDBOX, so
+      #     dev's job silently never happens on dev. The one that matters here is
+      #     HandleSfnNotificationsTimeout, dev's failsafe for missed SFN notifications: a dev
+      #     pipeline can stall with nothing left to rescue it.
+      #
+      # This is the hazard shoryuken is disabled in previews for; it was never applied to Resque.
+      #
+      # Required with NO fallback, deliberately -- the same rule as SANDBOX_SAMPLES_BUCKET. A
+      # default here would silently mean "dev's Redis", which is precisely the bug: it fails on the
+      # first run rather than quietly sharing dev's queues forever. The chart templates the value
+      # so it always matches the Service it renders (preview-redis.yaml).
+      scoped["REDISCLOUD_URL"] = ENV.fetch("SANDBOX_REDIS_URL") do
+        abort("[sandbox:provision] SANDBOX_REDIS_URL is unset. A sandbox must not inherit dev's " \
+              "REDISCLOUD_URL: it would share dev's Resque queues in both directions -- dev would " \
+              "eat this sandbox's result-loader jobs (so this sandbox could never show a result), " \
+              "and this sandbox could eat dev's scheduled jobs. Set preview.redis.enabled=true so " \
+              "the chart provisions this sandbox's own Redis and passes its URL.")
+      end
+
       File.write(f.path, JSON.pretty_generate(scoped))
       # Import (not write) so the scoped values land under the SAME uppercase keys the app reads, and
       # overwrite the imported dev values in place rather than racing them. Doing this in one import
@@ -434,13 +465,45 @@ namespace :sandbox do
   # on ANY re-sync of a sandbox (a PR push re-runs the migrate hook against the existing
   # schema). Guard it: only run db:seed on a truly fresh schema (no app_configs yet).
   # The first sync seeds the (dev) SFN ARNs + launched features; later re-syncs skip it.
-  desc "Run db:seed only if the sandbox schema has not been seeded yet (idempotent)"
+  desc "Run db:seed only if the sandbox schema has not been seeded yet (idempotent), then force the sandbox onto the polling pipeline model"
   task seed_once: :environment do
     if AppConfig.count.zero?
       puts "[sandbox:seed_once] fresh schema -- running db:seed"
       Rake::Task["db:seed"].invoke
     else
       puts "[sandbox:seed_once] app_configs already present (#{AppConfig.count}) -- skipping db:seed"
+    end
+
+    # A sandbox POLLS; it does not get notified. db:seed writes
+    # enable_sfn_notifications=1, which is right for dev and wrong here, and the mismatch is
+    # silent: the sample dispatches, the pipeline runs to completion in Step Functions, and the
+    # UI sits on whatever stage it started at, forever. Nothing errors.
+    #
+    # With the flag at 1 the app expects SQS notifications to drive status, so
+    # pipeline_monitor.rake deliberately skips the poll:
+    #
+    #   if AppConfigHelper.get_app_config(AppConfig::ENABLE_SFN_NOTIFICATIONS) != "1"
+    #     pr.update_job_status
+    #   end
+    #
+    # ...and the notifications never arrive, because a sandbox runs NO shoryuken -- deliberately.
+    # A sandbox shoryuken would be a competing consumer on DEV's shared notification queue and
+    # would steal dev's messages. So the sandbox runs both monitors and polls instead. Setting
+    # the flag to 0 is what makes those monitors actually do their job; it is the config half of
+    # the polling model the preview values already describe in prose.
+    #
+    # Enforced on EVERY sync rather than only on a fresh seed: the skip-branch above means an
+    # already-seeded sandbox would otherwise keep the wrong value forever, and this is how
+    # existing sandboxes self-heal on their next sync.
+    #
+    # Dev/staging/prod are untouched -- this task only ever runs in a sandbox's own schema.
+    flag = AppConfig.find_or_initialize_by(key: AppConfig::ENABLE_SFN_NOTIFICATIONS)
+    if flag.value == "0"
+      puts "[sandbox:seed_once] enable_sfn_notifications already 0 (polling model) -- ok"
+    else
+      puts "[sandbox:seed_once] forcing enable_sfn_notifications #{flag.value.inspect} -> \"0\": a sandbox has no shoryuken, so status must be polled"
+      flag.value = "0"
+      flag.save!
     end
   end
 end
