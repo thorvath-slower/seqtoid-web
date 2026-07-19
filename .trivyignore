@@ -1,36 +1,20 @@
-# Trivy baseline -- gate-on-new: accept CURRENT HIGH/CRITICAL findings; the build
-# trivy gate fails only on a NEW fixed-available CVE. Trimmed 2026-07-13 (SMP-1297 /
-# Forgejo #474) against a live trivy scan of the deployed image: 70 stale entries
-# removed (no longer present -- fixed by the chamber source-build (#291) + apt-upgrade
-# in the runtime stage since the #674 refresh, incl. libmariadb3 / CVE-2025-13699).
+# Trivy baseline -- gate-on-new. The build's image-scan gate (HIGH/CRITICAL, ignore-unfixed)
+# fails on any fixed-available CVE that is NOT listed here. This file is intentionally EMPTY of
+# CVE entries: the image currently has zero accepted HIGH/CRITICAL findings, so any new one will
+# (correctly) fail the gate. Keep the file present so the workflow's `trivyignores:` reference
+# resolves and the gate-on-new posture is preserved.
 #
-# SMP-1297 remediation: activestorage/activesupport (Rails 7.2.3.1), faraday, fast-xml-parser
-# and puma (7.2.1) were pulled forward AS REGULAR GEMS -- their CVEs are gone from the image, so
-# they were removed from this baseline.
+# 2026-07-15 (#474 / SMP-1297): baseline EMPTIED. The final 8 accepted CVEs were all genuinely
+# present in the image and fixable; they are now remediated at the image level instead of
+# suppressed:
+#   - JS: stale transitive braces 2.3.2 (CVE-2024-4068) and form-data 3.0.4 (CVE-2026-12143)
+#     pulled forward via package.json overrides (braces 3.0.3, form-data 4.0.6).
+#   - Ruby stdlib: base ruby:3.3.6-slim shipped stale default/bundled gemspecs -- uri 0.13.1
+#     (CVE-2025-61594), zlib 3.1.1 (CVE-2026-27820), erb 4.0.3 (CVE-2026-41316) and net-imap
+#     0.4.9.1 (CVE-2026-42245 / 42246 / 42257). The runtime stage now installs the patched
+#     pure-Ruby gems (uri 0.13.3, net-imap 0.6.4.1) and drops the stale default gemspecs; the
+#     patched erb 6.0.4 / zlib 3.2.3 come from the app bundle. See the Dockerfile "Ruby stdlib
+#     CVE hardening" step. This is the proper fix for the #319 default-gem image-scan incident.
+# Validated by an amd64 Trivy image scan (HIGH/CRITICAL, ignore-unfixed) = 0 findings.
 #
-# INCIDENT 2026-07-13: uri and zlib are Ruby DEFAULT gems. Pinning them forward in the Gemfile
-# (uri 0.13.3 / zlib 3.2.3) fixes the RUNTIME -- bundler activates the patched versions -- but does
-# NOT remove the vulnerable default-gem FILES (uri-0.13.1.gemspec / zlib-3.1.1.gemspec) that ship
-# with Ruby, so trivy still finds them in the image. They were prematurely removed from this
-# baseline in #319, which failed the dev build's image-scan gate and BLOCKED dev deploys. Re-added
-# here. The proper fix -- remove/upgrade the default gems in the Dockerfile so the image is clean --
-# is tracked in #474; once it lands, uri/zlib/erb/net-imap/braces/form-data can all be dropped and
-# this baseline emptied.
-#
-# The entries below are the HIGH/CRIT genuinely present in the image (all fixable). #474.
-# pkg -> fixed version:
-#   braces: 3.0.3
-#   erb: ~> 4.0.3.1, ~> 4.0.4.1, ~> 6.0.1.1, >= 6.0.4
-#   form-data: 2.5.6, 3.0.5, 4.0.6
-#   net-imap: ~> 0.3.10, ~> 0.4.24, ~> 0.5.14, >= 0.6.4
-#   uri (DEFAULT gem, image-only): ~> 0.12.5, ~> 0.13.3, >= 1.0.4
-#   zlib (DEFAULT gem, image-only): ~> 3.0.1, ~> 3.1.2, >= 3.2.3
-
-CVE-2024-4068
-CVE-2026-41316
-CVE-2026-12143
-CVE-2026-42245
-CVE-2026-42246
-CVE-2026-42257
-CVE-2025-61594
-CVE-2026-27820
+# History: 2026-07-13 trimmed 70 stale entries against a live scan; 2026-07-15 emptied.
