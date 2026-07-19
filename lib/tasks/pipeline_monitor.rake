@@ -59,6 +59,38 @@ class CheckPipelineRuns
     end
   end
 
+  # Poll WorkflowRun status (consensus-genome, amr, benchmark) the way update_jobs polls the
+  # mNGS PipelineRuns. WorkflowRuns are normally driven by SFN notifications
+  # (HandleSfnNotifications), so in a NOTIFICATION deployment (dev/staging/prod, which run
+  # shoryuken) this method is a no-op guard. But a POLLING deployment -- a preview sandbox, which
+  # sets ENABLE_SFN_NOTIFICATIONS != "1" and runs NO shoryuken (a sandbox shoryuken would steal
+  # dev's shared notification-queue messages) -- has no notifier, so without this a WorkflowRun's
+  # status never leaves RUNNING even though the SFN execution finished. update_status with no
+  # argument self-fetches the SFN execution status (and, on SUCCEEDED, finalizes + loads cached
+  # results), exactly as the notification handler would. Counts are tiny in a sandbox, so no
+  # sharding/forking is needed here.
+  def self.update_workflow_run_jobs
+    return if AppConfigHelper.get_app_config(AppConfig::ENABLE_SFN_NOTIFICATIONS) == "1"
+
+    WorkflowRun.in_progress.pluck(:id).each do |wrid|
+      break if @shutdown_requested
+
+      wr = WorkflowRun.find_by(id: wrid)
+      next unless wr
+
+      begin
+        Rails.logger.info("  Checking workflow run #{wr.id} for sample #{wr.sample_id}")
+        wr.update_status
+      rescue StandardError => exception
+        LogUtil.log_error(
+          "Updating workflow run #{wr.id} failed with exception: #{exception.message}",
+          exception: exception,
+          workflow_run_id: wr.id
+        )
+      end
+    end
+  end
+
   def self.benchmark_sample_name(s3_path, timestamp_str, metadata_prefix)
     # Benchmark sample names start with a prefix determined uniquely from the s3 path,
     # like so: "idseq-bench-1|".  This enables finding quickly all samples submitted for
@@ -299,6 +331,9 @@ class CheckPipelineRuns
           shard_id += 1
         end
         fork_pids.each { |p| Process.waitpid(p) }
+        # Poll WorkflowRuns too (cg/amr/benchmark) so a POLLING sandbox advances their status;
+        # a no-op in notification mode (dev/staging/prod). Runs in-process -- WR counts are small.
+        update_workflow_run_jobs
         benchmark_state = benchmark_update_safely_and_not_too_often(benchmark_state, t_now)
         t_now = Time.now.to_f
         after_iter_timestamp = Process.clock_gettime(Process::CLOCK_MONOTONIC)
