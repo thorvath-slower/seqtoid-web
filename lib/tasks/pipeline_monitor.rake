@@ -47,7 +47,15 @@ class CheckPipelineRuns
         Rails.logger.info("  Checking pipeline run #{pr.id} for sample #{pr.sample_id}")
 
         if AppConfigHelper.get_app_config(AppConfig::ENABLE_SFN_NOTIFICATIONS) != "1"
-          pr.update_job_status
+          # Branch by technology exactly as HandleSfnNotifications does: long-read (nanopore) is a
+          # SINGLE-STAGE SFN run, so it must poll via update_single_stage_run_status; the multi-
+          # stage update_job_status (active_stage/DAG) is for illumina short-read only. Without
+          # this, a polling sandbox leaves nanopore runs stuck on RUNNING.
+          if pr.technology == PipelineRun::TECHNOLOGY_INPUT[:nanopore]
+            pr.update_single_stage_run_status
+          else
+            pr.update_job_status
+          end
         end
       rescue StandardError => exception
         LogUtil.log_error(

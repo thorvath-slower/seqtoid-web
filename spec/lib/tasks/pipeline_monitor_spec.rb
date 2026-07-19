@@ -35,6 +35,32 @@ RSpec.describe CheckPipelineRuns do
     end
   end
 
+  # A polling sandbox must poll each PipelineRun with the same per-technology branch the
+  # notification handler uses: nanopore (single-stage SFN) via update_single_stage_run_status,
+  # illumina (multi-stage) via update_job_status. Wrong method => nanopore never leaves RUNNING.
+  describe ".update_jobs polling by technology" do
+    before do
+      allow(AppConfigHelper).to receive(:get_app_config)
+        .with(AppConfig::ENABLE_SFN_NOTIFICATIONS).and_return("0")
+    end
+
+    it "polls a nanopore run via the single-stage method" do
+      pr = instance_double(PipelineRun, id: 11, sample_id: 1, technology: PipelineRun::TECHNOLOGY_INPUT[:nanopore])
+      allow(PipelineRun).to receive(:find_by).with(id: 11).and_return(pr)
+      expect(pr).to receive(:update_single_stage_run_status)
+      expect(pr).not_to receive(:update_job_status)
+      described_class.update_jobs(1, 0, [11])
+    end
+
+    it "polls an illumina run via the multi-stage method" do
+      pr = instance_double(PipelineRun, id: 12, sample_id: 1, technology: PipelineRun::TECHNOLOGY_INPUT[:illumina])
+      allow(PipelineRun).to receive(:find_by).with(id: 12).and_return(pr)
+      expect(pr).to receive(:update_job_status)
+      expect(pr).not_to receive(:update_single_stage_run_status)
+      described_class.update_jobs(1, 0, [12])
+    end
+  end
+
   # A POLLING sandbox has no shoryuken to consume SFN notifications, so WorkflowRuns
   # (consensus-genome / amr / benchmark) must be polled here, exactly as the mNGS PipelineRuns
   # are -- otherwise their status never leaves RUNNING. Guarded by ENABLE_SFN_NOTIFICATIONS so
